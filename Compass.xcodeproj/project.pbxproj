@@ -14,6 +14,11 @@
 		6769CA462DD49C1BDF6E1E09 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C4A9F4F65AD120DB8AF53BA7 /* Foundation.framework */; };
 		6E8EB0A54357DC19BEBD7DC8 /* CompassCore in Frameworks */ = {isa = PBXBuildFile; productRef = 7706EB0E2104646E568CD71F /* CompassCore */; };
 		9E6DF7AA346C5341EE5E0E55 /* CompassApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDBFE6BCA6B17287C0474860 /* CompassApp.swift */; };
+		020F1378FBC3CA202F0BD64E /* TravelLocationSensor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B8C91614F79675159741862 /* TravelLocationSensor.swift */; };
+		35807C85FCA4AFD3E7A5EE80 /* CompassActivityPresenting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30824FB5698A3169AA134E40 /* CompassActivityPresenting.swift */; };
+		B37CF85048BCC053467427CB /* DriveSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3323475E7B406064067E6C2 /* DriveSessionController.swift */; };
+		F48727869BD5AB3FA5D5F667 /* CarPlaySetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55EF90D92525BD937AE2BA8E /* CarPlaySetupView.swift */; };
+		F294782D8B40F45F001D1942 /* DriveSessionControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43DECBF43D00BEAEEF7E2CD8 /* DriveSessionControllerTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -33,6 +38,11 @@
 		A1A46DD5AFEAE45BDDC8C05D /* HeadingController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HeadingController.swift; sourceTree = "<group>"; };
 		C4A9F4F65AD120DB8AF53BA7 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
 		EDBFE6BCA6B17287C0474860 /* CompassApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompassApp.swift; sourceTree = "<group>"; };
+		4B8C91614F79675159741862 /* TravelLocationSensor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TravelLocationSensor.swift; sourceTree = "<group>"; };
+		30824FB5698A3169AA134E40 /* CompassActivityPresenting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompassActivityPresenting.swift; sourceTree = "<group>"; };
+		F3323475E7B406064067E6C2 /* DriveSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveSessionController.swift; sourceTree = "<group>"; };
+		55EF90D92525BD937AE2BA8E /* CarPlaySetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlaySetupView.swift; sourceTree = "<group>"; };
+		43DECBF43D00BEAEEF7E2CD8 /* DriveSessionControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveSessionControllerTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -97,6 +107,10 @@
 			children = (
 				EDBFE6BCA6B17287C0474860 /* CompassApp.swift */,
 				A1A46DD5AFEAE45BDDC8C05D /* HeadingController.swift */,
+				55EF90D92525BD937AE2BA8E /* CarPlaySetupView.swift */,
+				F3323475E7B406064067E6C2 /* DriveSessionController.swift */,
+				30824FB5698A3169AA134E40 /* CompassActivityPresenting.swift */,
+				4B8C91614F79675159741862 /* TravelLocationSensor.swift */,
 			);
 			name = App;
 			path = App;
@@ -106,6 +120,7 @@
 			isa = PBXGroup;
 			children = (
 				610060C3F3A54EBB9B3CFE8E /* HeadingControllerTests.swift */,
+				43DECBF43D00BEAEEF7E2CD8 /* DriveSessionControllerTests.swift */,
 			);
 			name = AppTests;
 			path = AppTests;
@@ -211,6 +226,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				579778A1A4E3CF711F1D2023 /* HeadingControllerTests.swift in Sources */,
+				F294782D8B40F45F001D1942 /* DriveSessionControllerTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -220,6 +236,10 @@
 			files = (
 				9E6DF7AA346C5341EE5E0E55 /* CompassApp.swift in Sources */,
 				0838A3A568319EC0360654D0 /* HeadingController.swift in Sources */,
+				F48727869BD5AB3FA5D5F667 /* CarPlaySetupView.swift in Sources */,
+				B37CF85048BCC053467427CB /* DriveSessionController.swift in Sources */,
+				35807C85FCA4AFD3E7A5EE80 /* CompassActivityPresenting.swift in Sources */,
+				020F1378FBC3CA202F0BD64E /* TravelLocationSensor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
