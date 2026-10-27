@@ -21,7 +21,7 @@
 		9E6DF7AA346C5341EE5E0E55 /* CompassApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDBFE6BCA6B17287C0474860 /* CompassApp.swift */; };
 		A16441B24DE8B285E778387C /* CompassActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE2F63BB5C501FDD96214F95 /* CompassActivityAttributes.swift */; };
 		A2E9E28E8B17D7E977664AEE /* CompassActivity.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 2D622E267E018877158D2019 /* CompassActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		B1F547E16C5F05867526333C /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3808821DE39D9A062C2ED85D /* Foundation.framework */; };
+		B1F547E16C5F05867526333C /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C4A9F4F65AD120DB8AF53BA7 /* Foundation.framework */; };
 		B37CF85048BCC053467427CB /* DriveSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3323475E7B406064067E6C2 /* DriveSessionController.swift */; };
 		F294782D8B40F45F001D1942 /* DriveSessionControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43DECBF43D00BEAEEF7E2CD8 /* DriveSessionControllerTests.swift */; };
 		F48727869BD5AB3FA5D5F667 /* CarPlaySetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55EF90D92525BD937AE2BA8E /* CarPlaySetupView.swift */; };
@@ -66,7 +66,6 @@
 		2B1452F1D8CFC9C48AC3E6CC /* CompassTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CompassTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2D622E267E018877158D2019 /* CompassActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CompassActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		30824FB5698A3169AA134E40 /* CompassActivityPresenting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompassActivityPresenting.swift; sourceTree = "<group>"; };
-		3808821DE39D9A062C2ED85D /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		381DFC8C59216D52B9C5D31F /* CompassActivityWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompassActivityWidget.swift; sourceTree = "<group>"; };
 		43DECBF43D00BEAEEF7E2CD8 /* DriveSessionControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveSessionControllerTests.swift; sourceTree = "<group>"; };
 		4B8C91614F79675159741862 /* TravelLocationSensor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TravelLocationSensor.swift; sourceTree = "<group>"; };
@@ -163,7 +162,6 @@
 			isa = PBXGroup;
 			children = (
 				C4A9F4F65AD120DB8AF53BA7 /* Foundation.framework */,
-				3808821DE39D9A062C2ED85D /* Foundation.framework */,
 			);
 			name = iOS;
 			sourceTree = "<group>";

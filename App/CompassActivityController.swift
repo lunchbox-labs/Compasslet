@@ -6,7 +6,7 @@ import Foundation
 protocol CompassActivityHandle: AnyObject {
   var onDismiss: (() -> Void)? { get set }
   func update(_ state: CompassActivityAttributes.ContentState) async
-  func end() async
+  func end(_ finalState: CompassActivityAttributes.ContentState) async
 }
 
 @MainActor
@@ -14,7 +14,7 @@ protocol CompassActivitySystem: AnyObject {
   var enabled: Bool { get }
   func request(_ state: CompassActivityAttributes.ContentState) async throws
     -> any CompassActivityHandle
-  func endSurvivors() async
+  func endSurvivors(_ finalState: CompassActivityAttributes.ContentState) async
 }
 
 /// Owns only the current compact presentation. Call start from eligible CarPlay activation.
@@ -48,7 +48,7 @@ final class CompassActivityController: CompassActivityPresenting {
     do {
       let created = try await system.request(.init(bearing: nil, status: .waiting))
       guard generation == token else {
-        await created.end()
+        await created.end(.init(bearing: nil, status: .unavailable))
         throw Failure.cancelled
       }
       handle = created
@@ -100,8 +100,9 @@ final class CompassActivityController: CompassActivityPresenting {
     let system = system
     let task = Task { @MainActor in
       await previous?.value
-      await owned?.end()
-      await system.endSurvivors()
+      let finalState = CompassActivityAttributes.ContentState(bearing: nil, status: .unavailable)
+      await owned?.end(finalState)
+      await system.endSurvivors(finalState)
     }
     operation = task
     await task.value
@@ -141,9 +142,10 @@ private final class LocalCompassActivitySystem: CompassActivitySystem {
       content: ActivityContent(state: state, staleDate: state.expiry), pushType: nil)
     return LocalCompassActivityHandle(activity)
   }
-  func endSurvivors() async {
+  func endSurvivors(_ finalState: CompassActivityAttributes.ContentState) async {
     for activity in Activity<CompassActivityAttributes>.activities {
-      await activity.end(nil, dismissalPolicy: .immediate)
+      await activity.end(
+        ActivityContent(state: finalState, staleDate: nil), dismissalPolicy: .immediate)
     }
   }
 }
@@ -166,9 +168,10 @@ private final class LocalCompassActivityHandle: CompassActivityHandle {
   func update(_ state: CompassActivityAttributes.ContentState) async {
     await activity.update(ActivityContent(state: state, staleDate: state.expiry))
   }
-  func end() async {
+  func end(_ finalState: CompassActivityAttributes.ContentState) async {
     observer?.cancel()
     onDismiss = nil
-    await activity.end(nil, dismissalPolicy: .immediate)
+    await activity.end(
+      ActivityContent(state: finalState, staleDate: nil), dismissalPolicy: .immediate)
   }
 }

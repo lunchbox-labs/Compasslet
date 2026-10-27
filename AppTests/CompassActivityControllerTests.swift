@@ -22,6 +22,7 @@ struct CompassActivityControllerTests {
     let controller = CompassActivityController(system: system)
     await controller.end()
     #expect(system.cleanups == 1)
+    #expect(system.finalState == .init(bearing: nil, status: .unavailable))
     try await controller.start()
     try await controller.start()
     #expect(system.requests == 1)
@@ -43,6 +44,7 @@ struct CompassActivityControllerTests {
     system.resume?.resume()
     await #expect(throws: CompassActivityController.Failure.self) { try await startup.value }
     #expect(system.handle.ends == 1)
+    #expect(system.handle.finalState == .init(bearing: nil, status: .unavailable))
   }
 
   @Test func rejectsWrongSourceReferenceAndFuturePayload() {
@@ -91,6 +93,8 @@ struct CompassActivityControllerTests {
     await controller.update(.init(sample: sample, status: .usable))
     #expect(system.handle.updates.last?.bearing == nil)
     await controller.end()
+    #expect(system.handle.finalState == .init(bearing: nil, status: .unavailable))
+    #expect(system.finalState == .init(bearing: nil, status: .unavailable))
     let count = system.handle.updates.count
     await controller.update(.init(sample: sample, status: .usable))
     #expect(system.handle.updates.count == count)
@@ -101,8 +105,12 @@ struct CompassActivityControllerTests {
   var onDismiss: (() -> Void)?
   var updates: [CompassActivityAttributes.ContentState] = []
   var ends = 0
+  var finalState: CompassActivityAttributes.ContentState?
   func update(_ state: CompassActivityAttributes.ContentState) async { updates.append(state) }
-  func end() async { ends += 1 }
+  func end(_ finalState: CompassActivityAttributes.ContentState) async {
+    self.finalState = finalState
+    ends += 1
+  }
 }
 
 @MainActor private final class TestActivitySystem: CompassActivitySystem {
@@ -112,6 +120,7 @@ struct CompassActivityControllerTests {
   var resume: CheckedContinuation<Void, Never>?
   var requests = 0
   var cleanups = 0
+  var finalState: CompassActivityAttributes.ContentState?
   let handle = TestActivityHandle()
   func request(_ state: CompassActivityAttributes.ContentState) async throws
     -> any CompassActivityHandle
@@ -121,5 +130,8 @@ struct CompassActivityControllerTests {
     if fail { throw CompassActivityController.Failure.unavailable }
     return handle
   }
-  func endSurvivors() async { cleanups += 1 }
+  func endSurvivors(_ finalState: CompassActivityAttributes.ContentState) async {
+    self.finalState = finalState
+    cleanups += 1
+  }
 }
