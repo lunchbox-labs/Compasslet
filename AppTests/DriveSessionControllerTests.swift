@@ -29,6 +29,8 @@ final class DriveSessionControllerTests: XCTestCase {
     var fails = false
     var pauseStart = false
     var startContinuation: CheckedContinuation<Void, Never>?
+    var pauseUpdate = false
+    var updateContinuation: CheckedContinuation<Void, Never>?
     var pauseEnd = false
     var endContinuation: CheckedContinuation<Void, Never>?
     func start() async throws {
@@ -38,7 +40,10 @@ final class DriveSessionControllerTests: XCTestCase {
       }
       if fails { throw Failure.unavailable }
     }
-    func update(_ presentation: TravelPresentation) async { updates.append(presentation) }
+    func update(_ presentation: TravelPresentation) async {
+      updates.append(presentation)
+      if pauseUpdate { await withCheckedContinuation { updateContinuation = $0 } }
+    }
     func end() async {
       ends += 1
       if pauseEnd {
@@ -289,6 +294,24 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertEqual(activity.ends, 2)
     await controller.carPlayActivated()
     XCTAssertEqual(sensor.starts, 1)
+  }
+
+  func testSuspendedCompactWriteCoalescesToLatestInvalidation() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    await controller.carPlayActivated()
+    let initialCount = activity.updates.count
+    activity.pauseUpdate = true
+    sensor.receive?(reading(20))
+    while activity.updateContinuation == nil { await Task.yield() }
+    for course in 30...100 { sensor.receive?(reading(Double(course))) }
+    sensor.receive?(.interrupted)
+    activity.pauseUpdate = false
+    activity.updateContinuation?.resume()
+    await controller.waitForPendingOperations()
+    XCTAssertEqual(activity.updates.count, initialCount + 2)
+    XCTAssertNil(activity.updates.last?.sample)
+    XCTAssertEqual(activity.updates.last?.status, .unavailable)
+    await controller.endDrive()
   }
 
   func testInitialSurvivorCleanupAndCompactFailureRetainFullscreen() async {

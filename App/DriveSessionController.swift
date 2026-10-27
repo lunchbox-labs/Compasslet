@@ -25,6 +25,8 @@ final class DriveSessionController: ObservableObject {
   private var preparation: Task<Void, Never>?
   private var activityOperation: Task<Void, Never>?
   private var ticker: Task<Void, Never>?
+  private var pendingPresentation: TravelPresentation?
+  private var drainGeneration: UUID?
 
   init(
     sensor: any TravelLocationSensor, activity: any CompassActivityPresenting,
@@ -172,12 +174,22 @@ final class DriveSessionController: ObservableObject {
 
   private func publish(_ value: TravelPresentation) {
     presentation = value
+    pendingPresentation = value
     let token = generation
+    guard drainGeneration != token else { return }
+    drainGeneration = token
     _ = enqueue { [weak self, activity] in
-      guard let self, self.isDriving, self.generation == token,
-        self.compactStatus == .active
-      else { return }
-      await activity.update(value)
+      guard let self else { return }
+      while self.isDriving, self.generation == token, self.compactStatus == .active,
+        let latest = self.pendingPresentation
+      {
+        self.pendingPresentation = nil
+        await activity.update(latest)
+      }
+      if self.drainGeneration == token {
+        self.pendingPresentation = nil
+        self.drainGeneration = nil
+      }
     }
   }
 
@@ -185,6 +197,8 @@ final class DriveSessionController: ObservableObject {
   private func stopDrive() -> Task<Void, Never>? {
     guard isDriving else { return nil }
     generation = UUID()
+    pendingPresentation = nil
+    drainGeneration = nil
     isDriving = false
     ticker?.cancel()
     ticker = nil
