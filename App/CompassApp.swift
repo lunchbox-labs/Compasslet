@@ -3,12 +3,14 @@ import UIKit
 
 @main
 struct CompassApp: App {
+  @UIApplicationDelegateAdaptor(CompassAppDelegate.self) private var appDelegate
   var body: some Scene {
-    WindowGroup { CompassView() }
+    WindowGroup { CompassView(drive: appDelegate.drive) }
   }
 }
 
 struct CompassView: View {
+  @ObservedObject var drive: DriveSessionController
   @Environment(\.scenePhase) private var scenePhase
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @StateObject private var compass = HeadingController(sensor: DeviceHeadingSensor())
@@ -42,6 +44,7 @@ struct CompassView: View {
             .foregroundStyle(.secondary)
           Text("Find your bearing").font(.title2.weight(.semibold))
         }
+        CarPlaySetupView(drive: drive)
         dial
         VStack(spacing: 8) {
           Text(roundedDegrees.map { "\($0)° \(direction)" } ?? "—")

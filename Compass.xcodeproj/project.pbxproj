@@ -13,10 +13,13 @@
 		29D6B7B8A0067DFD42EA7CB5 /* CompassActivityControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13F96CE477553A99C1F0F39D /* CompassActivityControllerTests.swift */; };
 		3280C1EBE391B58BE077EC39 /* CompassCore in Frameworks */ = {isa = PBXBuildFile; productRef = ADC322CBBFADDB05596FFE57 /* CompassCore */; };
 		35807C85FCA4AFD3E7A5EE80 /* CompassActivityPresenting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30824FB5698A3169AA134E40 /* CompassActivityPresenting.swift */; };
+		4C4C18A842B6F0419CBD4102 /* CompassAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DCA6A3149843FD54FCEC16B /* CompassAppDelegate.swift */; };
 		579778A1A4E3CF711F1D2023 /* HeadingControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 610060C3F3A54EBB9B3CFE8E /* HeadingControllerTests.swift */; };
 		6769CA462DD49C1BDF6E1E09 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C4A9F4F65AD120DB8AF53BA7 /* Foundation.framework */; };
 		6E8EB0A54357DC19BEBD7DC8 /* CompassCore in Frameworks */ = {isa = PBXBuildFile; productRef = 7706EB0E2104646E568CD71F /* CompassCore */; };
 		7AA75085FC60695A12D26713 /* CompassActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE2F63BB5C501FDD96214F95 /* CompassActivityAttributes.swift */; };
+		7AE82164CFC284EB48F0ECB8 /* CarPlaySceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C6B9391E9371285A195C789 /* CarPlaySceneDelegate.swift */; };
+		7D2734D738F62A57FBC0C728 /* CarPlayPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BF0680E9674EB8E22601374 /* CarPlayPresentationTests.swift */; };
 		8F86E7595CF7EB29B0D46DC7 /* CompassActivityController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 223B00189E30490BEC47BB4B /* CompassActivityController.swift */; };
 		9E6DF7AA346C5341EE5E0E55 /* CompassApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDBFE6BCA6B17287C0474860 /* CompassApp.swift */; };
 		A16441B24DE8B285E778387C /* CompassActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE2F63BB5C501FDD96214F95 /* CompassActivityAttributes.swift */; };
@@ -26,6 +29,7 @@
 		F294782D8B40F45F001D1942 /* DriveSessionControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43DECBF43D00BEAEEF7E2CD8 /* DriveSessionControllerTests.swift */; };
 		F48727869BD5AB3FA5D5F667 /* CarPlaySetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55EF90D92525BD937AE2BA8E /* CarPlaySetupView.swift */; };
 		F97CCAF85C23D34073466081 /* CompassActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 381DFC8C59216D52B9C5D31F /* CompassActivityWidget.swift */; };
+		FED695C7626372E86C39FF85 /* CarPlayPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41FAB8F8EC4A00F7250C1BC0 /* CarPlayPresentation.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -65,18 +69,24 @@
 		223B00189E30490BEC47BB4B /* CompassActivityController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompassActivityController.swift; sourceTree = "<group>"; };
 		2B1452F1D8CFC9C48AC3E6CC /* CompassTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CompassTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2D622E267E018877158D2019 /* CompassActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CompassActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		2DCA6A3149843FD54FCEC16B /* CompassAppDelegate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompassAppDelegate.swift; sourceTree = "<group>"; };
 		30824FB5698A3169AA134E40 /* CompassActivityPresenting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompassActivityPresenting.swift; sourceTree = "<group>"; };
 		381DFC8C59216D52B9C5D31F /* CompassActivityWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompassActivityWidget.swift; sourceTree = "<group>"; };
+		41FAB8F8EC4A00F7250C1BC0 /* CarPlayPresentation.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CarPlayPresentation.swift; sourceTree = "<group>"; };
 		43DECBF43D00BEAEEF7E2CD8 /* DriveSessionControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveSessionControllerTests.swift; sourceTree = "<group>"; };
 		4B8C91614F79675159741862 /* TravelLocationSensor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TravelLocationSensor.swift; sourceTree = "<group>"; };
+		4C6B9391E9371285A195C789 /* CarPlaySceneDelegate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CarPlaySceneDelegate.swift; sourceTree = "<group>"; };
 		55EF90D92525BD937AE2BA8E /* CarPlaySetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlaySetupView.swift; sourceTree = "<group>"; };
+		5B26188BCA24C591A1887EE6 /* Compass.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = Compass.entitlements; sourceTree = "<group>"; };
 		610060C3F3A54EBB9B3CFE8E /* HeadingControllerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HeadingControllerTests.swift; sourceTree = "<group>"; };
+		7BF0680E9674EB8E22601374 /* CarPlayPresentationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CarPlayPresentationTests.swift; sourceTree = "<group>"; };
 		A1A46DD5AFEAE45BDDC8C05D /* HeadingController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HeadingController.swift; sourceTree = "<group>"; };
 		B1164CC266C944D46C5EAD7D /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		C4A9F4F65AD120DB8AF53BA7 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
 		DE2F63BB5C501FDD96214F95 /* CompassActivityAttributes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompassActivityAttributes.swift; sourceTree = "<group>"; };
 		EDBFE6BCA6B17287C0474860 /* CompassApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompassApp.swift; sourceTree = "<group>"; };
 		F3323475E7B406064067E6C2 /* DriveSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveSessionController.swift; sourceTree = "<group>"; };
+		FD697ECCB09B35EE9223BFF1 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -176,6 +186,11 @@
 				30824FB5698A3169AA134E40 /* CompassActivityPresenting.swift */,
 				4B8C91614F79675159741862 /* TravelLocationSensor.swift */,
 				223B00189E30490BEC47BB4B /* CompassActivityController.swift */,
+				41FAB8F8EC4A00F7250C1BC0 /* CarPlayPresentation.swift */,
+				4C6B9391E9371285A195C789 /* CarPlaySceneDelegate.swift */,
+				2DCA6A3149843FD54FCEC16B /* CompassAppDelegate.swift */,
+				FD697ECCB09B35EE9223BFF1 /* Info.plist */,
+				5B26188BCA24C591A1887EE6 /* Compass.entitlements */,
 			);
 			name = App;
 			path = App;
@@ -187,6 +202,7 @@
 				610060C3F3A54EBB9B3CFE8E /* HeadingControllerTests.swift */,
 				43DECBF43D00BEAEEF7E2CD8 /* DriveSessionControllerTests.swift */,
 				13F96CE477553A99C1F0F39D /* CompassActivityControllerTests.swift */,
+				7BF0680E9674EB8E22601374 /* CarPlayPresentationTests.swift */,
 			);
 			name = AppTests;
 			path = AppTests;
@@ -321,6 +337,7 @@
 				579778A1A4E3CF711F1D2023 /* HeadingControllerTests.swift in Sources */,
 				F294782D8B40F45F001D1942 /* DriveSessionControllerTests.swift in Sources */,
 				29D6B7B8A0067DFD42EA7CB5 /* CompassActivityControllerTests.swift in Sources */,
+				7D2734D738F62A57FBC0C728 /* CarPlayPresentationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -345,6 +362,9 @@
 				020F1378FBC3CA202F0BD64E /* TravelLocationSensor.swift in Sources */,
 				A16441B24DE8B285E778387C /* CompassActivityAttributes.swift in Sources */,
 				8F86E7595CF7EB29B0D46DC7 /* CompassActivityController.swift in Sources */,
+				FED695C7626372E86C39FF85 /* CarPlayPresentation.swift in Sources */,
+				7AE82164CFC284EB48F0ECB8 /* CarPlaySceneDelegate.swift in Sources */,
+				4C4C18A842B6F0419CBD4102 /* CompassAppDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -372,11 +392,11 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = App/Compass.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_FILE = App/Info.plist;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
@@ -557,11 +577,11 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = App/Compass.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_FILE = App/Info.plist;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
 				IPHONEOS_DEPLOYMENT_TARGET = 27.0;

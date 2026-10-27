@@ -1,9 +1,11 @@
 # CarPlay Compass
 
 A native SwiftUI **iOS 27+ iPhone compass** showing the direction the top of your
-phone points relative to magnetic north. It works while stationary, uses no travel
-course, and requests no location authorization or background tracking. Nearby
-magnets and metal can affect its accuracy.
+phone points relative to magnetic north. The phone compass works while stationary;
+nearby magnets and metal can affect its accuracy. CarPlay separately displays the
+vehicle’s direction of travel relative to true north, using precise location only
+during an active drive. Travel direction includes reverse movement and does not
+represent the direction the vehicle’s nose points.
 
 ## Run the app
 
@@ -37,7 +39,46 @@ interruption. Check actual denied/restricted service behavior if system settings
 produce it; an undetermined location authorization alone does not block magnetic
 heading. Also check VoiceOver, larger Dynamic Type, light/dark appearance, and
 Reduce Motion. Device sensor accuracy and these physical-device checks remain
-separate from simulator state tests. There is no CarPlay integration in this app.
+separate from simulator state tests.
+
+## Set up CarPlay
+
+While parked, open Compass on iPhone and use **Allow location on this phone** in
+CarPlay setup. Allow When In Use with Precise Location. The phone compass itself
+does not request location. Then open Compass from the CarPlay launcher to start a
+drive automatically; no phone Start Drive action is needed. Connecting a cable
+alone does not guarantee app launch. Setup and permission repair happen on iPhone
+while parked. Never grant Always authorization for this feature.
+
+The full-screen readout uses Apple’s information template and shows **Travel ·
+True north**, bearing, freshness/status, and **End Drive**. Switching to Maps keeps
+the drive running with the background location indicator. End Drive, actual
+CarPlay scene disconnect, lost permission, Live Activity dismissal, or an
+eight-hour limit stops acquisition. Reopen the CarPlay app after leaving it to
+start a new drive. An ordinary phone launch never resumes a drive. Slow movement,
+poor measurements, and data older than five seconds remove the bearing.
+
+The compact Dashboard surface uses a Live Activity. iOS and user settings control
+its appearance and refresh timing; an unavailable compact display does not disable
+an eligible full-screen session. Only bearing/status/freshness reaches ActivityKit.
+No coordinates, route history, sensor logs, analytics, or backend are stored by the
+app. iOS manages the minimal Live Activity state while the app is suspended.
+
+The checked-in driving-task entitlement is a declaration only. Full-screen
+CarPlay on a physical device requires Apple’s approval and matching signing and
+provisioning, supplied externally. There is no navigation entitlement. Unsigned
+Simulator builds remain the normal compilation check; they do not prove category
+approval or in-car operation.
+
+Before release, validate an entitled iPhone and CarPlay system with the phone
+locked, Maps visible, actual disconnect, stopping/reversing, poor GPS, denied and
+reduced-precision permission, Live Activities disabled/dismissed, accessibility,
+and thermal/battery behavior. CarPlay-only ActivityKit startup with a locked phone
+and foreground eligibility for starting background acquisition are physical gates.
+Validate that stale/suspended compact content promptly hides its numeric bearing;
+failure to do so blocks release of the compact numeric readout. Updates are bounded
+to at most once per second for usable bearings, with immediate invalidation in the
+producer; iOS does not guarantee rendering cadence.
 
 ## Swift style
 
