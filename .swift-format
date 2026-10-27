@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "lineLength": 100,
+  "indentation": { "spaces": 2 },
+  "rules": {
+    "AllPublicDeclarationsHaveDocumentation": true,
+    "NeverForceUnwrap": true,
+    "NeverUseForceTry": true,
+    "NeverUseImplicitlyUnwrappedOptionals": true,
+    "ValidateDocumentationComments": true
+  }
+}

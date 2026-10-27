@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+case "${1:-check}" in
+  check|format) mode="${1:-check}" ;;
+  *) printf 'Usage: bash scripts/swift-style [check|format]\n' >&2; exit 2 ;;
+esac
+if (( $# > 1 )); then
+  printf 'Usage: bash scripts/swift-style [check|format]\n' >&2
+  exit 2
+fi
+
+cd "$(dirname "$0")/.."
+expected_version=6.4.1
+actual_version=$(swift-format --version)
+if [[ "$actual_version" != "$expected_version" ]]; then
+  printf 'Expected swift-format %s; found %s. Use the documented toolchain.\n' \
+    "$expected_version" "$actual_version" >&2
+  exit 2
+fi
+
+# Include tracked and nonignored new files, preserving spaces in paths.
+file_list=$(mktemp)
+trap 'rm -f "$file_list"' EXIT
+git ls-files --cached --others --exclude-standard -z -- '*.swift' > "$file_list"
+files=()
+while IFS= read -r -d '' file; do
+  if [[ -f "$file" && ! -L "$file" ]]; then
+    files+=("./$file")
+  fi
+done < "$file_list"
+if (( ${#files[@]} == 0 )); then
+  printf 'No Swift source files exist yet; no style check was performed.\n' >&2
+  exit 2
+fi
+
+if [[ "$mode" == format ]]; then
+  swift-format format --configuration .swift-format --in-place "${files[@]}"
+else
+  swift-format lint --configuration .swift-format --strict "${files[@]}"
+fi
