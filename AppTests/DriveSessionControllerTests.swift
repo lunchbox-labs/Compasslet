@@ -241,14 +241,54 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertEqual(sensor.starts, 0)
   }
 
-  func testActivityDismissalDoesNotStopFullscreen() async {
+  func testActivityDismissalStopsClearsAndSuppressesDuplicateActivation() async {
     let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
     await controller.carPlayActivated()
-    activity.onDismiss?()
     sensor.receive?(reading())
+    let oldReading = sensor.receive
+    let oldDismissal = activity.onDismiss
+    oldDismissal?()
+    XCTAssertFalse(controller.isDriving)
+    XCTAssertNil(controller.presentation.sample)
     XCTAssertEqual(controller.compactStatus, .dismissed)
+    XCTAssertEqual(sensor.stops, 1)
+    oldReading?(reading(180))
+    oldDismissal?()
+    await controller.waitForPendingOperations()
+    XCTAssertNil(controller.presentation.sample)
+    XCTAssertEqual(activity.ends, 2)
+    await controller.carPlayActivated()
+    XCTAssertEqual(sensor.starts, 1)
+    controller.carPlayResignedActive()
+    await controller.carPlayActivated()
     XCTAssertTrue(controller.isDriving)
-    XCTAssertNotNil(controller.presentation.sample)
+    XCTAssertEqual(sensor.starts, 2)
+    oldDismissal?()
+    XCTAssertTrue(controller.isDriving)
+  }
+
+  func testDismissalDuringActivityStartupCannotPublishLaterActiveState() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    activity.pauseStart = true
+    let activation = Task { await controller.carPlayActivated() }
+    while activity.startContinuation == nil { await Task.yield() }
+    sensor.receive?(reading())
+    let oldReading = sensor.receive
+    activity.onDismiss?()
+    XCTAssertFalse(controller.isDriving)
+    XCTAssertNil(controller.presentation.sample)
+    XCTAssertEqual(sensor.stops, 1)
+    activity.startContinuation?.resume()
+    await activation.value
+    await controller.waitForPendingOperations()
+    oldReading?(reading(180))
+    XCTAssertEqual(controller.compactStatus, .dismissed)
+    XCTAssertFalse(controller.isDriving)
+    XCTAssertNil(controller.presentation.sample)
+    XCTAssertTrue(activity.updates.isEmpty)
+    XCTAssertEqual(activity.ends, 2)
+    await controller.carPlayActivated()
+    XCTAssertEqual(sensor.starts, 1)
   }
 
   func testInitialSurvivorCleanupAndCompactFailureRetainFullscreen() async {

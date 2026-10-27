@@ -83,6 +83,8 @@ final class DriveSessionController: ObservableObject {
       guard let self, self.isDriving, self.generation == token else { return }
       activity.onDismiss = { [weak self] in
         guard let self, self.isDriving, self.generation == token else { return }
+        self.suppressed = true
+        _ = self.stopDrive()
         self.compactStatus = .dismissed
       }
       do {
