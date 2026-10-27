@@ -14,7 +14,7 @@ final class CompassAppDelegate: NSObject, UIApplicationDelegate {
     configurationForConnecting connectingSceneSession: UISceneSession,
     options: UIScene.ConnectionOptions
   ) -> UISceneConfiguration {
-    if connectingSceneSession.role == CPTemplateApplicationSceneSessionRoleApplication {
+    if connectingSceneSession.role == .carTemplateApplication {
       let configuration = UISceneConfiguration(
         name: "CarPlay", sessionRole: connectingSceneSession.role)
       configuration.sceneClass = CPTemplateApplicationScene.self
