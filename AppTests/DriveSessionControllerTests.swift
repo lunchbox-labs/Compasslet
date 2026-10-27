@@ -122,6 +122,40 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertEqual(sensor.starts, 2)
   }
 
+  func testEndDriveAfterResignationAllowsFirstExplicitReopen() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    await controller.carPlayActivated()
+    controller.carPlayResignedActive()
+    await controller.endDrive()
+    XCTAssertFalse(controller.isDriving)
+    XCTAssertEqual(sensor.stops, 1)
+    await controller.carPlayActivated()
+    XCTAssertTrue(controller.isDriving)
+    XCTAssertEqual(controller.compactStatus, .active)
+    XCTAssertEqual(sensor.starts, 2)
+    XCTAssertEqual(activity.starts, 2)
+    await controller.carPlayActivated()
+    XCTAssertEqual(sensor.starts, 2)
+  }
+
+  func testActivityDismissalAfterResignationAllowsFirstExplicitReopen() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    await controller.carPlayActivated()
+    controller.carPlayResignedActive()
+    activity.onDismiss?()
+    await controller.waitForPendingOperations()
+    XCTAssertFalse(controller.isDriving)
+    XCTAssertEqual(controller.compactStatus, .dismissed)
+    XCTAssertEqual(sensor.stops, 1)
+    await controller.carPlayActivated()
+    XCTAssertTrue(controller.isDriving)
+    XCTAssertEqual(controller.compactStatus, .active)
+    XCTAssertEqual(sensor.starts, 2)
+    XCTAssertEqual(activity.starts, 2)
+    await controller.carPlayActivated()
+    XCTAssertEqual(sensor.starts, 2)
+  }
+
   func testOldCallbackCannotPublishIntoNextDrive() async {
     let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
     await controller.carPlayActivated()

@@ -85,7 +85,7 @@ final class DriveSessionController: ObservableObject {
       guard let self, self.isDriving, self.generation == token else { return }
       activity.onDismiss = { [weak self] in
         guard let self, self.isDriving, self.generation == token else { return }
-        self.suppressed = true
+        self.suppressed = self.active
         _ = self.stopDrive()
         self.compactStatus = .dismissed
       }
@@ -114,7 +114,8 @@ final class DriveSessionController: ObservableObject {
   }
 
   func endDrive() async {
-    suppressed = true
+    // Only an active scene must be left before the next explicit reopen.
+    suppressed = active
     await stopDrive()?.value
   }
 

@@ -153,10 +153,10 @@ private final class LocalCompassActivitySystem: CompassActivitySystem {
 @MainActor
 private final class LocalCompassActivityHandle: CompassActivityHandle {
   var onDismiss: (() -> Void)?
-  private let activity: Activity<CompassActivityAttributes>
+  private let activityID: String
   private var observer: Task<Void, Never>?
   init(_ activity: Activity<CompassActivityAttributes>) {
-    self.activity = activity
+    activityID = activity.id
     observer = Task { @MainActor [weak self] in
       for await state in activity.activityStateUpdates {
         guard !Task.isCancelled else { return }
@@ -166,11 +166,35 @@ private final class LocalCompassActivityHandle: CompassActivityHandle {
   }
   deinit { observer?.cancel() }
   func update(_ state: CompassActivityAttributes.ContentState) async {
-    await activity.update(ActivityContent(state: state, staleDate: state.expiry))
+    await Self.update(activityID: activityID, state: state)
   }
   func end(_ finalState: CompassActivityAttributes.ContentState) async {
     observer?.cancel()
     onDismiss = nil
+    await Self.end(activityID: activityID, finalState: finalState)
+  }
+
+  // Resolve the SDK handle locally so a retained main-actor value never crosses
+  // into ActivityKit's concurrent update/end operations.
+  nonisolated private static func update(
+    activityID: String, state: CompassActivityAttributes.ContentState
+  ) async {
+    guard
+      let activity = Activity<CompassActivityAttributes>.activities.first(where: {
+        $0.id == activityID
+      })
+    else { return }
+    await activity.update(ActivityContent(state: state, staleDate: state.expiry))
+  }
+
+  nonisolated private static func end(
+    activityID: String, finalState: CompassActivityAttributes.ContentState
+  ) async {
+    guard
+      let activity = Activity<CompassActivityAttributes>.activities.first(where: {
+        $0.id == activityID
+      })
+    else { return }
     await activity.end(
       ActivityContent(state: finalState, staleDate: nil), dismissalPolicy: .immediate)
   }
