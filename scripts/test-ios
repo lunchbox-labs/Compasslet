@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Pick an installed, available iOS 27+ iPhone; never silently test an older platform.
+destination="$(xcrun simctl list devices available --json | python3 -c '
+import json, re, sys
+payload = json.load(sys.stdin)
+for runtime, devices in sorted(payload["devices"].items(), reverse=True):
+    match = re.search(r"\.iOS-(\d+)-", runtime)
+    if not match or int(match.group(1)) < 27:
+        continue
+    for device in devices:
+        if device.get("isAvailable") and device["name"].startswith("iPhone"):
+            print(device["udid"])
+            sys.exit(0)
+sys.exit("No available iOS 27+ iPhone simulator")
+')"
+mkdir -p .build
+result_directory="$(mktemp -d .build/test-results.XXXXXX)"
+xcodebuild -project Compass.xcodeproj -scheme Compass \
+  -destination "platform=iOS Simulator,id=$destination" \
+  -derivedDataPath .build/xcode -resultBundlePath "$result_directory/CompassTests.xcresult" \
+  CODE_SIGNING_ALLOWED=NO test
