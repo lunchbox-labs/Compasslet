@@ -23,6 +23,17 @@ struct CompassView: View {
     return names[Int((degrees + 22.5) / 45) % 8]
   }
 
+  private var accessibilitySummary: String {
+    guard let sample = compass.sample, let roundedDegrees else { return compass.status.title }
+    let names = [
+      "north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest",
+    ]
+    let direction = names[Int((sample.angle.degrees + 22.5) / 45) % 8]
+    let accuracy = Int(min(sample.accuracy, 360).rounded())
+    return
+      "\(roundedDegrees) degrees, \(direction), magnetic heading. Accuracy plus or minus \(accuracy) degrees."
+  }
+
   var body: some View {
     ScrollView {
       VStack(spacing: 28) {
@@ -43,9 +54,7 @@ struct CompassView: View {
           }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(
-          roundedDegrees.map { "\($0) degrees, \(direction), magnetic heading" }
-            ?? compass.status.title)
+        .accessibilityLabel(accessibilitySummary)
         VStack(spacing: 10) {
           Label(
             compass.status.title,

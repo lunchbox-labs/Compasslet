@@ -30,7 +30,7 @@ final class DeviceHeadingSensor: NSObject, HeadingSensor, @preconcurrency CLLoca
   override init() {
     super.init()
     manager.delegate = self
-    manager.headingOrientation = .portrait
+    // CoreLocation defaults to portrait, matching the app’s supported orientation.
     manager.headingFilter = 1
   }
 

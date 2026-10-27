@@ -31,7 +31,7 @@
 		2B1452F1D8CFC9C48AC3E6CC /* CompassTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CompassTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		610060C3F3A54EBB9B3CFE8E /* HeadingControllerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HeadingControllerTests.swift; sourceTree = "<group>"; };
 		A1A46DD5AFEAE45BDDC8C05D /* HeadingController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HeadingController.swift; sourceTree = "<group>"; };
-		C4A9F4F65AD120DB8AF53BA7 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		C4A9F4F65AD120DB8AF53BA7 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
 		EDBFE6BCA6B17287C0474860 /* CompassApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompassApp.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
