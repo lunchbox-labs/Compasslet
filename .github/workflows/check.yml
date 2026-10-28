@@ -18,7 +18,6 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Trust the mounted checkout in this ephemeral container
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - run: python3 -m unittest discover -s Tests/Signing
       - run: bash scripts/swift-style check
       - run: swift build --jobs 4 -c release
       - run: swift test --jobs 4
@@ -38,6 +37,8 @@ jobs:
           xcrun --sdk iphonesimulator --show-sdk-version | grep -E '^27\.'
           xcrun swift --version
           xcrun swift-format --version
+      - name: Test signing validation without credentials
+        run: python3 -m unittest discover -s Tests/Signing
       - name: Verify internal TestFlight tool capabilities without credentials
         run: python3 scripts/testflight capabilities
       - name: Build unsigned simulator app

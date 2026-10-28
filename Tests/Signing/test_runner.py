@@ -70,6 +70,8 @@ class RunnerTests(unittest.TestCase):
             work.mkdir()
             installed = root / 'installed.mobileprovision'
             installed.write_bytes(b'private')
+            for name in ['AuthKey_TEST.p8', 'identity.p12', 'app.mobileprovision', 'signing.keychain-db']:
+                (work / name).write_bytes(b'private')
             (work / 'cleanup.json').write_text(json.dumps({'keychains': ['/old'],
                                                            'profiles': [str(installed)]}))
             def security(*args, **kwargs):
@@ -81,6 +83,10 @@ class RunnerTests(unittest.TestCase):
                 mocked.assert_any_call('security', 'delete-keychain', work / 'keychain', check=False)
                 self.assertFalse(installed.exists())
                 self.assertTrue((work / 'cleanup.json').exists())
+                self.assertEqual({p.name for p in work.iterdir()}, {'cleanup.json'})
+                with self.assertRaises(ValueError):
+                    runner.cleanup()
+                self.assertEqual({p.name for p in work.iterdir()}, {'cleanup.json'})
 
     def test_dispatch_gate_precedes_tools_and_credentials(self):
         for event, ref, confirmation in [('push', 'refs/heads/main', 'UPLOAD INTERNAL TESTFLIGHT'),
