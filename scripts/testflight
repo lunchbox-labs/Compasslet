@@ -1,0 +1,236 @@
+#!/usr/bin/env python3
+"""Manual internal TestFlight publication. Never print captured Apple diagnostics."""
+import base64
+import hashlib
+import json
+import os
+from pathlib import Path
+import plistlib
+import re
+import secrets
+import shlex
+import shutil
+import signal
+import subprocess
+import sys
+import zipfile
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / 'signing'))
+from validation import APP, ACTIVITY, SigningError, require, validate_build, validate_profile, validate_product
+
+ROOT = Path(__file__).resolve().parents[1]
+WORK = Path(os.environ.get('RUNNER_TEMP', '/tmp')) / 'compass-testflight'
+KEYCHAIN = WORK / 'signing.keychain-db'
+STAGE = 'preflight'
+
+
+def run(*args, check=True, **kwargs):
+    result = subprocess.run([str(a) for a in args], stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, **kwargs)
+    if check and result.returncode:
+        raise SigningError('Apple tool failed; check credentials, provisioning and selected toolchain.')
+    return result
+
+
+def cleanup():
+    # State exists before changing the search list or installing any profile.
+    state = WORK / 'cleanup.json'
+    if state.exists():
+        data = json.loads(state.read_text())
+        failures = []
+        restored = run('security', 'list-keychains', '-d', 'user', '-s', *data['keychains'], check=False)
+        if restored.returncode:
+            failures.append('restore keychain search list')
+        deleted = run('security', 'delete-keychain', KEYCHAIN, check=False)
+        if deleted.returncode and KEYCHAIN.exists():
+            failures.append('delete signing keychain')
+        for path in data['profiles']:
+            try:
+                Path(path).unlink(missing_ok=True)
+            except OSError:
+                failures.append('remove installed profile')
+        # Keep state for the always-running workflow retry if any cleanup failed.
+        require(not failures, 'Cleanup could not ' + ', '.join(failures) + '; retry cleanup.')
+    shutil.rmtree(WORK, ignore_errors=False) if WORK.exists() else None
+
+
+def capabilities():
+    version = run('xcodebuild', '-version').stdout.decode()
+    require('Xcode 27.1\n' in version and 'Build version 27A9275' in version, 'Select Xcode 27.1 (27A9275).')
+    # xcodebuild -help may return nonzero while providing full export documentation.
+    help_result = run('xcodebuild', '-help', check=False)
+    export_help = (help_result.stdout + help_result.stderr).decode()
+    for option in ['testFlightInternalTestingOnly', 'app-store-connect', 'manageAppVersionAndBuildNumber', 'provisioningProfiles']:
+        require(option in export_help, 'Installed Xcode lacks a required internal TestFlight export option.')
+    help_result = run('xcrun', 'altool', '--help')
+    upload_help = (help_result.stdout + help_result.stderr).decode()
+    for option in ['--apiKey', '--apiIssuer', '--validate-app', '--upload-app']:
+        require(option in upload_help, 'Installed altool lacks required team-key upload options.')
+    print('Xcode export and altool team-key options available (no signing performed).')
+
+
+def decode(name, filename):
+    value = os.environ.get(name, '')
+    require(bool(value), 'Missing required Actions secret: ' + name)
+    path = WORK / filename
+    path.write_bytes(base64.b64decode(''.join(value.split()), validate=True))
+    return path
+
+
+def profile(path, roots):
+    # Unlike security cms -D, smime -verify verifies the signature AND trust chain.
+    signer = WORK / 'profile-signer.pem'
+    result = run('openssl', 'smime', '-verify', '-inform', 'DER', '-in', path,
+                 '-CAfile', roots, '-purpose', 'any', '-signer', signer)
+    subject = run('openssl', 'x509', '-in', signer, '-noout', '-subject').stdout.decode()
+    require('Apple' in subject and 'Provisioning Profile Signing' in subject,
+            'Profile CMS signer is not Apple provisioning signing.')
+    return plistlib.loads(result.stdout)
+
+
+def signed_product(path, bundle, build, expected, roots, certificate):
+    run('codesign', '--verify', '--deep', '--strict', path)
+    prefix = WORK / 'signed-cert'
+    run('codesign', '--display', '--extract-certificates', prefix, path)
+    require(Path(str(prefix) + '0').read_bytes() == certificate, 'Signed certificate mismatch.')
+    embedded = profile(path / 'embedded.mobileprovision', roots)
+    require(embedded == expected, 'Embedded provisioning profile mismatch.')
+    ent = plistlib.loads(run('codesign', '--display', '--entitlements', ':-', path).stdout)
+    info = plistlib.loads((path / 'Info.plist').read_bytes())
+    validate_product(info, ent, embedded, bundle, build)
+
+
+def publish():
+    global STAGE
+    require(os.environ.get('GITHUB_EVENT_NAME') == 'workflow_dispatch' and
+            os.environ.get('GITHUB_REF') == 'refs/heads/main' and
+            os.environ.get('UPLOAD_CONFIRMATION') == 'UPLOAD INTERNAL TESTFLIGHT',
+            'Run manually from main with the exact upload confirmation.')
+    build = os.environ.get('BUILD_NUMBER', '')
+    validate_build(build)
+    team = os.environ.get('APPLE_TEAM_ID', '')
+    key = os.environ.get('ASC_API_KEY_ID', '')
+    issuer = os.environ.get('ASC_API_ISSUER_ID', '')
+    require(re.fullmatch('[A-Z0-9]{10}', team) and re.fullmatch('[A-Z0-9]+', key), 'Missing/invalid team or API key ID.')
+    import uuid
+    uuid.UUID(issuer)
+    require(os.environ.get('IOS_DISTRIBUTION_P12_PASSWORD'), 'Missing p12 password.')
+    capabilities()
+    icon = ROOT / 'App/Assets.xcassets/AppIcon.appiconset/Contents.json'
+    require(any(i.get('filename') and (icon.parent / i['filename']).is_file()
+                for i in json.loads(icon.read_text())['images']), 'Supply the app icon before publishing.')
+    require(not WORK.exists(), 'Stale signing directory; run cleanup first.')
+    WORK.mkdir(mode=0o700)
+    state = {'keychains': shlex.split(run('security', 'list-keychains', '-d', 'user').stdout.decode()), 'profiles': []}
+    state_path = WORK / 'cleanup.json'
+    state_path.write_text(json.dumps(state))
+    STAGE = 'credential and profile validation'
+    p12 = decode('IOS_DISTRIBUTION_P12_BASE64', 'identity.p12')
+    paths = [decode('IOS_APP_PROFILE_BASE64', 'app.mobileprovision'),
+             decode('IOS_ACTIVITY_PROFILE_BASE64', 'activity.mobileprovision')]
+    decode('ASC_API_PRIVATE_KEY_BASE64', 'AuthKey_' + key + '.p8')
+    password = secrets.token_urlsafe(32)
+    run('security', 'create-keychain', '-p', password, KEYCHAIN)
+    run('security', 'set-keychain-settings', '-lut', '21600', KEYCHAIN)
+    run('security', 'unlock-keychain', '-p', password, KEYCHAIN)
+    run('security', 'list-keychains', '-d', 'user', '-s', KEYCHAIN, *state['keychains'])
+    run('security', 'import', p12, '-k', KEYCHAIN, '-P', os.environ['IOS_DISTRIBUTION_P12_PASSWORD'],
+        '-T', '/usr/bin/codesign', '-T', '/usr/bin/security')
+    run('security', 'set-key-partition-list', '-S', 'apple-tool:,apple:,codesign:', '-s', '-k', password, KEYCHAIN)
+    identities = run('security', 'find-identity', '-v', '-p', 'codesigning', KEYCHAIN).stdout.decode()
+    matches = re.findall(r'\b([A-Fa-f0-9]{40}) "Apple Distribution:[^"\n]+"', identities)
+    require(len(matches) == 1, 'Import exactly one valid Apple Distribution identity with private key.')
+    identity = matches[0].upper()
+    pem = run('security', 'find-certificate', '-a', '-p', KEYCHAIN).stdout
+    blocks = re.findall(b'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----', pem, re.S)
+    certificates = [base64.b64decode(b''.join(b.splitlines()[1:-1])) for b in blocks]
+    certificate = next((c for c in certificates if hashlib.sha1(c).hexdigest().upper() == identity), None)
+    require(certificate is not None, 'Distribution certificate unavailable.')
+    cert = WORK / 'identity.der'
+    cert.write_bytes(certificate)
+    run('security', 'verify-cert', '-c', cert, '-p', 'codeSign')
+    run('openssl', 'x509', '-inform', 'DER', '-in', cert, '-checkend', '0', '-noout')
+    roots = WORK / 'trusted-roots.pem'
+    roots.write_bytes(run('security', 'find-certificate', '-a', '-p', '/System/Library/Keychains/SystemRootCertificates.keychain').stdout)
+    profiles = [profile(p, roots) for p in paths]
+    require(profiles[0]['UUID'] != profiles[1]['UUID'], 'Use separate app and extension profiles.')
+    for p, bundle in zip(profiles, [APP, ACTIVITY]):
+        validate_profile(p, team, bundle, certificate)
+    installed = Path.home() / 'Library/Developer/Xcode/UserData/Provisioning Profiles'
+    installed.mkdir(parents=True, exist_ok=True)
+    for source, p in zip(paths, profiles):
+        destination = installed / (p['UUID'] + '.mobileprovision')
+        require(not destination.exists(), 'Profile already installed; use a fresh runner.')
+        state['profiles'].append(str(destination))
+        state_path.write_text(json.dumps(state))
+        shutil.copyfile(source, destination)
+    STAGE = 'archive'
+    source = WORK / 'source'
+    shutil.copytree(ROOT, source, ignore=shutil.ignore_patterns('.git', '.build', '__pycache__'))
+    project = source / 'Compass.xcodeproj/project.pbxproj'
+    data = json.loads(run('plutil', '-convert', 'json', '-o', '-', project).stdout)
+    seen = set()
+    for obj in data['objects'].values():
+        settings = obj.get('buildSettings', {})
+        bundle = settings.get('PRODUCT_BUNDLE_IDENTIFIER')
+        if bundle in [APP, ACTIVITY]:
+            p = profiles[[APP, ACTIVITY].index(bundle)]
+            settings.update(CODE_SIGN_STYLE='Manual', DEVELOPMENT_TEAM=team,
+                            CODE_SIGN_IDENTITY=identity, PROVISIONING_PROFILE_SPECIFIER=p['UUID'],
+                            CURRENT_PROJECT_VERSION=build)
+            seen.add(bundle)
+    require(seen == {APP, ACTIVITY}, 'Project target IDs changed; review signing configuration.')
+    project.write_bytes(plistlib.dumps(data))
+    archive = WORK / 'Compass.xcarchive'
+    run('xcodebuild', '-project', source / 'Compass.xcodeproj', '-scheme', 'Compass',
+        '-configuration', 'Release', '-destination', 'generic/platform=iOS',
+        '-derivedDataPath', WORK / 'derived', '-archivePath', archive, 'archive', cwd=source)
+    app = archive / 'Products/Applications/Compass.app'
+    signed_product(app, APP, build, profiles[0], roots, certificate)
+    signed_product(app / 'PlugIns/CompassActivity.appex', ACTIVITY, build, profiles[1], roots, certificate)
+    STAGE = 'internal-only export'
+    options = WORK / 'ExportOptions.plist'
+    options.write_bytes(plistlib.dumps({'method': 'app-store-connect', 'destination': 'export',
+        'teamID': team, 'signingStyle': 'manual', 'signingCertificate': identity,
+        'provisioningProfiles': {APP: profiles[0]['UUID'], ACTIVITY: profiles[1]['UUID']},
+        'testFlightInternalTestingOnly': True, 'manageAppVersionAndBuildNumber': False}))
+    exported = WORK / 'export'
+    run('xcodebuild', '-exportArchive', '-archivePath', archive, '-exportPath', exported,
+        '-exportOptionsPlist', options)
+    ipas = list(exported.glob('*.ipa'))
+    require(len(ipas) == 1, 'Expected one exported IPA.')
+    unpacked = WORK / 'ipa'
+    with zipfile.ZipFile(ipas[0]) as ipa:
+        ipa.extractall(unpacked)
+    app = unpacked / 'Payload/Compass.app'
+    signed_product(app, APP, build, profiles[0], roots, certificate)
+    signed_product(app / 'PlugIns/CompassActivity.appex', ACTIVITY, build, profiles[1], roots, certificate)
+    STAGE = 'Apple validation'
+    auth_env = dict(os.environ, API_PRIVATE_KEYS_DIR=str(WORK))
+    args = ['--file', ipas[0], '--type', 'ios', '--apiKey', key, '--apiIssuer', issuer]
+    run('xcrun', 'altool', '--validate-app', *args, env=auth_env)
+    STAGE = 'upload (check App Store Connect before retrying an interrupted upload)'
+    run('xcrun', 'altool', '--upload-app', *args, env=auth_env)
+    print('Apple accepted the upload. Processing and internal tester availability are still pending.')
+
+
+if __name__ == '__main__':
+    os.umask(0o077)
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(1))
+    try:
+        if sys.argv[1:] == ['capabilities']:
+            capabilities()
+        elif sys.argv[1:] == ['cleanup']:
+            cleanup()
+        elif not sys.argv[1:]:
+            try:
+                publish()
+            finally:
+                cleanup()
+        else:
+            raise ValueError('Usage: python3 scripts/testflight [capabilities|cleanup]')
+    except Exception as error:
+        # Never print exception text from subprocess, plist, JSON or credential decoding.
+        detail = str(error) if isinstance(error, SigningError) else 'Review configuration and rerun secret-free checks.'
+        print('TestFlight failed during ' + STAGE + ': ' + detail, file=sys.stderr)
+        sys.exit(1)
