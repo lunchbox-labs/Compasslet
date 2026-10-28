@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		10A9C1012AD54E0AA0676C01 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 10A9C1012AD54E0AA0676C02 /* Assets.xcassets */; };
 		020F1378FBC3CA202F0BD64E /* TravelLocationSensor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B8C91614F79675159741862 /* TravelLocationSensor.swift */; };
 		0838A3A568319EC0360654D0 /* HeadingController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A46DD5AFEAE45BDDC8C05D /* HeadingController.swift */; };
 		23618A1923A31DB6A89C3DB2 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C4A9F4F65AD120DB8AF53BA7 /* Foundation.framework */; };
@@ -64,6 +65,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		10A9C1012AD54E0AA0676C02 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		13F96CE477553A99C1F0F39D /* CompassActivityControllerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompassActivityControllerTests.swift; sourceTree = "<group>"; };
 		1AC18E30C9DAEB073F3B849A /* Compass.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Compass.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		223B00189E30490BEC47BB4B /* CompassActivityController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompassActivityController.swift; sourceTree = "<group>"; };
@@ -179,6 +181,7 @@
 		B5518889D94CFC520A2DC420 /* App */ = {
 			isa = PBXGroup;
 			children = (
+				10A9C1012AD54E0AA0676C02 /* Assets.xcassets */,
 				EDBFE6BCA6B17287C0474860 /* CompassApp.swift */,
 				A1A46DD5AFEAE45BDDC8C05D /* HeadingController.swift */,
 				55EF90D92525BD937AE2BA8E /* CarPlaySetupView.swift */,
@@ -310,6 +313,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				10A9C1012AD54E0AA0676C01 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
