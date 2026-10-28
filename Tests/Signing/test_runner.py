@@ -23,14 +23,20 @@ class RunnerTests(unittest.TestCase):
             subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1',
                             '-subj', '/CN=Apple Synthetic Provisioning Profile Signing',
                             '-keyout', str(key), '-out', str(cert)], check=True, capture_output=True)
+            unrelated = root / 'unrelated.pem'
+            subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1',
+                            '-subj', '/CN=Unrelated Synthetic Root', '-keyout', str(root / 'unrelated.key'),
+                            '-out', str(unrelated)], check=True, capture_output=True)
             payload.write_bytes(plistlib.dumps({'Synthetic': True}))
             subprocess.run(['openssl', 'smime', '-sign', '-binary', '-nodetach', '-in', str(payload),
                             '-signer', str(cert), '-inkey', str(key), '-outform', 'DER', '-out', str(cms)],
                            check=True, capture_output=True)
             with patch.object(runner, 'WORK', root):
                 self.assertEqual(runner.profile(cms, cert), {'Synthetic': True})
-                with self.assertRaises(ValueError):
-                    runner.profile(cms, Path('/dev/null'))
+                # Even a misleading Apple subject and a default trusted certificate
+                # cannot bypass the explicit trust anchors supplied by the caller.
+                with patch.dict(runner.os.environ, SSL_CERT_FILE=str(cert)), self.assertRaises(ValueError):
+                    runner.profile(cms, unrelated)
                 contents = cms.read_bytes()
                 self.assertIn(b'Synthetic', contents)
                 cms.write_bytes(contents.replace(b'Synthetic', b'Tamperedd', 1))

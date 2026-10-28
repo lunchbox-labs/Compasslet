@@ -90,8 +90,10 @@ def decode(name, filename):
 def profile(path, roots):
     # Unlike security cms -D, smime -verify verifies the signature AND trust chain.
     signer = WORK / 'profile-signer.pem'
+    empty_ca_path = WORK / 'empty-ca-path'
+    empty_ca_path.mkdir(exist_ok=True)
     result = run('openssl', 'smime', '-verify', '-inform', 'DER', '-in', path,
-                 '-CAfile', roots, '-purpose', 'any', '-signer', signer)
+                 '-CAfile', roots, '-CApath', empty_ca_path, '-purpose', 'any', '-signer', signer)
     subject = run('openssl', 'x509', '-in', signer, '-noout', '-subject').stdout.decode()
     require('Apple' in subject and 'Provisioning Profile Signing' in subject,
             'Profile CMS signer is not Apple provisioning signing.')
@@ -161,7 +163,11 @@ def publish():
     run('security', 'verify-cert', '-c', cert, '-p', 'codeSign')
     run('openssl', 'x509', '-inform', 'DER', '-in', cert, '-checkend', '0', '-noout')
     roots = WORK / 'trusted-roots.pem'
-    roots.write_bytes(run('security', 'find-certificate', '-a', '-p', '/System/Library/Keychains/SystemRootCertificates.keychain').stdout)
+    # Restrict trust to Apple's roots from the OS-managed system keychain.
+    apple_roots = run('security', 'find-certificate', '-a', '-c', 'Apple Root CA', '-p',
+                      '/System/Library/Keychains/SystemRootCertificates.keychain').stdout
+    require(b'-----BEGIN CERTIFICATE-----' in apple_roots, 'Apple Root CA certificates unavailable.')
+    roots.write_bytes(apple_roots)
     profiles = [profile(p, roots) for p in paths]
     require(profiles[0]['UUID'] != profiles[1]['UUID'], 'Use separate app and extension profiles.')
     for p, bundle in zip(profiles, [APP, ACTIVITY]):
