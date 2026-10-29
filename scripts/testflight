@@ -23,8 +23,9 @@ KEYCHAIN = WORK / 'signing.keychain-db'
 STAGE = 'preflight'
 
 
-# Only these build calls stream output. Credential-tool output stays private.
-BUILD_OPERATIONS = {'archive', 'export archive'}
+# Stream build and delivery tools; credential-handling output stays private.
+STREAM_OPERATIONS = {('xcodebuild', 'archive'), ('xcodebuild', 'export archive'),
+                     ('xcrun', 'Apple validation'), ('xcrun', 'upload')}
 
 
 class SigningError(ValueError):
@@ -53,7 +54,7 @@ def mask(value):
 
 
 def run(*args, operation, check=True, **kwargs):
-    output = None if args[0] == 'xcodebuild' and operation in BUILD_OPERATIONS else subprocess.PIPE
+    output = None if (args[0], operation) in STREAM_OPERATIONS else subprocess.PIPE
     try:
         result = subprocess.run([str(a) for a in args], stdout=output, stderr=output, **kwargs)
     except OSError:
