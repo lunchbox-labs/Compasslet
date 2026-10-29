@@ -33,6 +33,12 @@
 		FED695C7626372E86C39FF85 /* CarPlayPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41FAB8F8EC4A00F7250C1BC0 /* CarPlayPresentation.swift */; };
 		90090CB56FF0934B45B2BA5B /* CompassView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82EE439CAC4B29FCB2B2652C /* CompassView.swift */; };
 		983B0768852B43DBA2893954 /* CompassRefreshProbeWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2FA1E22F31F4AE7B2C1B510 /* CompassRefreshProbeWidget.swift */; };
+		2ADCF5F1540DE262C8F3A1E5 /* CompassDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 220B49D5093197C84DE6C5D3 /* CompassDiagnostics.swift */; };
+		391F7E6A591CFB7AB7F572CF /* CompassDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 220B49D5093197C84DE6C5D3 /* CompassDiagnostics.swift */; };
+		774742633DD35133F9D14ED8 /* CompassDiagnosticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 275D9183B5D424FCC7810822 /* CompassDiagnosticsTests.swift */; };
+		A58C4FDC4EB85A91FBF6ED09 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = F493B01490C49678449E1B72 /* libsqlite3.tbd */; };
+		D204473737DF36F5712B0D3E /* DiagnosticsSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E4EE64525C86691D6CBD629 /* DiagnosticsSettingsSection.swift */; };
+		D39558B867B4613C01C73F04 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = F493B01490C49678449E1B72 /* libsqlite3.tbd */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -93,6 +99,11 @@
 		FD697ECCB09B35EE9223BFF1 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		82EE439CAC4B29FCB2B2652C /* CompassView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompassView.swift; sourceTree = "<group>"; };
 		E2FA1E22F31F4AE7B2C1B510 /* CompassRefreshProbeWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompassRefreshProbeWidget.swift; sourceTree = "<group>"; };
+		00F237C285337B5CFA6907E4 /* CompassActivity.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = CompassActivity.entitlements; sourceTree = "<group>"; };
+		220B49D5093197C84DE6C5D3 /* CompassDiagnostics.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompassDiagnostics.swift; sourceTree = "<group>"; };
+		275D9183B5D424FCC7810822 /* CompassDiagnosticsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompassDiagnosticsTests.swift; sourceTree = "<group>"; };
+		2E4EE64525C86691D6CBD629 /* DiagnosticsSettingsSection.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DiagnosticsSettingsSection.swift; sourceTree = "<group>"; };
+		F493B01490C49678449E1B72 /* libsqlite3.tbd */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libsqlite3.tbd; path = usr/lib/libsqlite3.tbd; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -102,6 +113,7 @@
 			files = (
 				6769CA462DD49C1BDF6E1E09 /* Foundation.framework in Frameworks */,
 				6E8EB0A54357DC19BEBD7DC8 /* CompassCore in Frameworks */,
+				A58C4FDC4EB85A91FBF6ED09 /* libsqlite3.tbd in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -110,6 +122,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B1F547E16C5F05867526333C /* Foundation.framework in Frameworks */,
+				D39558B867B4613C01C73F04 /* libsqlite3.tbd in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -129,6 +142,7 @@
 			isa = PBXGroup;
 			children = (
 				DE2F63BB5C501FDD96214F95 /* CompassActivityAttributes.swift */,
+				220B49D5093197C84DE6C5D3 /* CompassDiagnostics.swift */,
 			);
 			name = Shared;
 			path = Shared;
@@ -140,6 +154,7 @@
 				381DFC8C59216D52B9C5D31F /* CompassActivityWidget.swift */,
 				E2FA1E22F31F4AE7B2C1B510 /* CompassRefreshProbeWidget.swift */,
 				B1164CC266C944D46C5EAD7D /* Info.plist */,
+				00F237C285337B5CFA6907E4 /* CompassActivity.entitlements */,
 			);
 			name = CompassActivity;
 			path = CompassActivity;
@@ -161,6 +176,7 @@
 			isa = PBXGroup;
 			children = (
 				A4684D239F06EE1D7DBDE1DE /* iOS */,
+				F493B01490C49678449E1B72 /* libsqlite3.tbd */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -206,6 +222,7 @@
 				43DECBF43D00BEAEEF7E2CD8 /* DriveSessionControllerTests.swift */,
 				13F96CE477553A99C1F0F39D /* CompassActivityControllerTests.swift */,
 				7BF0680E9674EB8E22601374 /* CarPlayPresentationTests.swift */,
+				275D9183B5D424FCC7810822 /* CompassDiagnosticsTests.swift */,
 			);
 			name = AppTests;
 			path = AppTests;
@@ -226,6 +243,7 @@
 				A1A46DD5AFEAE45BDDC8C05D /* HeadingController.swift */,
 				82EE439CAC4B29FCB2B2652C /* CompassView.swift */,
 				55EF90D92525BD937AE2BA8E /* CompassSettingsView.swift */,
+				2E4EE64525C86691D6CBD629 /* DiagnosticsSettingsSection.swift */,
 			);
 			path = Heading;
 			sourceTree = "<group>";
@@ -388,6 +406,7 @@
 				F294782D8B40F45F001D1942 /* DriveSessionControllerTests.swift in Sources */,
 				29D6B7B8A0067DFD42EA7CB5 /* CompassActivityControllerTests.swift in Sources */,
 				7D2734D738F62A57FBC0C728 /* CarPlayPresentationTests.swift in Sources */,
+				774742633DD35133F9D14ED8 /* CompassDiagnosticsTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -398,6 +417,7 @@
 				F97CCAF85C23D34073466081 /* CompassActivityWidget.swift in Sources */,
 				983B0768852B43DBA2893954 /* CompassRefreshProbeWidget.swift in Sources */,
 				7AA75085FC60695A12D26713 /* CompassActivityAttributes.swift in Sources */,
+				391F7E6A591CFB7AB7F572CF /* CompassDiagnostics.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -417,6 +437,8 @@
 				FED695C7626372E86C39FF85 /* CarPlayPresentation.swift in Sources */,
 				7AE82164CFC284EB48F0ECB8 /* CarPlaySceneDelegate.swift in Sources */,
 				4C4C18A842B6F0419CBD4102 /* CompassAppDelegate.swift in Sources */,
+				2ADCF5F1540DE262C8F3A1E5 /* CompassDiagnostics.swift in Sources */,
+				D204473737DF36F5712B0D3E /* DiagnosticsSettingsSection.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -474,6 +496,7 @@
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = CompassActivity/CompassActivity.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -496,6 +519,7 @@
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = CompassActivity/CompassActivity.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;

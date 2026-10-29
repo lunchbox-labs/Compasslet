@@ -49,10 +49,14 @@ private struct CompassActivityView: View {
       Text(Self.bearing(context)).font(family == .small ? .title2 : .largeTitle).bold()
       if context.isStale {
         Text("Travel unavailable").font(.caption)
-      } else if context.state.status == .usable, let time = context.state.sampleTime {
-        Text(time, style: .time).font(.caption)
-      } else {
+      } else if context.state.status != .usable {
         Text(status).font(.caption)
+      }
+      if let update = context.state.debugUpdateTime {
+        Text("Update \(update, format: .dateTime.hour().minute().second())").font(.caption2)
+        if let sample = context.state.sampleTime {
+          Text("Sample \(sample, format: .dateTime.hour().minute().second())").font(.caption2)
+        }
       }
     }
     .accessibilityElement(children: .combine)

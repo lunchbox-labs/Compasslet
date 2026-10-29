@@ -7,6 +7,7 @@ struct CompassActivityAttributes: ActivityAttributes {
     var status: Status
     var sampleTime: Date?
     var expiry: Date?
+    var debugUpdateTime: Date? = nil
   }
 
   enum Status: String, Codable, Hashable, Sendable {

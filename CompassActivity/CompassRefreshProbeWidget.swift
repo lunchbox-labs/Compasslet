@@ -1,4 +1,3 @@
-import OSLog
 import SwiftUI
 import Synchronization
 import WidgetKit
@@ -9,10 +8,8 @@ private struct RefreshProbeEntry: TimelineEntry {
 }
 
 private struct RefreshProbeProvider: TimelineProvider {
-  // No shared container or persistence: this counter resets with the extension process.
+  // This display counter resets with the extension process.
   private static let deliveries = Mutex(0)
-  private static let log = Logger(
-    subsystem: "dev.lunchbox-labs.carplay-compass", category: "WidgetRefreshProbe")
 
   func placeholder(in context: Context) -> RefreshProbeEntry {
     RefreshProbeEntry(date: .now, delivery: nil)
@@ -29,9 +26,12 @@ private struct RefreshProbeProvider: TimelineProvider {
       return value
     }
     let date = Date()
-    Self.log.info("delivery #\(delivery) at \(date.timeIntervalSince1970)")
+    let debugging = (try? CompassDiagnostics.shared?.isEnabled()) == true
+    try? CompassDiagnostics.shared?.record(.widget, kind: .providerCreated)
     completion(
-      Timeline(entries: [RefreshProbeEntry(date: date, delivery: delivery)], policy: .never))
+      Timeline(
+        entries: [RefreshProbeEntry(date: date, delivery: debugging ? delivery : nil)],
+        policy: .never))
   }
 }
 
@@ -46,7 +46,8 @@ struct CompassRefreshProbeWidget: Widget {
             .font(.caption).monospacedDigit()
           Text("Provider time · counter resets").font(.caption2)
         } else {
-          Text("Waiting for timeline").font(.headline)
+          Text("Refresh experiment").font(.headline)
+          Text("Enable Debug Mode in the app for timing. No bearing is shown.").font(.caption)
         }
       }
       .accessibilityElement(children: .combine)
