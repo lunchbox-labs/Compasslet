@@ -32,6 +32,7 @@
 		F97CCAF85C23D34073466081 /* CompassActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 381DFC8C59216D52B9C5D31F /* CompassActivityWidget.swift */; };
 		FED695C7626372E86C39FF85 /* CarPlayPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41FAB8F8EC4A00F7250C1BC0 /* CarPlayPresentation.swift */; };
 		90090CB56FF0934B45B2BA5B /* CompassView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82EE439CAC4B29FCB2B2652C /* CompassView.swift */; };
+		983B0768852B43DBA2893954 /* CompassRefreshProbeWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2FA1E22F31F4AE7B2C1B510 /* CompassRefreshProbeWidget.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -91,6 +92,7 @@
 		F3323475E7B406064067E6C2 /* DriveSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveSessionController.swift; sourceTree = "<group>"; };
 		FD697ECCB09B35EE9223BFF1 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		82EE439CAC4B29FCB2B2652C /* CompassView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompassView.swift; sourceTree = "<group>"; };
+		E2FA1E22F31F4AE7B2C1B510 /* CompassRefreshProbeWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompassRefreshProbeWidget.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -136,6 +138,7 @@
 			isa = PBXGroup;
 			children = (
 				381DFC8C59216D52B9C5D31F /* CompassActivityWidget.swift */,
+				E2FA1E22F31F4AE7B2C1B510 /* CompassRefreshProbeWidget.swift */,
 				B1164CC266C944D46C5EAD7D /* Info.plist */,
 			);
 			name = CompassActivity;
@@ -393,6 +396,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F97CCAF85C23D34073466081 /* CompassActivityWidget.swift in Sources */,
+				983B0768852B43DBA2893954 /* CompassRefreshProbeWidget.swift in Sources */,
 				7AA75085FC60695A12D26713 /* CompassActivityAttributes.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
