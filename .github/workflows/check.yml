@@ -44,8 +44,14 @@ jobs:
           -derivedDataPath .build/xcode CODE_SIGNING_ALLOWED=NO build
       - name: Test on an available iPhone simulator
         run: bash scripts/test-ios
-      - name: Verify built extension display name
+      - name: Verify built bundle names
         run: |
+          for key in CFBundleName CFBundleDisplayName; do
+            /usr/libexec/PlistBuddy -c "Print :$key" \
+              .build/xcode/Build/Products/Debug-iphonesimulator/Compass.app/Info.plist \
+              | tee /dev/stderr \
+              | grep -Fx 'CarPlay Compass'
+          done
           /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' \
             .build/xcode/Build/Products/Debug-iphonesimulator/Compass.app/PlugIns/CompassActivity.appex/Info.plist \
             | grep -Fx 'CarPlay Compass'
