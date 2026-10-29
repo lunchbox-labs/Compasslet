@@ -1,8 +1,11 @@
-"""Synthetic tool output only: never needs Apple credentials or Xcode."""
+"""Synthetic subprocess and Actions masking tests; no Apple credentials."""
 import contextlib
 import io
+import os
+from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -10,105 +13,104 @@ from test_runner import runner
 
 
 class DiagnosticTests(unittest.TestCase):
-    def failure(self, operation, output, command='xcodebuild'):
-        result = subprocess.CompletedProcess([command], 65, output, output)
-        with patch.object(runner.subprocess, 'run', return_value=result), \
+    def test_mask_escapes_whole_value_and_each_nonempty_line(self):
+        output = io.StringIO()
+        with patch.dict(os.environ, GITHUB_ACTIONS='true'), contextlib.redirect_stdout(output):
+            runner.mask('first%line\r\nsecond\n')
+        self.assertEqual(output.getvalue(),
+                         '::add-mask::first%25line%0D%0Asecond%0A\n'
+                         '::add-mask::first%25line\n::add-mask::second\n')
+
+    def test_mask_never_prints_values_outside_actions(self):
+        output = io.StringIO()
+        with patch.dict(os.environ, GITHUB_ACTIONS='false'), contextlib.redirect_stdout(output), \
+                self.assertRaises(runner.SigningError):
+            runner.mask('PRIVATE')
+        self.assertEqual(output.getvalue(), '')
+
+    def test_mask_flushes_before_next_tool(self):
+        class Output(io.StringIO):
+            flushed = False
+            def flush(self):
+                self.flushed = True
+                super().flush()
+        output = Output()
+        def tool(*args, **kwargs):
+            self.assertTrue(output.flushed)
+            self.assertEqual(output.getvalue(), '::add-mask::synthetic-password\n')
+            return subprocess.CompletedProcess(args, 0)
+        with patch.dict(os.environ, GITHUB_ACTIONS='true'), contextlib.redirect_stdout(output), \
+                patch.object(runner.subprocess, 'run', side_effect=tool):
+            runner.mask('synthetic-password')
+            runner.run('xcodebuild', operation='archive')
+
+    def test_decoded_key_is_masked_before_tools_can_use_it(self):
+        import base64
+        key = b'-----BEGIN PRIVATE KEY-----\nSYNTHETIC-KEY\n-----END PRIVATE KEY-----\n'
+        output = io.StringIO()
+        with tempfile.TemporaryDirectory() as temporary, patch.object(runner, 'WORK', Path(temporary)), \
+                patch.dict(os.environ, GITHUB_ACTIONS='true', ASC_API_PRIVATE_KEY_BASE64=base64.b64encode(key).decode()), \
+                contextlib.redirect_stdout(output):
+            path = runner.decode('ASC_API_PRIVATE_KEY_BASE64', 'synthetic.p8')
+            self.assertEqual(path.read_bytes(), key)
+            self.assertIn('::add-mask::SYNTHETIC-KEY\n', output.getvalue())
+            self.assertIn('KEY-----%0ASYNTHETIC-KEY%0A', output.getvalue())
+
+    def test_build_output_streams_while_credential_output_is_captured(self):
+        # A real executable named xcodebuild exercises inherited file descriptors,
+        # not a mocked CompletedProcess pretending to stream.
+        with tempfile.TemporaryDirectory() as temporary:
+            tool = Path(temporary) / 'xcodebuild'
+            tool.write_text('#!/bin/sh\nprintf "compiler stdout\\n"\nprintf "compiler stderr\\n" >&2\nexit 65\n')
+            tool.chmod(0o700)
+            script = ("import sys; sys.path.insert(0, 'Tests/Signing'); from test_runner import runner; "
+                      "runner.sys.argv=['testflight']; "
+                      "runner.cleanup=lambda: print('cleanup complete'); "
+                      "runner.publish=lambda: runner.run('xcodebuild', operation='archive'); "
+                      "sys.exit(runner.main())")
+            result = subprocess.run([sys.executable, '-c', script], capture_output=True, text=True,
+                                    env=dict(os.environ, PATH=temporary + os.pathsep + os.environ['PATH']))
+            self.assertEqual(result.returncode, 65)
+            self.assertIn('compiler stdout', result.stdout)
+            self.assertIn('compiler stderr', result.stderr)
+            self.assertIn('archive failed (exit code 65)', result.stderr)
+            self.assertIn('cleanup complete', result.stdout)
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output), \
                 self.assertRaises(runner.SigningError) as caught:
-            runner.run(command, operation=operation)
-        return str(caught.exception)
-
-    def test_archive_keeps_actionable_error_and_redacts_variable_fields(self):
-        message = self.failure('archive', b"/private/user/SECRET.swift:42:7: error: cannot find 'PRIVATE_VALUE' in scope\n")
-        self.assertIn('archive failed (exit code 65)', message)
-        self.assertIn("[source]:42:7: error: cannot find '[redacted]' in scope", message)
-        self.assertNotIn('PRIVATE_VALUE', message)
-        self.assertNotIn('/private/user', message)
-
-    def test_project_and_signing_errors_keep_reason_without_identifiers(self):
-        for output, reason in [
-            (b"xcodebuild: error: Unable to open project 'SECRET.xcodeproj'.\n", 'Unable to open project'),
-            (b'error: Provisioning profile "SECRET" doesn\'t include signing certificate "PRIVATE".\n', "doesn't include signing certificate"),
-            (b"error: No profiles for 'PRIVATE' were found\n", 'No profiles for'),
-        ]:
-            with self.subTest(output=output):
-                message = self.failure('export archive', output)
-                self.assertIn(reason, message)
-                self.assertNotIn('SECRET', message)
-                self.assertNotIn('PRIVATE', message)
-
-    def test_credential_and_other_tools_never_emit_captured_output(self):
-        for operation, command in [('import signing identity', 'security'), ('verify profile CMS', 'openssl'),
-                                   ('verify signature', 'codesign'), ('Apple validation', 'xcrun'),
-                                   ('upload', 'xcrun'), ('convert project', 'plutil'), ('archive', 'security')]:
-            with self.subTest(operation=operation, command=command):
-                message = self.failure(operation, b"error: no such module 'SECRET'\n", command)
-                self.assertNotIn('no such module', message)
-                self.assertNotIn('SECRET', message)
-                self.assertIn('exit code 65', message)
-
-    def test_unknown_payloads_and_controls_fail_closed(self):
-        output = (b'error: SECRET=private-token\n::error::PRIVATE\n'
-                  b'error: no such module \'SECRET\'\x1b[31m\n'
-                  b'error: no such module \'SECRET\'\r::add-mask::PRIVATE\n'
-                  b'-----BEGIN PRIVATE KEY-----\nPRIVATEKEYBASE64\n-----END PRIVATE KEY-----\n'
-                  b'<plist><data>PROFILEBASE64</data></plist>\n'
-                  b'export PASSWORD=SECRET\nsecurity import -P SECRET\n')
-        message = self.failure('archive', output)
-        self.assertIn('No recognized safe build diagnostics', message)
-        for forbidden in ['SECRET', 'PRIVATE', 'PROFILEBASE64', '\x1b', '\r', '::', 'security import']:
-            self.assertNotIn(forbidden, message)
-
-    def test_multiline_variable_payload_is_not_reconstructed(self):
-        output = b"error: no such module '-----BEGIN PRIVATE KEY-----\nPAYLOAD\n-----END PRIVATE KEY-----'\n"
-        message = self.failure('archive', output)
-        self.assertNotIn('PAYLOAD', message)
-        self.assertNotIn('BEGIN', message)
-        self.assertIn('No recognized safe build diagnostics', message)
-
-    def test_diagnostics_are_bounded_and_deduplicated(self):
-        output = b''.join(f"/secret.swift:{i}:1: error: no such module 'SECRET'\n".encode() for i in range(1000))
-        message = self.failure('archive', output)
-        self.assertLessEqual(len(message), 4096)
-        self.assertLessEqual(message.count('error:'), 20)
-        message = self.failure('archive', b"error: no such module 'SECRET'\n" * 1000)
-        self.assertEqual(message.count('no such module'), 1)
-        message = self.failure('archive', b"error: no such module '" + b'S' * 20000 + b"'\n")
-        self.assertIn('No recognized safe build diagnostics', message)
-
-    def test_failed_build_command_kind_without_paths_or_arguments(self):
-        output = (b"The following build commands failed:\n"
-                  b"\tSwiftCompile normal arm64 /private/SECRET.swift (in target 'PRIVATE' from project 'SECRET')\n"
-                  b"\tCodeSign /private/SECRET.app PASSWORD=PRIVATE\n"
-                  b"(2 failures)\n")
-        message = self.failure('archive', output)
-        self.assertIn('Failed build command: SwiftCompile', message)
-        self.assertIn('Failed build command: CodeSign', message)
-        self.assertNotIn('PRIVATE', message)
-        self.assertNotIn('SECRET', message)
-
-    def test_payload_wrappers_do_not_become_diagnostics(self):
-        output = (b'<string>error: no such module \'PRIVATE\'</string>\n'
-                  b'{"error": "no such module \'PRIVATE\'"}\n'
-                  b'-----BEGIN CERTIFICATE-----\nerror: no such module \'PRIVATE\'\n-----END CERTIFICATE-----\n')
-        message = self.failure('archive', output)
-        self.assertIn('No recognized safe build diagnostics', message)
-
-    def test_success_and_unchecked_calls_preserve_result_without_logging(self):
-        for code, check in [(0, True), (65, False)]:
-            result = subprocess.CompletedProcess(['security'], code, b'PRIVATE', b'SECRET')
-            captured = io.StringIO()
-            with patch.object(runner.subprocess, 'run', return_value=result), \
-                    contextlib.redirect_stdout(captured), contextlib.redirect_stderr(captured):
-                actual = runner.run('security', operation='import signing identity', check=check)
-            self.assertIs(actual, result)
-            self.assertEqual(captured.getvalue(), '')
-
-    def test_real_subprocess_failure_keeps_exit_code_without_output(self):
-        with self.assertRaises(runner.SigningError) as caught:
-            runner.run(sys.executable, '-c',
-                       "import sys; print('PRIVATE'); print('SECRET', file=sys.stderr); sys.exit(23)",
-                       operation='verify signature')
+            runner.run(sys.executable, '-c', "print('PRIVATE'); raise SystemExit(23)", operation='verify signature')
+        self.assertEqual(output.getvalue(), '')
         self.assertEqual(str(caught.exception), 'verify signature failed (exit code 23).')
+
+    def test_only_selected_build_calls_stream(self):
+        for command, operation, streams in [('xcodebuild', 'archive', True), ('xcodebuild', 'export archive', True),
+                                             ('xcodebuild', 'read Xcode version', False),
+                                             ('security', 'archive', False), ('xcrun', 'upload', False)]:
+            with self.subTest(command=command, operation=operation), \
+                    patch.object(runner.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0)) as tool:
+                runner.run(command, operation=operation)
+                self.assertEqual(tool.call_args.kwargs['stdout'], None if streams else subprocess.PIPE)
+                self.assertEqual(tool.call_args.kwargs['stderr'], None if streams else subprocess.PIPE)
+
+    def test_cleanup_failure_supersedes_tool_status_without_leaking_arguments(self):
+        output = io.StringIO()
+        with patch.object(runner.sys, 'argv', ['testflight']), \
+                patch.object(runner, 'publish', side_effect=runner.ToolError('archive', 65)), \
+                patch.object(runner, 'cleanup', side_effect=runner.SigningError('Cleanup failed.')), \
+                contextlib.redirect_stderr(output):
+            self.assertEqual(runner.main(), 1)
+        self.assertIn('Cleanup failed.', output.getvalue())
+
+    def test_non_actions_publish_rejected_before_credentials_or_tools(self):
+        with patch.dict(os.environ, GITHUB_ACTIONS='false', GITHUB_EVENT_NAME='workflow_dispatch',
+                        GITHUB_REF='refs/heads/main', UPLOAD_CONFIRMATION='UPLOAD INTERNAL TESTFLIGHT',
+                        BUILD_NUMBER='1.0.0', APPLE_TEAM_ID='TEAM123456', ASC_API_KEY_ID='KEY123',
+                        ASC_API_ISSUER_ID='12345678-1234-1234-1234-123456789abc',
+                        IOS_DISTRIBUTION_P12_PASSWORD='synthetic'), \
+                patch.object(runner, 'capabilities', side_effect=AssertionError('Passed Actions gate')), \
+                patch.object(runner, 'run') as tool, self.assertRaises(runner.SigningError):
+            runner.publish()
+        tool.assert_not_called()
 
     def test_launch_failure_hides_exception_and_command(self):
         with patch.object(runner.subprocess, 'run', side_effect=OSError('SECRET')), \

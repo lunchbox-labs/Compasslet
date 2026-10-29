@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Manual internal TestFlight publication. Print only fixed, redacted build diagnostics."""
+"""Manual internal TestFlight publication. Stream build output; keep credential-tool output private."""
 import base64
 import hashlib
 import json
@@ -16,7 +16,7 @@ import sys
 import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / 'signing'))
-from validation import APP, ACTIVITY, SigningError, require, validate_build, validate_profile, validate_product, safe_build_diagnostics
+from validation import APP, ACTIVITY, SigningError, require, validate_build, validate_profile, validate_product
 
 ROOT = Path(__file__).resolve().parents[1]
 WORK = Path(os.environ.get('RUNNER_TEMP', '/tmp')) / 'compass-testflight'
@@ -24,21 +24,34 @@ KEYCHAIN = WORK / 'signing.keychain-db'
 STAGE = 'preflight'
 
 
-# Only these two calls consume build logs. Credential-tool output stays private.
+# Only these build calls stream output. Credential-tool output stays private.
 BUILD_OPERATIONS = {'archive', 'export archive'}
 
 
+class ToolError(SigningError):
+    def __init__(self, operation, returncode):
+        super().__init__(operation + ' failed (exit code ' + str(returncode) + ').')
+        self.exit_code = returncode if returncode > 0 else 128 - returncode
+
+
+def mask(value):
+    # Actions consumes these commands before streamed build output can expose a
+    # decoded key or generated password. Never emit masking commands locally.
+    require(os.environ.get('GITHUB_ACTIONS') == 'true', 'Secret masking requires GitHub Actions.')
+    for part in dict.fromkeys([value, *value.splitlines()]):
+        if part:
+            escaped = part.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+            print('::add-mask::' + escaped, flush=True)
+
+
 def run(*args, operation, check=True, **kwargs):
+    output = None if args[0] == 'xcodebuild' and operation in BUILD_OPERATIONS else subprocess.PIPE
     try:
-        result = subprocess.run([str(a) for a in args], stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE, **kwargs)
+        result = subprocess.run([str(a) for a in args], stdout=output, stderr=output, **kwargs)
     except OSError:
         raise SigningError(operation + ' could not start.') from None
     if check and result.returncode:
-        detail = operation + ' failed (exit code ' + str(result.returncode) + ').'
-        if args[0] == 'xcodebuild' and operation in BUILD_OPERATIONS:
-            detail += '\n' + safe_build_diagnostics(result.stdout, result.stderr)
-        raise SigningError(detail)
+        raise ToolError(operation, result.returncode)
     return result
 
 
@@ -93,7 +106,10 @@ def decode(name, filename):
     value = os.environ.get(name, '')
     require(bool(value), 'Missing required Actions secret: ' + name)
     path = WORK / filename
-    path.write_bytes(base64.b64decode(''.join(value.split()), validate=True))
+    payload = base64.b64decode(''.join(value.split()), validate=True)
+    if name == 'ASC_API_PRIVATE_KEY_BASE64':
+        mask(payload.decode('utf-8'))
+    path.write_bytes(payload)
     return path
 
 
@@ -124,10 +140,11 @@ def signed_product(path, bundle, build, expected, roots, certificate):
 
 def publish():
     global STAGE
-    require(os.environ.get('GITHUB_EVENT_NAME') == 'workflow_dispatch' and
+    require(os.environ.get('GITHUB_ACTIONS') == 'true' and
+            os.environ.get('GITHUB_EVENT_NAME') == 'workflow_dispatch' and
             os.environ.get('GITHUB_REF') == 'refs/heads/main' and
             os.environ.get('UPLOAD_CONFIRMATION') == 'UPLOAD INTERNAL TESTFLIGHT',
-            'Run manually from main with the exact upload confirmation.')
+            'Run in GitHub Actions manually from main with the exact upload confirmation.')
     build = os.environ.get('BUILD_NUMBER', '')
     validate_build(build)
     team = os.environ.get('APPLE_TEAM_ID', '')
@@ -152,6 +169,7 @@ def publish():
              decode('IOS_ACTIVITY_PROFILE_BASE64', 'activity.mobileprovision')]
     decode('ASC_API_PRIVATE_KEY_BASE64', 'AuthKey_' + key + '.p8')
     password = secrets.token_urlsafe(32)
+    mask(password)
     run('security', 'create-keychain', '-p', password, KEYCHAIN, operation='create signing keychain')
     run('security', 'set-keychain-settings', '-lut', '21600', KEYCHAIN, operation='configure signing keychain')
     run('security', 'unlock-keychain', '-p', password, KEYCHAIN, operation='unlock signing keychain')
@@ -163,6 +181,7 @@ def publish():
     matches = re.findall(r'\b([A-Fa-f0-9]{40}) "Apple Distribution:[^"\n]+"', identities)
     require(len(matches) == 1, 'Import exactly one valid Apple Distribution identity with private key.')
     identity = matches[0].upper()
+    mask(identity)
     pem = run('security', 'find-certificate', '-a', '-p', KEYCHAIN, operation='read signing certificates').stdout
     blocks = re.findall(b'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----', pem, re.S)
     certificates = [base64.b64decode(b''.join(b.splitlines()[1:-1])) for b in blocks]
@@ -182,6 +201,9 @@ def publish():
     require(profiles[0]['UUID'] != profiles[1]['UUID'], 'Use separate app and extension profiles.')
     for p, bundle in zip(profiles, [APP, ACTIVITY]):
         validate_profile(p, team, bundle, certificate)
+        mask(p['UUID'])
+        if p.get('Name'):
+            mask(p['Name'])
     installed = Path.home() / 'Library/Developer/Xcode/UserData/Provisioning Profiles'
     installed.mkdir(parents=True, exist_ok=True)
     for source, p in zip(paths, profiles):
@@ -245,9 +267,7 @@ def publish():
     print('Apple accepted the upload. Processing and internal tester availability are still pending.')
 
 
-if __name__ == '__main__':
-    os.umask(0o077)
-    signal.signal(signal.SIGTERM, lambda *_: sys.exit(1))
+def main():
     try:
         if sys.argv[1:] == ['capabilities']:
             capabilities()
@@ -264,4 +284,11 @@ if __name__ == '__main__':
         # Never print exception text from subprocess, plist, JSON or credential decoding.
         detail = str(error) if isinstance(error, SigningError) else 'Review configuration and rerun secret-free checks.'
         print('TestFlight failed during ' + STAGE + ': ' + detail, file=sys.stderr)
-        sys.exit(1)
+        return error.exit_code if isinstance(error, ToolError) else 1
+    return 0
+
+
+if __name__ == '__main__':
+    os.umask(0o077)
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(1))
+    sys.exit(main())

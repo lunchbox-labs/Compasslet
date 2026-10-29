@@ -99,7 +99,7 @@ class RunnerTests(unittest.TestCase):
                                          ('workflow_dispatch', 'refs/heads/topic', 'UPLOAD INTERNAL TESTFLIGHT'),
                                          ('workflow_dispatch', 'refs/heads/main', 'yes')]:
             with self.subTest(event=event, ref=ref), patch.dict(runner.os.environ,
-                    GITHUB_EVENT_NAME=event, GITHUB_REF=ref, UPLOAD_CONFIRMATION=confirmation), \
+                    GITHUB_ACTIONS='true', GITHUB_EVENT_NAME=event, GITHUB_REF=ref, UPLOAD_CONFIRMATION=confirmation), \
                     patch.object(runner, 'run') as mocked:
                 with self.assertRaises(ValueError):
                     runner.publish()
