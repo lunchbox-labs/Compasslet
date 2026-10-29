@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Manual internal TestFlight publication. Stream build output; keep credential-tool output private."""
+"""Publish manual internal builds or stable releases; keep credential-tool output private."""
 import base64
 import json
 import os
@@ -113,13 +113,26 @@ def decode(name, filename):
 
 def publish():
     global STAGE
-    require(os.environ.get('GITHUB_ACTIONS') == 'true' and
-            os.environ.get('GITHUB_EVENT_NAME') == 'workflow_dispatch' and
-            os.environ.get('GITHUB_REF') == 'refs/heads/main',
-            'Run in GitHub Actions manually from main.')
+    require(os.environ.get('GITHUB_ACTIONS') == 'true', 'Run in GitHub Actions.')
+    event = os.environ.get('GITHUB_EVENT_NAME')
+    version = None
+    if event == 'workflow_dispatch':
+        require(os.environ.get('GITHUB_REF') == 'refs/heads/main', 'Run manually from main.')
+    elif event == 'release':
+        payload = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
+        release = payload['release']
+        require(payload.get('action') == 'published' and release.get('draft') is False and
+                release.get('prerelease') is False, 'Only published stable releases can upload.')
+        tag = release.get('tag_name', '')
+        match = re.fullmatch(r'v?((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))', tag)
+        require(match and os.environ.get('GITHUB_REF') == 'refs/tags/' + tag,
+                'Release tag must be X.Y.Z or vX.Y.Z, without prerelease or build metadata.')
+        version = match.group(1)
+    else:
+        raise SigningError('Only manual main builds or published stable releases can upload.')
     build = os.environ.get('BUILD_NUMBER', '')
-    require(re.fullmatch(r'[1-9][0-9]{0,3}\.(0|[1-9][0-9]?)\.(0|[1-9][0-9]?)', build),
-            'Choose a build number n.n.n (first 1–9999, others 0–99, no leading zeroes).')
+    require(re.fullmatch(r'[1-9][0-9]{0,3}\.[1-9][0-9]?', build),
+            'Workflow build number must be run.attempt (run 1–9999, attempt 1–99).')
     team = os.environ.get('APPLE_TEAM_ID', '')
     key = os.environ.get('ASC_API_KEY_ID', '')
     issuer = os.environ.get('ASC_API_ISSUER_ID', '')
@@ -179,6 +192,8 @@ def publish():
             settings.update(CODE_SIGN_STYLE='Manual', DEVELOPMENT_TEAM=team,
                             CODE_SIGN_IDENTITY='Apple Distribution', PROVISIONING_PROFILE_SPECIFIER=profile_id,
                             CURRENT_PROJECT_VERSION=build)
+            if version is not None:
+                settings['MARKETING_VERSION'] = version
             seen.add(bundle)
     require(seen == {APP, ACTIVITY}, 'Project target IDs changed; review signing configuration.')
     project.write_bytes(plistlib.dumps(data))
@@ -187,12 +202,12 @@ def publish():
     run('xcodebuild', '-project', source / 'Compass.xcodeproj', '-scheme', 'Compass',
         '-configuration', 'Release', '-destination', 'generic/platform=iOS',
         '-derivedDataPath', WORK / 'derived', '-archivePath', archive, 'archive', cwd=source, operation='archive')
-    STAGE = 'internal-only export'
+    STAGE = 'export'
     options = WORK / 'ExportOptions.plist'
     options.write_bytes(plistlib.dumps({'method': 'app-store-connect', 'destination': 'export',
         'teamID': team, 'signingStyle': 'manual', 'signingCertificate': 'Apple Distribution',
         'provisioningProfiles': dict(zip([APP, ACTIVITY], profiles)),
-        'testFlightInternalTestingOnly': True, 'manageAppVersionAndBuildNumber': False}))
+        'testFlightInternalTestingOnly': event == 'workflow_dispatch', 'manageAppVersionAndBuildNumber': False}))
     exported = WORK / 'export'
     run('xcodebuild', '-exportArchive', '-archivePath', archive, '-exportPath', exported,
         '-exportOptionsPlist', options, operation='export archive')
@@ -204,7 +219,7 @@ def publish():
     run('xcrun', 'altool', '--validate-app', *args, env=auth_env, operation='Apple validation')
     STAGE = 'upload (check App Store Connect before retrying an interrupted upload)'
     run('xcrun', 'altool', '--upload-app', *args, env=auth_env, operation='upload')
-    print('Apple accepted the upload. Processing and internal tester availability are still pending.')
+    print('Apple accepted the upload. Processing is still pending; no App Review submission was made.')
 
 
 def main():
