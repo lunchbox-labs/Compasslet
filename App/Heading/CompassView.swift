@@ -6,6 +6,8 @@ struct CompassView: View {
   @Environment(\.scenePhase) private var scenePhase
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @StateObject private var compass = HeadingController(sensor: DeviceHeadingSensor())
+  @AppStorage("rotatesCompassDial") private var rotatesDial = true
+  @State private var showingSettings = false
 
   private var roundedDegrees: Int? {
     compass.sample.map { Int($0.angle.degrees.rounded()) % 360 }
@@ -36,20 +38,28 @@ struct CompassView: View {
             .foregroundStyle(.secondary)
           Text("Find your bearing").font(.title2.weight(.semibold))
         }
-        CarPlaySetupView(drive: drive)
-        dial
-        VStack(spacing: 8) {
-          Text(roundedDegrees.map { "\($0)° \(direction)" } ?? "—")
-            .font(.system(.largeTitle, design: .rounded, weight: .medium))
-            .monospacedDigit()
-            .contentTransition(.identity)
-          if let sample = compass.sample {
-            Text("Accuracy ±\(Int(min(sample.accuracy, 360).rounded()))°")
-              .font(.subheadline).foregroundStyle(.secondary)
+        HStack {
+          if drive.isDriving {
+            Button("End Drive", role: .destructive) { Task { await drive.endDrive() } }
+          }
+          Spacer()
+          Button("Settings", systemImage: "gearshape") { showingSettings = true }
+            .labelStyle(.iconOnly)
+        }
+        if let notice = locationNotice {
+          Button {
+            showingSettings = true
+          } label: {
+            Label(notice, systemImage: "location.slash")
+              .font(.subheadline)
           }
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilitySummary)
+        dial
+        if !rotatesDial { headingReadout.accessibilityHidden(true) }
+        if let sample = compass.sample {
+          Text("Accuracy ±\(Int(min(sample.accuracy, 360).rounded()))°")
+            .font(.subheadline).foregroundStyle(.secondary)
+        }
         VStack(spacing: 10) {
           Label(
             compass.status.title,
@@ -77,46 +87,87 @@ struct CompassView: View {
       .frame(maxWidth: .infinity)
     }
     .background(Color(uiColor: .systemBackground))
+    .sheet(isPresented: $showingSettings) {
+      CompassSettingsView(drive: drive, rotatesDial: $rotatesDial)
+    }
     .task(id: scenePhase) {
       guard scenePhase == .active else {
         compass.stop()
         return
       }
+      await drive.phoneBecameActive()
+      guard !Task.isCancelled else { return }
       compass.setReducedMotion(reduceMotion)
       await compass.run()
     }
     .onChange(of: reduceMotion) { _, value in compass.setReducedMotion(value) }
   }
 
+  private var headingReadout: some View {
+    Text(roundedDegrees.map { "\($0)° \(direction)" } ?? "—")
+      .font(.system(.largeTitle, design: .rounded, weight: .medium))
+      .monospacedDigit()
+      .contentTransition(.identity)
+      .lineLimit(1)
+      .minimumScaleFactor(0.7)
+  }
+
+  private var locationNotice: String? {
+    switch drive.setupStatus {
+    case .ready: nil
+    case .permissionRequired, .denied: "Enable location for CarPlay"
+    case .restricted: "Location access is restricted"
+    case .servicesDisabled: "Location Services is off"
+    case .preciseLocationRequired: "Enable Precise Location for CarPlay"
+    case .unavailable: "CarPlay travel direction unavailable"
+    }
+  }
+
   private var dial: some View {
     ZStack {
       Circle().stroke(.quaternary, lineWidth: 2)
-      ForEach(0..<72) { index in
-        Capsule()
-          .fill(index % 9 == 0 ? Color.primary : Color.secondary.opacity(0.45))
-          .frame(width: index % 9 == 0 ? 2 : 1, height: index % 9 == 0 ? 16 : 7)
-          .offset(y: -118)
-          .rotationEffect(.degrees(Double(index) * 5))
+      ZStack {
+        ForEach(0..<72) { index in
+          Capsule()
+            .fill(index % 9 == 0 ? Color.primary : Color.secondary.opacity(0.45))
+            .frame(width: index % 9 == 0 ? 2 : 1, height: index % 9 == 0 ? 16 : 7)
+            .offset(y: -118)
+            .rotationEffect(.degrees(Double(index) * 5))
+        }
+        ForEach(Array(["N", "E", "S", "W"].enumerated()), id: \.offset) { index, label in
+          Text(label).font(.headline)
+            .foregroundStyle(index == 0 ? Color.red : Color.secondary)
+            .offset(
+              x: index == 1 ? 90 : index == 3 ? -90 : 0,
+              y: index == 0 ? -90 : index == 2 ? 90 : 0)
+        }
       }
-      ForEach(Array(["N", "E", "S", "W"].enumerated()), id: \.offset) { index, label in
-        Text(label).font(.headline)
-          .foregroundStyle(index == 0 ? Color.red : Color.secondary)
-          .offset(
-            x: index == 1 ? 90 : index == 3 ? -90 : 0,
-            y: index == 0 ? -90 : index == 2 ? 90 : 0)
-      }
+      // Samples are already circularly smoothed. No implicit interpolation means
+      // crossing north cannot animate a full revolution in either display style.
+      .rotationEffect(.degrees(rotatesDial ? -(compass.sample?.angle.degrees ?? 0) : 0))
+      .opacity(compass.sample == nil ? 0.35 : 1)
       if let sample = compass.sample {
-        Image(systemName: "location.north.fill")
-          .font(.system(size: 100, weight: .ultraLight))
-          .foregroundStyle(.tint)
-          .rotationEffect(.degrees(sample.angle.degrees))
+        if rotatesDial {
+          Image(systemName: "triangle.fill")
+            .font(.caption)
+            .foregroundStyle(.tint)
+            .rotationEffect(.degrees(180))
+            .offset(y: -132)
+          headingReadout.frame(maxWidth: 150)
+        } else {
+          Image(systemName: "location.north.fill")
+            .font(.system(size: 100, weight: .ultraLight))
+            .foregroundStyle(.tint)
+            .rotationEffect(.degrees(sample.angle.degrees))
+          Circle().fill(.primary).frame(width: 8, height: 8)
+        }
       } else {
         Image(systemName: "safari")
           .font(.system(size: 64, weight: .ultraLight)).foregroundStyle(.tertiary)
       }
-      Circle().fill(.primary).frame(width: 8, height: 8)
     }
     .frame(width: 260, height: 260)
-    .accessibilityHidden(true)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(accessibilitySummary)
   }
 }

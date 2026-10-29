@@ -7,6 +7,7 @@ final class DriveSessionControllerTests: XCTestCase {
   final class Sensor: TravelLocationSensor {
     var authorization: TravelAuthorization = .authorized
     var fullAccuracy = true
+    var servicesEnabled = true
     var available = true
     var receive: ((TravelSensorEvent) -> Void)?
     var starts = 0
@@ -63,16 +64,76 @@ final class DriveSessionControllerTests: XCTestCase {
       sensor: sensor, activity: activity, now: { self.time }, automaticTick: false)
   }
 
-  func testPhoneLaunchDoesNotAcquireAndPhoneRequestIsOnce() {
+  func testPhoneLaunchDoesNotAcquireAndPhoneRequestIsOnce() async {
     let sensor = Sensor(), activity = Activity()
     sensor.authorization = .notDetermined
     let controller = make(sensor, activity)
     XCTAssertEqual(sensor.starts, 0)
     controller.requestPhoneAuthorization(isForeground: false)
     XCTAssertEqual(sensor.requests, 0)
-    controller.requestPhoneAuthorization(isForeground: true)
-    controller.requestPhoneAuthorization(isForeground: true)
+    await controller.phoneBecameActive()
+    await controller.phoneBecameActive()
     XCTAssertEqual(sensor.requests, 1)
+    XCTAssertEqual(sensor.starts, 0)
+    XCTAssertEqual(activity.starts, 0)
+    sensor.authorization = .denied
+    await controller.phoneBecameActive()
+    XCTAssertEqual(controller.setupStatus, .denied)
+    XCTAssertEqual(sensor.requests, 1)
+  }
+
+  func testForegroundRefreshReflectsSettingsWithoutStartingTravel() async {
+    let sensor = Sensor(), activity = Activity()
+    sensor.authorization = .denied
+    let controller = make(sensor, activity)
+    await controller.phoneBecameActive()
+    XCTAssertEqual(controller.setupStatus, .denied)
+    sensor.authorization = .restricted
+    await controller.phoneBecameActive()
+    XCTAssertEqual(controller.setupStatus, .restricted)
+    sensor.authorization = .authorized
+    sensor.fullAccuracy = false
+    await controller.phoneBecameActive()
+    XCTAssertEqual(controller.setupStatus, .preciseLocationRequired)
+    sensor.servicesEnabled = false
+    await controller.phoneBecameActive()
+    XCTAssertEqual(controller.setupStatus, .servicesDisabled)
+    sensor.servicesEnabled = true
+    sensor.fullAccuracy = true
+    await controller.phoneBecameActive()
+    XCTAssertEqual(controller.setupStatus, .ready)
+    XCTAssertEqual(sensor.requests, 0)
+    XCTAssertEqual(sensor.starts, 0)
+    XCTAssertEqual(activity.starts, 0)
+  }
+
+  func testServicesDisabledOnReturnStopsActiveDriveAndClearsBearing() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    await controller.carPlayActivated()
+    sensor.receive?(reading())
+    sensor.servicesEnabled = false
+    await controller.phoneBecameActive()
+    await controller.waitForPendingOperations()
+    XCTAssertEqual(controller.setupStatus, .servicesDisabled)
+    XCTAssertFalse(controller.isDriving)
+    XCTAssertNil(controller.presentation.sample)
+    XCTAssertEqual(sensor.stops, 1)
+    XCTAssertEqual(activity.ends, 2)
+    XCTAssertEqual(sensor.requests, 0)
+  }
+
+  func testPhoneForegroundCancelledDuringPreparationDoesNotPrompt() async {
+    let sensor = Sensor(), activity = Activity()
+    sensor.authorization = .notDetermined
+    activity.pauseEnd = true
+    let controller = make(sensor, activity)
+    let opening = Task { await controller.phoneBecameActive() }
+    while activity.endContinuation == nil { await Task.yield() }
+    opening.cancel()
+    activity.endContinuation?.resume()
+    await opening.value
+    XCTAssertEqual(sensor.requests, 0)
+    XCTAssertEqual(sensor.starts, 0)
   }
 
   func testActivationStartsOnceAndResignationRetainsAcquisition() async {
@@ -93,13 +154,16 @@ final class DriveSessionControllerTests: XCTestCase {
   }
 
   func testIneligibleAuthorizationAndPrecisionNeverAcquireOrPrompt() async {
-    for authorization in [TravelAuthorization.notDetermined, .denied, .restricted] {
+    for (authorization, expected) in [
+      (TravelAuthorization.notDetermined, DriveSessionController.SetupStatus.permissionRequired),
+      (.denied, .denied), (.restricted, .restricted),
+    ] {
       let sensor = Sensor(), activity = Activity()
       sensor.authorization = authorization
       let controller = make(sensor, activity)
       await controller.carPlayActivated()
       XCTAssertFalse(controller.isDriving)
-      XCTAssertEqual(controller.setupStatus, .permissionRequired)
+      XCTAssertEqual(controller.setupStatus, expected)
       XCTAssertEqual(sensor.starts, 0)
       XCTAssertEqual(sensor.requests, 0)
     }

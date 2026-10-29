@@ -15,6 +15,7 @@ enum TravelSensorEvent {
 protocol TravelLocationSensor: AnyObject {
   var authorization: TravelAuthorization { get }
   var fullAccuracy: Bool { get }
+  var servicesEnabled: Bool { get }
   var available: Bool { get }
   var receive: ((TravelSensorEvent) -> Void)? { get set }
   func requestAuthorization()
@@ -46,8 +47,9 @@ final class DeviceTravelLocationSensor: NSObject, TravelLocationSensor,
     }
   }
   var fullAccuracy: Bool { authorizationManager.accuracyAuthorization == .fullAccuracy }
+  var servicesEnabled: Bool { CLLocationManager.locationServicesEnabled() }
   var available: Bool {
-    CLLocationManager.locationServicesEnabled()
+    servicesEnabled
       && (Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String])?
         .contains("location") == true
       && !(Bundle.main.object(forInfoDictionaryKey: "NSLocationWhenInUseUsageDescription")
