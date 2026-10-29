@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CFBundleName</key>
+	<string>CarPlay Compass</string>
+	<key>CFBundleDisplayName</key>
+	<string>CarPlay Compass</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Compass uses precise location for travel direction during a CarPlay drive, including while another app is visible. No location or route history is saved.</string>
 	<key>NSSupportsLiveActivities</key>
