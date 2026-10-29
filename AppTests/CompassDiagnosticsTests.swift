@@ -71,6 +71,27 @@ final class CompassDiagnosticsTests: XCTestCase {
       try restarted.snapshot().surfaces.first { $0.surface == .widget }?.activeSeconds, 0)
   }
 
+  func testExportContainsElapsedIntervalsWithoutRawBootUptime() throws {
+    let store = try makeStore()
+    try store.setEnabled(true)
+    try store.observe(.widget, active: true, wall: 100, uptime: 987654)
+    try store.record(.widget, kind: .reloadRequested, wall: 100, uptime: 987654)
+    try store.observe(.widget, active: true, wall: 101, uptime: 987655)
+    try store.record(.widget, kind: .reloadRequested, wall: 101, uptime: 987655)
+    let data = try store.exportJSON()
+    let text = try XCTUnwrap(String(data: data, encoding: .utf8))
+    XCTAssertFalse(text.contains("987654"))
+    XCTAssertFalse(text.contains("987655"))
+    let snapshot = try JSONDecoder().decode(CompassDiagnostics.Snapshot.self, from: data)
+    XCTAssertEqual(
+      snapshot.events.filter { $0.kind == .reloadRequested }.map(\.elapsedSinceFirstRetainedEvent),
+      [0, 1])
+    XCTAssertEqual(
+      snapshot.surfaces.first { $0.surface == .widget }?.intervals.first {
+        $0.kind == .reloadRequested
+      }?.meanIntervalSeconds, 1)
+  }
+
   func testConcurrentConnectionsExportConsistentEventsAndIntervals() throws {
     let store = try makeStore()
     let provider = try CompassDiagnostics(url: store.url)

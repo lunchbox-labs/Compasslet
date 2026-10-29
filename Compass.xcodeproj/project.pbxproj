@@ -39,6 +39,8 @@
 		A58C4FDC4EB85A91FBF6ED09 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = F493B01490C49678449E1B72 /* libsqlite3.tbd */; };
 		D204473737DF36F5712B0D3E /* DiagnosticsSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E4EE64525C86691D6CBD629 /* DiagnosticsSettingsSection.swift */; };
 		D39558B867B4613C01C73F04 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = F493B01490C49678449E1B72 /* libsqlite3.tbd */; };
+		DB938C90D20A4B90A9A33002 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = DB938C90D20A4B90A9A33001 /* PrivacyInfo.xcprivacy */; };
+		DB938C90D20A4B90A9A33004 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = DB938C90D20A4B90A9A33003 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -104,6 +106,8 @@
 		275D9183B5D424FCC7810822 /* CompassDiagnosticsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompassDiagnosticsTests.swift; sourceTree = "<group>"; };
 		2E4EE64525C86691D6CBD629 /* DiagnosticsSettingsSection.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DiagnosticsSettingsSection.swift; sourceTree = "<group>"; };
 		F493B01490C49678449E1B72 /* libsqlite3.tbd */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libsqlite3.tbd; path = usr/lib/libsqlite3.tbd; sourceTree = SDKROOT; };
+		DB938C90D20A4B90A9A33001 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		DB938C90D20A4B90A9A33003 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -151,6 +155,7 @@
 		27073E1FFFF847E6BA90B14D /* CompassActivity */ = {
 			isa = PBXGroup;
 			children = (
+				DB938C90D20A4B90A9A33003 /* PrivacyInfo.xcprivacy */,
 				381DFC8C59216D52B9C5D31F /* CompassActivityWidget.swift */,
 				E2FA1E22F31F4AE7B2C1B510 /* CompassRefreshProbeWidget.swift */,
 				B1164CC266C944D46C5EAD7D /* Info.plist */,
@@ -202,6 +207,7 @@
 		B5518889D94CFC520A2DC420 /* App */ = {
 			isa = PBXGroup;
 			children = (
+				DB938C90D20A4B90A9A33001 /* PrivacyInfo.xcprivacy */,
 				B291BEB8793F4F3308C46395 /* Application */,
 				A3089B7FAE27BCA3309070E0 /* Heading */,
 				5FF69E94E9E7C6A94754E828 /* Driving */,
@@ -377,6 +383,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DB938C90D20A4B90A9A33002 /* PrivacyInfo.xcprivacy in Resources */,
 				10A9C1012AD54E0AA0676C01 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -392,6 +399,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DB938C90D20A4B90A9A33004 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

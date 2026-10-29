@@ -13,7 +13,7 @@ final class CompassDiagnostics: @unchecked Sendable {
     let surface: Surface
     let kind: Kind
     let timestamp: Double
-    let uptime: Double
+    let elapsedSinceFirstRetainedEvent: Double
     let activeSeconds: Double
     let session: String
   }
@@ -213,6 +213,10 @@ final class CompassDiagnostics: @unchecked Sendable {
 
   func snapshot() throws -> Snapshot {
     try transaction(readOnly: true) {
+      var origins: [String: Double] = [:]
+      for row in try rows("SELECT session,MIN(uptime) FROM events GROUP BY session") {
+        origins[row[0]] = Double(row[1])
+      }
       let events = try rows(
         "SELECT sequence,surface,kind,wall,uptime,elapsed,session FROM events ORDER BY sequence"
       ).compactMap { row -> Event? in
@@ -220,9 +224,10 @@ final class CompassDiagnostics: @unchecked Sendable {
           let kind = Kind(rawValue: row[2]), let wall = Double(row[3]),
           let uptime = Double(row[4]), let elapsed = Double(row[5])
         else { throw Failure.database }
+        let origin = origins[row[6], default: uptime]
         return Event(
           sequence: sequence, surface: surface, kind: kind, timestamp: wall,
-          uptime: uptime, activeSeconds: elapsed, session: row[6])
+          elapsedSinceFirstRetainedEvent: uptime - origin, activeSeconds: elapsed, session: row[6])
       }
       let clocks = try rows("SELECT surface,total FROM clocks")
       let summaries = Surface.allCases.map { surface in
@@ -230,14 +235,16 @@ final class CompassDiagnostics: @unchecked Sendable {
         let kinds = Set(selected.map(\.kind.rawValue)).sorted()
         let intervals = kinds.compactMap { name -> IntervalSummary? in
           guard let kind = Kind(rawValue: name) else { return nil }
-          let stream = selected.filter { $0.kind == kind }
+          let stream = selected.filter { $0.kind == kind }.sorted {
+            $0.elapsedSinceFirstRetainedEvent < $1.elapsedSinceFirstRetainedEvent
+          }
           var previous: [String: Double] = [:]
           var differences: [Double] = []
           for event in stream {
-            if let time = previous[event.session], event.uptime >= time {
-              differences.append(event.uptime - time)
+            if let time = previous[event.session], event.elapsedSinceFirstRetainedEvent >= time {
+              differences.append(event.elapsedSinceFirstRetainedEvent - time)
             }
-            previous[event.session] = event.uptime
+            previous[event.session] = event.elapsedSinceFirstRetainedEvent
           }
           return IntervalSummary(
             kind: kind, count: stream.count,
@@ -250,7 +257,7 @@ final class CompassDiagnostics: @unchecked Sendable {
       }
       return Snapshot(
         explanation:
-          "Timing evidence, not screen visibility or paint. Each surface retains up to 30 observed active-feed minutes across sessions (maximum 50000 events). Gaps over 2 seconds and process restarts are not counted. Intervals are grouped by event kind within sessions. Timestamps are Unix seconds; uptime is monotonic seconds since boot.",
+          "Timing evidence, not screen visibility or paint. Each surface retains up to 30 observed active-feed minutes across sessions (maximum 50000 events). Gaps over 2 seconds and process restarts are not counted. Intervals are grouped by event kind within sessions. Timestamps are Unix seconds. Event elapsed times are relative to the first retained event in that session; raw boot uptime is not exported.",
         surfaces: summaries, events: events)
     }
   }
