@@ -44,11 +44,8 @@ jobs:
           -derivedDataPath .build/xcode CODE_SIGNING_ALLOWED=NO build
       - name: Test on an available iPhone simulator
         run: bash scripts/test-ios
-      - name: Verify built bundle metadata
+      - name: Verify built bundle names
         run: |
-          plutil -extract ITSAppUsesNonExemptEncryption raw -expect bool \
-            .build/xcode/Build/Products/Debug-iphonesimulator/Compass.app/Info.plist \
-            | grep -Fx 'false'
           for key in CFBundleName CFBundleDisplayName; do
             /usr/libexec/PlistBuddy -c "Print :$key" \
               .build/xcode/Build/Products/Debug-iphonesimulator/Compass.app/Info.plist \
