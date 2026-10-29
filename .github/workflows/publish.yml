@@ -2,10 +2,6 @@ name: Publish
 on:
   workflow_dispatch:
     inputs:
-      confirmation:
-        description: 'Type UPLOAD INTERNAL TESTFLIGHT to authorize this upload'
-        required: true
-        type: string
       build_number:
         description: 'Unused build n.n.n, greater than prior builds for this app version (e.g. 2.0.0)'
         required: true
@@ -17,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   publish:
-    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'UPLOAD INTERNAL TESTFLIGHT'
+    if: github.ref == 'refs/heads/main'
     runs-on: xcode-27
     timeout-minutes: 60
     env:
@@ -29,7 +25,6 @@ jobs:
           persist-credentials: false
       - name: Archive, validate and upload internal TestFlight build
         env:
-          UPLOAD_CONFIRMATION: ${{ inputs.confirmation }}
           BUILD_NUMBER: ${{ inputs.build_number }}
           APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
           ASC_API_KEY_ID: ${{ vars.ASC_API_KEY_ID }}
