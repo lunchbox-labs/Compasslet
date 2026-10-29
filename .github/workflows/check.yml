@@ -1,0 +1,46 @@
+name: Check
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: check-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    container: swift:6.4.1
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Trust the mounted checkout in this ephemeral container
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - run: bash scripts/swift-style check
+      - run: swift build --jobs 4 -c release
+      - run: swift test --jobs 4
+  native:
+    runs-on: xcode-27
+    timeout-minutes: 25
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Verify Apple toolchain
+        run: |
+          xcodebuild -version
+          xcodebuild -version | grep -Fx 'Xcode 27.1'
+          xcodebuild -version | grep -Fx 'Build version 27A9275'
+          xcrun --sdk iphonesimulator --show-sdk-version
+          xcrun --sdk iphonesimulator --show-sdk-version | grep -E '^27\.'
+          xcrun swift --version
+          xcrun swift-format --version
+      - name: Build unsigned simulator app
+        run: >-
+          xcodebuild -project Compass.xcodeproj -scheme Compass
+          -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath .build/xcode CODE_SIGNING_ALLOWED=NO build
+      - name: Test on an available iPhone simulator
+        run: bash scripts/test-ios
