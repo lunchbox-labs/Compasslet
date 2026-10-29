@@ -88,7 +88,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
       CPInformationItem(title: "Status", detail: value.status),
       CPInformationItem(title: "Dashboard", detail: value.compact),
     ]
-    try? CompassDiagnostics.shared?.record(.fullscreen, kind: .templateUpdated)
+    _ = try? CompassDiagnostics.shared?.record(.fullscreen, kind: .templateUpdated)
     information.actions =
       value.canEndDrive
       ? [

@@ -27,7 +27,7 @@ private struct RefreshProbeProvider: TimelineProvider {
     }
     let date = Date()
     let debugging = (try? CompassDiagnostics.shared?.isEnabled()) == true
-    try? CompassDiagnostics.shared?.record(.widget, kind: .providerCreated)
+    _ = try? CompassDiagnostics.shared?.record(.widget, kind: .providerCreated)
     completion(
       Timeline(
         entries: [RefreshProbeEntry(date: date, delivery: debugging ? delivery : nil)],

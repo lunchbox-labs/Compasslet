@@ -191,9 +191,9 @@ private final class LocalCompassActivityHandle: CompassActivityHandle {
     if (try? CompassDiagnostics.shared?.isEnabled()) == true {
       content.debugUpdateTime = Date()
     }
-    try? CompassDiagnostics.shared?.record(.activity, kind: .updateRequested)
+    _ = try? CompassDiagnostics.shared?.record(.activity, kind: .updateRequested)
     await activity.update(ActivityContent(state: content, staleDate: content.expiry))
-    try? CompassDiagnostics.shared?.record(.activity, kind: .updateCompleted)
+    _ = try? CompassDiagnostics.shared?.record(.activity, kind: .updateCompleted)
   }
 
   nonisolated private static func end(

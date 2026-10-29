@@ -10,7 +10,7 @@ final class CompassAppDelegate: NSObject, UIApplicationDelegate {
     reloadWidget: requestWidgetReload)
 
   private static func requestWidgetReload(reason: String) {
-    try? CompassDiagnostics.shared?.record(.widget, kind: .reloadRequested)
+    _ = try? CompassDiagnostics.shared?.record(.widget, kind: .reloadRequested)
     WidgetCenter.shared.reloadTimelines(ofKind: "CompassRefreshProbe")
   }
 
