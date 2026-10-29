@@ -1,11 +1,26 @@
 import CarPlay
 import UIKit
+import WidgetKit
+import OSLog
 
 @MainActor
 final class CompassAppDelegate: NSObject, UIApplicationDelegate {
   // One process-lifetime owner shared by the phone and all CarPlay callbacks.
   static let sharedDrive = DriveSessionController(
-    sensor: DeviceTravelLocationSensor(), activity: CompassActivityController())
+    sensor: DeviceTravelLocationSensor(), activity: CompassActivityController(),
+    reloadWidget: requestWidgetReload)
+
+  private static let widgetLog = Logger(
+    subsystem: "dev.lunchbox-labs.carplay-compass", category: "WidgetRefreshProbe")
+  private static var widgetRequests = 0
+
+  private static func requestWidgetReload(reason: String) {
+    widgetRequests += 1
+    widgetLog.info(
+      "request #\(widgetRequests) at \(Date().timeIntervalSince1970) reason=\(reason, privacy: .public)"
+    )
+    WidgetCenter.shared.reloadTimelines(ofKind: "CompassRefreshProbe")
+  }
 
   var drive: DriveSessionController { Self.sharedDrive }
 

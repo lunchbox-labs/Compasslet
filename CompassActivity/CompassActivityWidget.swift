@@ -3,6 +3,13 @@ import SwiftUI
 import WidgetKit
 
 @main
+struct CompassWidgets: WidgetBundle {
+  var body: some Widget {
+    CompassActivityWidget()
+    CompassRefreshProbeWidget()
+  }
+}
+
 struct CompassActivityWidget: Widget {
   var body: some WidgetConfiguration {
     ActivityConfiguration(for: CompassActivityAttributes.self) { context in

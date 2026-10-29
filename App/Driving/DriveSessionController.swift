@@ -15,6 +15,8 @@ final class DriveSessionController: ObservableObject {
   private let activity: any CompassActivityPresenting
   private let now: () -> Date
   private let automaticTick: Bool
+  private let reloadWidget: @MainActor (String) -> Void
+  private var lastWidgetReload: Date?
   private var filter = TravelCourseFilter()
   private var lastReading: TravelReading?
   private var startedAt: Date?
@@ -30,12 +32,14 @@ final class DriveSessionController: ObservableObject {
 
   init(
     sensor: any TravelLocationSensor, activity: any CompassActivityPresenting,
-    now: @escaping () -> Date = Date.init, automaticTick: Bool = true
+    now: @escaping () -> Date = Date.init, automaticTick: Bool = true,
+    reloadWidget: @escaping @MainActor (String) -> Void = { _ in }
   ) {
     self.sensor = sensor
     self.activity = activity
     self.now = now
     self.automaticTick = automaticTick
+    self.reloadWidget = reloadWidget
     refreshSetupStatus()
     observeAuthorization()
   }
@@ -76,6 +80,7 @@ final class DriveSessionController: ObservableObject {
     }
     isDriving = true
     startedAt = now()
+    lastWidgetReload = nil
     filter.reset()
     lastReading = nil
     presentation = TravelPresentation(sample: nil, status: .waiting)
@@ -169,7 +174,16 @@ final class DriveSessionController: ObservableObject {
       publish(filter.update(nil, now: now()))
     case .reading(let reading):
       lastReading = reading
-      publish(filter.update(reading, now: now()))
+      let value = filter.update(reading, now: now())
+      publish(value)
+      let currentTime = now()
+      if value.status == .usable, let sample = value.sample,
+        sample.isFresh(now: currentTime, maximumAge: 5),
+        lastWidgetReload.map({ currentTime.timeIntervalSince($0) >= 1 }) ?? true
+      {
+        lastWidgetReload = currentTime
+        reloadWidget("fresh reading")
+      }
     }
   }
 
@@ -210,6 +224,8 @@ final class DriveSessionController: ObservableObject {
     filter.reset()
     presentation = TravelPresentation(sample: nil, status: .unavailable)
     compactStatus = .inactive
+    lastWidgetReload = nil
+    reloadWidget("session ended")
     return enqueue { [activity] in
       activity.onDismiss = nil
       await activity.end()

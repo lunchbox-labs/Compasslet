@@ -75,6 +75,68 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertEqual(sensor.requests, 1)
   }
 
+  func testWidgetReloadsOnlyForFreshUsableReadingsAtMostOncePerSecond() async {
+    let sensor = Sensor(), activity = Activity()
+    var reloads = 0
+    let controller = DriveSessionController(
+      sensor: sensor, activity: activity, now: { self.time }, automaticTick: false,
+      reloadWidget: { _ in reloads += 1 })
+    await controller.carPlayActivated()
+    XCTAssertEqual(reloads, 0)
+    sensor.receive?(reading())
+    XCTAssertEqual(reloads, 1)
+    time += 0.5
+    sensor.receive?(reading())
+    XCTAssertEqual(reloads, 1)
+    time += 0.5
+    sensor.receive?(reading())
+    XCTAssertEqual(reloads, 2)
+    time += 1
+    sensor.receive?(reading(-1))
+    XCTAssertEqual(reloads, 2)
+    let staleReading = reading()
+    time += 6
+    sensor.receive?(staleReading)
+    XCTAssertEqual(reloads, 2)
+    controller.tick()
+    XCTAssertEqual(reloads, 2)
+    sensor.receive?(reading())
+    XCTAssertEqual(reloads, 3)
+    await controller.endDrive()
+  }
+
+  func testWidgetReloadEndsOnceAndIgnoresLateReadingsAfterDriveStops() async {
+    for stop in ["end", "disconnect", "permission", "services"] {
+      let sensor = Sensor(), activity = Activity()
+      var reloads = 0
+      let controller = DriveSessionController(
+        sensor: sensor, activity: activity, now: { self.time }, automaticTick: false,
+        reloadWidget: { _ in reloads += 1 })
+      await controller.carPlayActivated()
+      let lateDelivery = sensor.receive
+      sensor.receive?(reading())
+      XCTAssertEqual(reloads, 1)
+      switch stop {
+      case "end": await controller.endDrive()
+      case "disconnect": await controller.carPlayDisconnected()
+      case "permission":
+        sensor.authorization = .denied
+        sensor.receive?(.authorizationChanged)
+      default:
+        sensor.available = false
+        controller.tick()
+      }
+      XCTAssertFalse(controller.isDriving)
+      XCTAssertEqual(reloads, 2)
+      time += 2
+      lateDelivery?(reading())
+      controller.tick()
+      await controller.endDrive()
+      XCTAssertEqual(reloads, 2)
+      await controller.waitForPendingOperations()
+    }
+  }
+
   func testActivationStartsOnceAndResignationRetainsAcquisition() async {
     let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
     await controller.carPlayActivated()
