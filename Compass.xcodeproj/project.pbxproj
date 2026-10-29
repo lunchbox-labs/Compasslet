@@ -31,6 +31,7 @@
 		F48727869BD5AB3FA5D5F667 /* CarPlaySetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55EF90D92525BD937AE2BA8E /* CarPlaySetupView.swift */; };
 		F97CCAF85C23D34073466081 /* CompassActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 381DFC8C59216D52B9C5D31F /* CompassActivityWidget.swift */; };
 		FED695C7626372E86C39FF85 /* CarPlayPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41FAB8F8EC4A00F7250C1BC0 /* CarPlayPresentation.swift */; };
+		90090CB56FF0934B45B2BA5B /* CompassView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82EE439CAC4B29FCB2B2652C /* CompassView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -89,6 +90,7 @@
 		EDBFE6BCA6B17287C0474860 /* CompassApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompassApp.swift; sourceTree = "<group>"; };
 		F3323475E7B406064067E6C2 /* DriveSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveSessionController.swift; sourceTree = "<group>"; };
 		FD697ECCB09B35EE9223BFF1 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		82EE439CAC4B29FCB2B2652C /* CompassView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompassView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -181,17 +183,12 @@
 		B5518889D94CFC520A2DC420 /* App */ = {
 			isa = PBXGroup;
 			children = (
+				B291BEB8793F4F3308C46395 /* Application */,
+				A3089B7FAE27BCA3309070E0 /* Heading */,
+				5FF69E94E9E7C6A94754E828 /* Driving */,
+				651EB86926D5F6CA5BCA9EA8 /* CarPlay */,
+				FFABD4A00B014023AF290D95 /* LiveActivity */,
 				10A9C1012AD54E0AA0676C02 /* Assets.xcassets */,
-				EDBFE6BCA6B17287C0474860 /* CompassApp.swift */,
-				A1A46DD5AFEAE45BDDC8C05D /* HeadingController.swift */,
-				55EF90D92525BD937AE2BA8E /* CarPlaySetupView.swift */,
-				F3323475E7B406064067E6C2 /* DriveSessionController.swift */,
-				30824FB5698A3169AA134E40 /* CompassActivityPresenting.swift */,
-				4B8C91614F79675159741862 /* TravelLocationSensor.swift */,
-				223B00189E30490BEC47BB4B /* CompassActivityController.swift */,
-				41FAB8F8EC4A00F7250C1BC0 /* CarPlayPresentation.swift */,
-				4C6B9391E9371285A195C789 /* CarPlaySceneDelegate.swift */,
-				2DCA6A3149843FD54FCEC16B /* CompassAppDelegate.swift */,
 				FD697ECCB09B35EE9223BFF1 /* Info.plist */,
 				5B26188BCA24C591A1887EE6 /* Compass.entitlements */,
 			);
@@ -209,6 +206,52 @@
 			);
 			name = AppTests;
 			path = AppTests;
+			sourceTree = "<group>";
+		};
+		B291BEB8793F4F3308C46395 /* Application */ = {
+			isa = PBXGroup;
+			children = (
+				EDBFE6BCA6B17287C0474860 /* CompassApp.swift */,
+				2DCA6A3149843FD54FCEC16B /* CompassAppDelegate.swift */,
+			);
+			path = Application;
+			sourceTree = "<group>";
+		};
+		A3089B7FAE27BCA3309070E0 /* Heading */ = {
+			isa = PBXGroup;
+			children = (
+				A1A46DD5AFEAE45BDDC8C05D /* HeadingController.swift */,
+				82EE439CAC4B29FCB2B2652C /* CompassView.swift */,
+			);
+			path = Heading;
+			sourceTree = "<group>";
+		};
+		5FF69E94E9E7C6A94754E828 /* Driving */ = {
+			isa = PBXGroup;
+			children = (
+				F3323475E7B406064067E6C2 /* DriveSessionController.swift */,
+				4B8C91614F79675159741862 /* TravelLocationSensor.swift */,
+			);
+			path = Driving;
+			sourceTree = "<group>";
+		};
+		651EB86926D5F6CA5BCA9EA8 /* CarPlay */ = {
+			isa = PBXGroup;
+			children = (
+				4C6B9391E9371285A195C789 /* CarPlaySceneDelegate.swift */,
+				41FAB8F8EC4A00F7250C1BC0 /* CarPlayPresentation.swift */,
+				55EF90D92525BD937AE2BA8E /* CarPlaySetupView.swift */,
+			);
+			path = CarPlay;
+			sourceTree = "<group>";
+		};
+		FFABD4A00B014023AF290D95 /* LiveActivity */ = {
+			isa = PBXGroup;
+			children = (
+				223B00189E30490BEC47BB4B /* CompassActivityController.swift */,
+				30824FB5698A3169AA134E40 /* CompassActivityPresenting.swift */,
+			);
+			path = LiveActivity;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -359,6 +402,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9E6DF7AA346C5341EE5E0E55 /* CompassApp.swift in Sources */,
+				90090CB56FF0934B45B2BA5B /* CompassView.swift in Sources */,
 				0838A3A568319EC0360654D0 /* HeadingController.swift in Sources */,
 				F48727869BD5AB3FA5D5F667 /* CarPlaySetupView.swift in Sources */,
 				B37CF85048BCC053467427CB /* DriveSessionController.swift in Sources */,
