@@ -4,7 +4,10 @@ import Foundation
 
 @MainActor
 final class DriveSessionController: ObservableObject {
-  enum SetupStatus { case ready, permissionRequired, preciseLocationRequired, unavailable }
+  enum SetupStatus {
+    case ready, permissionRequired, denied, restricted, servicesDisabled, preciseLocationRequired,
+      unavailable
+  }
   enum CompactStatus { case inactive, starting, active, unavailable, dismissed }
   @Published private(set) var presentation = TravelPresentation(sample: nil, status: .unavailable)
   @Published private(set) var isDriving = false
@@ -53,8 +56,19 @@ final class DriveSessionController: ObservableObject {
     await operation.value
   }
 
+  /// Refresh on return from Settings; permission alone never starts travel acquisition.
+  func phoneBecameActive() async {
+    await prepare()
+    guard !Task.isCancelled else { return }
+    refreshSetupStatus()
+    if setupStatus != .ready { _ = stopDrive() }
+    requestPhoneAuthorization(isForeground: true)
+  }
+
   func requestPhoneAuthorization(isForeground: Bool) {
-    guard isForeground, !requestedPermission, sensor.authorization == .notDetermined else { return }
+    guard isForeground, !requestedPermission, setupStatus == .permissionRequired,
+      sensor.authorization == .notDetermined
+    else { return }
     requestedPermission = true
     sensor.requestAuthorization()
     refreshSetupStatus()
@@ -144,10 +158,16 @@ final class DriveSessionController: ObservableObject {
   }
 
   private func refreshSetupStatus() {
-    if !sensor.available {
+    if !sensor.servicesEnabled {
+      setupStatus = .servicesDisabled
+    } else if !sensor.available {
       setupStatus = .unavailable
-    } else if sensor.authorization != .authorized {
+    } else if sensor.authorization == .notDetermined {
       setupStatus = .permissionRequired
+    } else if sensor.authorization == .denied {
+      setupStatus = .denied
+    } else if sensor.authorization == .restricted {
+      setupStatus = .restricted
     } else if !sensor.fullAccuracy {
       setupStatus = .preciseLocationRequired
     } else {
@@ -162,7 +182,7 @@ final class DriveSessionController: ObservableObject {
     switch event {
     case .authorizationChanged: break
     case .authorizationLost:
-      setupStatus = .permissionRequired
+      setupStatus = .denied
       _ = stopDrive()
     case .interrupted:
       lastReading = nil

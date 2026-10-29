@@ -23,7 +23,15 @@ struct CarPlayPresentation: Equatable {
       }
     var bearing = "—"
     if setup != .ready {
-      status = "Complete location setup on iPhone while parked."
+      status =
+        switch setup {
+        case .permissionRequired, .denied: "Enable location on iPhone while parked."
+        case .restricted: "Location access is restricted on iPhone."
+        case .servicesDisabled: "Turn on Location Services on iPhone while parked."
+        case .preciseLocationRequired: "Enable Precise Location on iPhone while parked."
+        case .unavailable: "Travel direction unavailable on this device."
+        case .ready: "Waiting for travel direction"
+        }
     } else if !driving {
       status = "Drive ended. Reopen Compass on CarPlay to start."
     } else {

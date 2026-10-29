@@ -31,9 +31,10 @@ The test script chooses an installed, available iOS 27+ iPhone simulator. It run
 hosted state tests using injected sensor events and time; it does not fabricate
 production sensor readings. CI builds the actual app and runs this shared scheme.
 
-On a physical iPhone, check that there is no location permission prompt, that the
-heading follows the phone’s top while stationary, and that crossing north does
-not spin the needle around the dial. Check calibration away from metal and
+On a physical iPhone, check that the first foreground opening requests When In Use
+location once, that the heading follows the phone’s top while stationary, and that
+crossing north does not spin the dial or arrow around. Check both display styles
+in Settings, calibration away from metal and
 magnets, leaving and returning to the foreground, and recovery after an
 interruption. Check actual denied/restricted service behavior if system settings
 produce it; an undetermined location authorization alone does not block magnetic
@@ -43,9 +44,10 @@ separate from simulator state tests.
 
 ## Set up CarPlay
 
-While parked, open Compass on iPhone and use **Allow location on this phone** in
-CarPlay setup. Allow When In Use with Precise Location. The phone compass itself
-does not request location. Then open Compass from the CarPlay launcher to start a
+While parked, open Compass on iPhone and allow the initial When In Use request
+with Precise Location. The app’s **Settings** menu shows location status and an
+**Open Settings** action where permission needs repair. Granting access does not
+start travel collection. Then open Compass from the CarPlay launcher to start a
 drive automatically; no phone Start Drive action is needed. Connecting a cable
 alone does not guarantee app launch. Setup and permission repair happen on iPhone
 while parked. Never grant Always authorization for this feature.
