@@ -1,11 +1,8 @@
 name: Publish
 on:
   workflow_dispatch:
-    inputs:
-      build_number:
-        description: 'Unused build n.n.n, greater than prior builds for this app version (e.g. 2.0.0)'
-        required: true
-        type: string
+  release:
+    types: [published]
 permissions:
   contents: read
 concurrency:
@@ -13,7 +10,9 @@ concurrency:
   cancel-in-progress: false
 jobs:
   publish:
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'release' && !github.event.release.prerelease && !github.event.release.draft)
     runs-on: xcode-27
     timeout-minutes: 60
     env:
@@ -23,9 +22,9 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - name: Archive, validate and upload internal TestFlight build
+      - name: Archive, validate and upload build
         env:
-          BUILD_NUMBER: ${{ inputs.build_number }}
+          BUILD_NUMBER: ${{ github.run_number }}.${{ github.run_attempt }}
           APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
           ASC_API_KEY_ID: ${{ vars.ASC_API_KEY_ID }}
           ASC_API_ISSUER_ID: ${{ vars.ASC_API_ISSUER_ID }}
