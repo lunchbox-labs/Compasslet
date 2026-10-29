@@ -64,7 +64,7 @@ class RunnerTests(unittest.TestCase):
                      patch.object(runner, 'run', side_effect=security) as mocked:
                     runner.cleanup()
                     mocked.assert_any_call('security', 'list-keychains', '-d', 'user', '-s',
-                                           '/old.keychain', check=False)
+                                           '/old.keychain', check=False, operation='restore keychain search list')
                     self.assertFalse(work.exists())
                     self.assertFalse(installed.exists())
                     runner.cleanup()  # Always step can safely repeat cleanup.
@@ -84,9 +84,9 @@ class RunnerTests(unittest.TestCase):
                 return subprocess.CompletedProcess(args, 1 if args[1] == 'list-keychains' else 0, b'', b'')
             with patch.object(runner, 'WORK', work), patch.object(runner, 'KEYCHAIN', work / 'keychain'), \
                  patch.object(runner, 'run', side_effect=security) as mocked:
-                with self.assertRaises(ValueError):
+                with self.assertRaisesRegex(ValueError, r'restore keychain search list \(exit code 1\)'):
                     runner.cleanup()
-                mocked.assert_any_call('security', 'delete-keychain', work / 'keychain', check=False)
+                mocked.assert_any_call('security', 'delete-keychain', work / 'keychain', check=False, operation='delete signing keychain')
                 self.assertFalse(installed.exists())
                 self.assertTrue((work / 'cleanup.json').exists())
                 self.assertEqual({p.name for p in work.iterdir()}, {'cleanup.json'})
