@@ -115,9 +115,8 @@ def publish():
     global STAGE
     require(os.environ.get('GITHUB_ACTIONS') == 'true' and
             os.environ.get('GITHUB_EVENT_NAME') == 'workflow_dispatch' and
-            os.environ.get('GITHUB_REF') == 'refs/heads/main' and
-            os.environ.get('UPLOAD_CONFIRMATION') == 'UPLOAD INTERNAL TESTFLIGHT',
-            'Run in GitHub Actions manually from main with the exact upload confirmation.')
+            os.environ.get('GITHUB_REF') == 'refs/heads/main',
+            'Run in GitHub Actions manually from main.')
     build = os.environ.get('BUILD_NUMBER', '')
     require(re.fullmatch(r'[1-9][0-9]{0,3}\.(0|[1-9][0-9]?)\.(0|[1-9][0-9]?)', build),
             'Choose a build number n.n.n (first 1–9999, others 0–99, no leading zeroes).')
