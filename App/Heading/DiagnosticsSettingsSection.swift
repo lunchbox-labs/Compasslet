@@ -47,7 +47,7 @@ struct DiagnosticsSettingsSection: View {
       error = nil
       // A configuration change may request a redraw, but WidgetKit chooses when to deliver it.
       WidgetCenter.shared.reloadTimelines(ofKind: "CompassRefreshProbe")
-    } catch { error = error.localizedDescription }
+    } catch { self.error = error.localizedDescription }
   }
 
   private func export() {
@@ -62,7 +62,7 @@ struct DiagnosticsSettingsSection: View {
       exportURL = url
       showingExport = true
       error = nil
-    } catch { error = error.localizedDescription }
+    } catch { self.error = error.localizedDescription }
   }
 
   private func removeExport() {
