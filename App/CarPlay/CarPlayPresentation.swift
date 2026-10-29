@@ -50,7 +50,7 @@ struct CarPlayPresentation: Equatable {
           let degrees = Int(sample.angle.degrees.rounded()) % 360
           let names = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
           bearing = "\(degrees)° \(names[Int((sample.angle.degrees + 22.5) / 45) % 8])"
-          status = "Updated within 5 seconds"
+          status = "Updates limited to once every 10 seconds"
         } else {
           status = "Direction unavailable"
         }
