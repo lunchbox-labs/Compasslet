@@ -79,6 +79,11 @@ final class CompassDiagnosticsTests: XCTestCase {
     DispatchQueue.concurrentPerform(iterations: 20) { _ in
       do {
         try provider.record(.widget, kind: .providerCreated, wall: 100, uptime: 100)
+        let snapshot = try JSONDecoder().decode(
+          CompassDiagnostics.Snapshot.self, from: store.exportJSON())
+        let summarized = snapshot.surfaces.flatMap(\.intervals).reduce(0) { $0 + $1.count }
+        XCTAssertEqual(summarized, snapshot.events.count)
+        XCTAssertEqual(Set(snapshot.events.map(\.sequence)).count, snapshot.events.count)
         try store.record(.widget, kind: .reloadRequested, wall: 100, uptime: 100)
       } catch { XCTFail("Concurrent write failed: \(error)") }
     }

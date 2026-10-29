@@ -123,6 +123,11 @@ final class CompassDiagnostics: @unchecked Sendable {
         )
       }
       try execute("UPDATE settings SET enabled=? WHERE id=1", [value ? "1" : "0"])
+      for row in try rows("SELECT surface,total FROM clocks") {
+        if let surface = Surface(rawValue: row[0]), let total = Double(row[1]) {
+          try prune(surface, total: total)
+        }
+      }
       // Resume on the next observed lifecycle tick, never from an old wall-clock timestamp.
       try execute("UPDATE clocks SET active=0")
       lastObservation.removeAll()
