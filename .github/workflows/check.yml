@@ -37,6 +37,10 @@ jobs:
           xcrun --sdk iphonesimulator --show-sdk-version | grep -E '^27\.'
           xcrun swift --version
           xcrun swift-format --version
+      - name: Test signing validation without credentials
+        run: python3 -m unittest discover -s Tests/Signing
+      - name: Verify internal TestFlight tool capabilities without credentials
+        run: python3 scripts/testflight capabilities
       - name: Build unsigned simulator app
         run: >-
           xcodebuild -project Compass.xcodeproj -scheme Compass
