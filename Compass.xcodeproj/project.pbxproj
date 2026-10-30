@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C0A000000000000000000001 /* CarPlayCompassTemplate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0A000000000000000000002 /* CarPlayCompassTemplate.swift */; };
 		020F1378FBC3CA202F0BD64E /* TravelLocationSensor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B8C91614F79675159741862 /* TravelLocationSensor.swift */; };
 		0838A3A568319EC0360654D0 /* HeadingController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A46DD5AFEAE45BDDC8C05D /* HeadingController.swift */; };
 		09DF70A050F3531A490635EF /* CompassCore in Frameworks */ = {isa = PBXBuildFile; productRef = EE2B30918BA1EF40AF49F626 /* CompassCore */; };
@@ -129,6 +130,7 @@
 		00F237C285337B5CFA6907E4 /* CompassActivity.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = CompassActivity.entitlements; sourceTree = "<group>"; };
 		014D8AD2FF2B324887AF606C /* CompassDial.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompassDial.swift; sourceTree = "<group>"; };
 		09ECB0E558E2492FB7A6E578 /* WatchCompassView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WatchCompassView.swift; sourceTree = "<group>"; };
+		C0A000000000000000000002 /* CarPlayCompassTemplate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayCompassTemplate.swift; sourceTree = "<group>"; };
 		10A9C1012AD54E0AA0676C02 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		13F96CE477553A99C1F0F39D /* CompassActivityControllerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompassActivityControllerTests.swift; sourceTree = "<group>"; };
 		1AC18E30C9DAEB073F3B849A /* Compass.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Compass.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -305,6 +307,7 @@
 			children = (
 				4C6B9391E9371285A195C789 /* CarPlaySceneDelegate.swift */,
 				41FAB8F8EC4A00F7250C1BC0 /* CarPlayPresentation.swift */,
+				C0A000000000000000000002 /* CarPlayCompassTemplate.swift */,
 			);
 			path = CarPlay;
 			sourceTree = "<group>";
@@ -654,6 +657,7 @@
 				A16441B24DE8B285E778387C /* CompassActivityAttributes.swift in Sources */,
 				8F86E7595CF7EB29B0D46DC7 /* CompassActivityController.swift in Sources */,
 				FED695C7626372E86C39FF85 /* CarPlayPresentation.swift in Sources */,
+				C0A000000000000000000001 /* CarPlayCompassTemplate.swift in Sources */,
 				7AE82164CFC284EB48F0ECB8 /* CarPlaySceneDelegate.swift in Sources */,
 				4C4C18A842B6F0419CBD4102 /* CompassAppDelegate.swift in Sources */,
 				2ADCF5F1540DE262C8F3A1E5 /* CompassDiagnostics.swift in Sources */,

@@ -52,9 +52,17 @@ drive automatically; no phone Start Drive action is needed. Connecting a cable
 alone does not guarantee app launch. Setup and permission repair happen on iPhone
 while parked. Never grant Always authorization for this feature.
 
-The full-screen readout uses Apple’s information template and shows **Travel ·
-True north**, bearing, and freshness/status. There are no manual drive controls
-on iPhone or CarPlay. Switching to Maps keeps the drive running with the background
+The full-screen readout uses Apple’s native list details header with a compass
+thumbnail, an explicitly **Sampled** course, **Travel · True north**, the original
+sample time, and status. It is a snapshot rather than a continuously live compass.
+New snapshots appear at most once every ten seconds. Fresh sensor input keeps the
+previous snapshot visible between updates without changing its timestamp. Missing,
+unreliable or older-than-five-second sensor input immediately removes the numeric
+bearing and arrow. While the app is rendering, the ten-second update interval and
+five-second input freshness limit bound the displayed sample’s age to fifteen
+seconds; the app does not retain the last reading after acquisition fails.
+There are no manual drive
+controls on iPhone or CarPlay. Switching to Maps keeps the drive running with the background
 location indicator. A CarPlay template scene disconnect, lost permission, Live
 Activity dismissal, or an eight-hour limit stops acquisition. Reopen the CarPlay
 app after leaving it to start a new drive. An ordinary phone launch never resumes a drive. Slow movement,
@@ -81,6 +89,24 @@ Validate that stale/suspended compact content promptly hides its numeric bearing
 failure to do so blocks release of the compact numeric readout. Updates are bounded
 to at most once per second for usable bearings, with immediate invalidation in the
 producer; iOS does not guarantee rendering cadence.
+
+## Travel widget
+
+The small Travel Compass widget shows one **last recorded** vehicle travel direction
+and its update age. It becomes **Stale** after five seconds and is retained for at
+most two minutes when no fresh sample arrives. It is not a live heading indicator.
+Invalid measurements, stopping acquisition or losing permission clear the shared
+reading. WidgetKit controls delivery, so clearing and expiry can appear late; the
+recorded age remains visible. The widget does not start location collection or
+read the phone's magnetic compass. Open Compasslet on CarPlay to start the travel
+feed; simply displaying a widget does not start it.
+
+Debug Mode adds bounded acquisition reasons, shared-file read/write outcomes,
+provider timestamps and sample ages to diagnostics. These records contain no
+coordinates or bearings and are capped at 256 records over the latest 30 minutes
+of recorded wall-clock time, separately from the existing active-feed timing log.
+They help distinguish missing acquisition, storage failures and delayed delivery;
+a reload request or provider invocation does not prove a screen redraw.
 
 ## Swift style
 
