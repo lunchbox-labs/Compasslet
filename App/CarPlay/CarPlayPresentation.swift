@@ -2,8 +2,10 @@ import CompassCore
 import Foundation
 
 struct CarPlayPresentation: Equatable {
-  let bearing: String
-  let status: String
+  private(set) var bearing: String
+  private(set) var courseDegrees: Double?
+  private(set) var sampleTimestamp: Date?
+  private(set) var status: String
   let compact: String
   let reference = "Travel · True north"
 
@@ -45,6 +47,8 @@ struct CarPlayPresentation: Equatable {
           now.timeIntervalSince1970.isFinite,
           (0...5).contains(now.timeIntervalSince(sample.timestamp))
         {
+          courseDegrees = sample.angle.degrees
+          sampleTimestamp = sample.timestamp
           let degrees = Int(sample.angle.degrees.rounded()) % 360
           let names = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
           bearing = "\(degrees)° \(names[Int((sample.angle.degrees + 22.5) / 45) % 8])"
@@ -55,6 +59,37 @@ struct CarPlayPresentation: Equatable {
       }
     }
     self.bearing = bearing
+  }
+
+  func removingExpiredCourse() -> Self {
+    var result = self
+    result.bearing = "—"
+    result.courseDegrees = nil
+    result.sampleTimestamp = nil
+    result.status = "Waiting for next direction update"
+    return result
+  }
+}
+
+/// Bounds new course snapshots without retaining a stale displayed course.
+struct CarPlayUpdateGate {
+  private var latest: CarPlayPresentation?
+  private var lastBearingUpdate: Date?
+
+  mutating func update(_ value: CarPlayPresentation, now: Date) -> CarPlayPresentation? {
+    var next = value
+    if value.courseDegrees != nil, let lastBearingUpdate,
+      now.timeIntervalSince(lastBearingUpdate) < 10
+    {
+      guard let latest, let timestamp = latest.sampleTimestamp,
+        !(0...5).contains(now.timeIntervalSince(timestamp))
+      else { return nil }
+      next = latest.removingExpiredCourse()
+    }
+    guard next != latest else { return nil }
+    latest = next
+    if next.courseDegrees != nil { lastBearingUpdate = now }
+    return next
   }
 }
 
