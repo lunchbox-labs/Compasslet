@@ -179,7 +179,7 @@ final class DriveSessionControllerTests: XCTestCase {
   }
 
   func testAcquisitionDiagnosticsIdentifyStartAndTeardownReason() async {
-    for reason in ["disconnect", "permission", "timeout", "dismissal"] {
+    for reason in ["disconnect", "permission", "timeout"] {
       let sensor = Sensor(), activity = Activity()
       var events: [CompassDiagnostics.WidgetOutcome] = []
       let controller = DriveSessionController(
@@ -196,13 +196,10 @@ final class DriveSessionControllerTests: XCTestCase {
         expected = .permission
         sensor.authorization = .denied
         sensor.receive?(.authorizationChanged)
-      case "timeout":
+      default:
         expected = .timeout
         time += 8 * 60 * 60
         controller.tick()
-      default:
-        expected = .dismissed
-        activity.onDismiss?()
       }
       XCTAssertEqual(events, [.success, expected])
       await controller.waitForPendingOperations()
@@ -427,22 +424,27 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertEqual(sensor.starts, 2)
   }
 
-  func testActivityDismissalAfterResignationAllowsFirstExplicitReopen() async {
+  func testActivityDismissalAfterResignationKeepsDrivingUntilDisconnect() async {
     let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
     await controller.carPlayActivated()
     controller.carPlayResignedActive()
     activity.onDismiss?()
     await controller.waitForPendingOperations()
-    XCTAssertFalse(controller.isDriving)
+    XCTAssertTrue(controller.isDriving)
     XCTAssertEqual(controller.compactStatus, .dismissed)
+    XCTAssertEqual(sensor.stops, 0)
+    await controller.carPlayActivated()
+    XCTAssertEqual(sensor.starts, 1)
+    XCTAssertEqual(activity.starts, 1)
+    XCTAssertEqual(controller.compactStatus, .dismissed)
+    await controller.carPlayDisconnected()
+    XCTAssertFalse(controller.isDriving)
     XCTAssertEqual(sensor.stops, 1)
     await controller.carPlayActivated()
     XCTAssertTrue(controller.isDriving)
     XCTAssertEqual(controller.compactStatus, .active)
     XCTAssertEqual(sensor.starts, 2)
     XCTAssertEqual(activity.starts, 2)
-    await controller.carPlayActivated()
-    XCTAssertEqual(sensor.starts, 2)
   }
 
   func testOldCallbackCannotPublishIntoNextDrive() async {
@@ -569,30 +571,32 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertEqual(sensor.starts, 0)
   }
 
-  func testActivityDismissalStopsClearsAndSuppressesDuplicateActivation() async {
+  func testActivityDismissalKeepsDrivingWithoutCompactUpdates() async {
     let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
     await controller.carPlayActivated()
     sensor.receive?(reading())
-    let oldReading = sensor.receive
+    await controller.waitForPendingOperations()
+    let delivered = activity.updates.count
+    XCTAssertGreaterThan(delivered, 0)
     let oldDismissal = activity.onDismiss
     oldDismissal?()
-    XCTAssertFalse(controller.isDriving)
-    XCTAssertNil(controller.presentation.sample)
+    XCTAssertTrue(controller.isDriving)
+    XCTAssertEqual(controller.presentation.sample?.angle.degrees, 90)
     XCTAssertEqual(controller.compactStatus, .dismissed)
-    XCTAssertEqual(sensor.stops, 1)
-    oldReading?(reading(180))
+    XCTAssertEqual(sensor.stops, 0)
+    time += 1
+    sensor.receive?(reading(180))
     oldDismissal?()
     await controller.waitForPendingOperations()
-    XCTAssertNil(controller.presentation.sample)
+    XCTAssertNotNil(controller.presentation.sample)
+    XCTAssertEqual(activity.updates.count, delivered)
+    XCTAssertEqual(activity.ends, 1)
+    await controller.endDrive()
+    XCTAssertFalse(controller.isDriving)
+    XCTAssertEqual(sensor.stops, 1)
     XCTAssertEqual(activity.ends, 2)
-    await controller.carPlayActivated()
-    XCTAssertEqual(sensor.starts, 1)
-    controller.carPlayResignedActive()
-    await controller.carPlayActivated()
-    XCTAssertTrue(controller.isDriving)
-    XCTAssertEqual(sensor.starts, 2)
     oldDismissal?()
-    XCTAssertTrue(controller.isDriving)
+    XCTAssertEqual(controller.compactStatus, .inactive)
   }
 
   func testDismissalDuringActivityStartupCannotPublishLaterActiveState() async {
@@ -601,22 +605,23 @@ final class DriveSessionControllerTests: XCTestCase {
     let activation = Task { await controller.carPlayActivated() }
     while activity.startContinuation == nil { await Task.yield() }
     sensor.receive?(reading())
-    let oldReading = sensor.receive
     activity.onDismiss?()
-    XCTAssertFalse(controller.isDriving)
-    XCTAssertNil(controller.presentation.sample)
-    XCTAssertEqual(sensor.stops, 1)
+    XCTAssertTrue(controller.isDriving)
+    XCTAssertEqual(controller.compactStatus, .dismissed)
+    XCTAssertEqual(sensor.stops, 0)
     activity.startContinuation?.resume()
     await activation.value
     await controller.waitForPendingOperations()
-    oldReading?(reading(180))
+    time += 1
+    sensor.receive?(reading(180))
+    await controller.waitForPendingOperations()
     XCTAssertEqual(controller.compactStatus, .dismissed)
-    XCTAssertFalse(controller.isDriving)
-    XCTAssertNil(controller.presentation.sample)
+    XCTAssertTrue(controller.isDriving)
+    XCTAssertNotNil(controller.presentation.sample)
     XCTAssertTrue(activity.updates.isEmpty)
+    XCTAssertEqual(activity.ends, 1)
+    await controller.carPlayDisconnected()
     XCTAssertEqual(activity.ends, 2)
-    await controller.carPlayActivated()
-    XCTAssertEqual(sensor.starts, 1)
   }
 
   func testSuspendedCompactWriteCoalescesToLatestInvalidation() async {
