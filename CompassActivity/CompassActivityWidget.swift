@@ -35,18 +35,30 @@ private struct CompassActivityView: View {
   @Environment(\.activityFamily) private var family
 
   static func bearing(_ context: ActivityViewContext<CompassActivityAttributes>) -> String {
+    guard let reading = reading(context) else { return "—" }
+    return "\(reading.cardinal) \(reading.degrees)"
+  }
+
+  private static func reading(_ context: ActivityViewContext<CompassActivityAttributes>)
+    -> (cardinal: String, degrees: String)?
+  {
     guard !context.isStale, context.state.status == .usable,
-      let degrees = context.state.bearing
-    else { return "—" }
+      let degrees = context.state.bearing, degrees.isFinite, (0..<360).contains(degrees)
+    else { return nil }
     let cardinals = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
     let cardinal = cardinals[Int((degrees + 22.5) / 45) % 8]
-    return "\(cardinal) \(Int(degrees.rounded()) % 360)°"
+    return (cardinal, "\(Int(degrees.rounded()) % 360)°")
   }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: family == .small ? 2 : 6) {
-      Text("Travel · True north").font(.caption)
-      Text(Self.bearing(context)).font(family == .small ? .title2 : .largeTitle).bold()
+    VStack(spacing: family == .small ? 2 : 6) {
+      if let reading = Self.reading(context) {
+        Text(reading.cardinal).font(.largeTitle.bold())
+        Text(reading.degrees).font(.title2).monospacedDigit()
+      } else {
+        Text("—").font(.largeTitle.bold())
+      }
+      Text("Travel · True north").font(.caption2)
       if context.isStale {
         Text("Travel unavailable").font(.caption)
       } else if context.state.status != .usable {
