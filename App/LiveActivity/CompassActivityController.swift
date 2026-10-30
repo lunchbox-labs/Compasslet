@@ -1,4 +1,5 @@
 import ActivityKit
+import Combine
 import CompassCore
 import Foundation
 
@@ -30,13 +31,23 @@ final class CompassActivityController: CompassActivityPresenting {
   private var validity = UUID()
   private var lastUsableWrite: Date?
   private var operation: Task<Void, Never>?
+  private var appearance: AppearanceValues
+  private var appearanceObservation: AnyCancellable?
+  private var lastContent: CompassActivityAttributes.ContentState?
 
   init(
     system: any CompassActivitySystem = LocalCompassActivitySystem(),
-    now: @escaping () -> Date = Date.init
+    now: @escaping () -> Date = Date.init,
+    appearanceStore: AppearanceStore = .shared
   ) {
     self.system = system
     self.now = now
+    appearance = appearanceStore.preferences.effective(for: .activity)
+    appearanceObservation = appearanceStore.$preferences
+      .map { $0.effective(for: .activity) }.removeDuplicates().dropFirst()
+      .sink { [weak self] value in
+        self?.updateAppearance(value)
+      }
   }
 
   func start() async throws {
@@ -46,22 +57,27 @@ final class CompassActivityController: CompassActivityPresenting {
     starting = true
     let token = generation
     do {
-      let created = try await system.request(.init(bearing: nil, status: .waiting))
+      var initial = CompassActivityAttributes.ContentState(bearing: nil, status: .waiting)
+      initial.appearance = appearance
+      let created = try await system.request(initial)
       guard generation == token else {
         await created.end(.init(bearing: nil, status: .unavailable))
         throw Failure.cancelled
       }
       handle = created
+      lastContent = initial
       try? CompassDiagnostics.shared?.observe(.activity, active: true)
       starting = false
       created.onDismiss = { [weak self] in
         guard let self, self.generation == token else { return }
         self.generation = UUID()
         self.handle = nil
+        self.lastContent = nil
         try? CompassDiagnostics.shared?.observe(.activity, active: false)
         self.lastUsableWrite = nil
         self.onDismiss?()
       }
+      if initial.appearance != appearance { await updateAppearance(appearance)?.value }
     } catch {
       if generation == token { starting = false }
       throw error
@@ -85,10 +101,44 @@ final class CompassActivityController: CompassActivityPresenting {
         state.bearing == nil || self.validity == validityToken
       else { return }
       // Revalidate after waiting so an expired sample never becomes a new bearing.
-      await handle.update(Self.content(presentation, now: self.now()))
+      var content = Self.content(presentation, now: self.now())
+      content.appearance = self.appearance
+      self.lastContent = content
+      await handle.update(content)
     }
     operation = task
     await task.value
+  }
+
+  /// Changes only presentation, serialized with course updates and teardown.
+  @discardableResult
+  func updateAppearance(_ value: AppearanceValues) -> Task<Void, Never>? {
+    appearance = value.requiringReadout()
+    guard let handle else { return nil }
+    let token = generation
+    let validityToken = validity
+    let previous = operation
+    let task = Task { @MainActor [weak self] in
+      await previous?.value
+      guard let self, self.generation == token, self.validity == validityToken,
+        var content = self.lastContent
+      else { return }
+      content.appearance = self.appearance
+      // A cosmetic update must not turn a stale ActivityKit payload into a fresh one.
+      if content.bearing != nil {
+        let date = self.now()
+        if content.expiry.map({ $0 > date }) != true
+          || content.sampleTime.map({ (0...5).contains(date.timeIntervalSince($0)) }) != true
+        {
+          content.bearing = nil
+          content.status = .unavailable
+        }
+      }
+      self.lastContent = content
+      await handle.update(content)
+    }
+    operation = task
+    return task
   }
 
   func end() async {
@@ -97,6 +147,7 @@ final class CompassActivityController: CompassActivityPresenting {
     lastUsableWrite = nil
     let owned = handle
     handle = nil
+    lastContent = nil
     try? CompassDiagnostics.shared?.observe(.activity, active: false)
     owned?.onDismiss = nil
     let previous = operation

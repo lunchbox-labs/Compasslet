@@ -1,4 +1,5 @@
 import ActivityKit
+import CompassCore
 import SwiftUI
 import WidgetKit
 
@@ -21,9 +22,9 @@ struct CompassActivityWidget: Widget {
       } compactLeading: {
         Image(systemName: "location.north")
       } compactTrailing: {
-        Text(CompassActivityView.bearing(context))
+        ActivityCompactReadout(context: context)
       } minimal: {
-        Text(CompassActivityView.bearing(context))
+        ActivityCompactReadout(context: context)
       }
     }
     .supplementalActivityFamilies([.small])
@@ -36,7 +37,11 @@ private struct CompassActivityView: View {
 
   static func bearing(_ context: ActivityViewContext<CompassActivityAttributes>) -> String {
     guard let reading = reading(context) else { return "—" }
-    return "\(reading.cardinal) \(reading.degrees)"
+    let appearance = (context.state.appearance ?? AppearanceValues()).requiringReadout()
+    return [
+      appearance.showDirection ? reading.cardinal : nil,
+      appearance.showDegrees ? reading.degrees : nil,
+    ].compactMap { $0 }.joined(separator: " ")
   }
 
   private static func reading(_ context: ActivityViewContext<CompassActivityAttributes>)
@@ -52,9 +57,11 @@ private struct CompassActivityView: View {
 
   var body: some View {
     VStack(spacing: family == .small ? 2 : 6) {
-      if let reading = Self.reading(context) {
-        Text(reading.cardinal).font(.largeTitle.bold())
-        Text(reading.degrees).font(.title2).monospacedDigit()
+      if Self.reading(context) != nil {
+        CompassReadout(
+          bearing: context.state.bearing ?? 0,
+          appearance: (context.state.appearance ?? AppearanceValues()).requiringReadout()
+        )
       } else {
         Text("—").font(.largeTitle.bold())
       }
@@ -86,5 +93,17 @@ private struct CompassActivityView: View {
     case .slow: "Move steadily to show travel"
     case .unreliable: "Travel direction uncertain"
     }
+  }
+}
+
+private struct ActivityCompactReadout: View {
+  let context: ActivityViewContext<CompassActivityAttributes>
+  @Environment(\.dynamicTypeSize) private var systemTextSize
+
+  var body: some View {
+    Text(CompassActivityView.bearing(context))
+      .font(.caption).lineLimit(1).minimumScaleFactor(0.85)
+      .dynamicTypeSize(
+        (context.state.appearance ?? AppearanceValues()).readoutTextSize(system: systemTextSize))
   }
 }

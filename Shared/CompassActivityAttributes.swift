@@ -1,5 +1,6 @@
 import ActivityKit
 import Foundation
+import CompassCore
 
 struct CompassActivityAttributes: ActivityAttributes {
   struct ContentState: Codable, Hashable, Sendable {
@@ -8,6 +9,7 @@ struct CompassActivityAttributes: ActivityAttributes {
     var sampleTime: Date?
     var expiry: Date?
     var debugUpdateTime: Date? = nil
+    var appearance: AppearanceValues? = nil
   }
 
   enum Status: String, Codable, Hashable, Sendable {

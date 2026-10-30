@@ -5,6 +5,71 @@ import Testing
 
 @Suite @MainActor
 struct CompassActivityControllerTests {
+  @Test func appearanceChangesPreserveSampleExpiryAndCannotReviveStaleCourse() async throws {
+    let system = TestActivitySystem()
+    var time = Date(timeIntervalSince1970: 100)
+    let controller = CompassActivityController(system: system, now: { time })
+    try await controller.start()
+    let sample = CompassSample(
+      degrees: 42, source: .vehicleCourse, reference: .trueNorth,
+      accuracy: 1, timestamp: time)
+    await controller.update(.init(sample: sample, status: .usable))
+    let original = try #require(system.handle.updates.last)
+    var appearance = AppearanceValues()
+    appearance.showDegrees = false
+    time = time.addingTimeInterval(0.5)
+    await controller.updateAppearance(appearance)?.value
+    let changed = try #require(system.handle.updates.last)
+    #expect(changed.bearing == original.bearing)
+    #expect(changed.sampleTime == original.sampleTime)
+    #expect(changed.expiry == original.expiry)
+    #expect(changed.appearance?.showDegrees == false)
+    time = time.addingTimeInterval(6)
+    appearance.showDegrees = true
+    await controller.updateAppearance(appearance)?.value
+    #expect(system.handle.updates.last?.bearing == nil)
+    #expect(system.handle.updates.last?.expiry == original.expiry)
+    await controller.end()
+    let count = system.handle.updates.count
+    await controller.updateAppearance(appearance)?.value
+    #expect(system.handle.updates.count == count)
+  }
+
+  @Test func queuedAppearanceCannotRepublishAfterSensorInvalidation() async throws {
+    let system = TestActivitySystem()
+    let time = Date(timeIntervalSince1970: 100)
+    var watchInvalidation = false
+    var invalidationBegan = false
+    let controller = CompassActivityController(
+      system: system,
+      now: {
+        if watchInvalidation { invalidationBegan = true }
+        return time
+      })
+    try await controller.start()
+    system.handle.suspendNextUpdate = true
+    let sample = CompassSample(
+      degrees: 42, source: .vehicleCourse, reference: .trueNorth,
+      accuracy: 1, timestamp: time)
+    let usable = Task { await controller.update(.init(sample: sample, status: .usable)) }
+    while system.handle.resumeUpdate == nil { await Task.yield() }
+    var appearance = AppearanceValues()
+    appearance.showDegrees = false
+    let cosmetic = controller.updateAppearance(appearance)
+    watchInvalidation = true
+    let invalidation = Task { await controller.update(.init(sample: nil, status: .slow)) }
+    // now() runs synchronously before the invalidation joins the serial queue.
+    while !invalidationBegan { await Task.yield() }
+    system.handle.resumeUpdate?.resume()
+    await usable.value
+    await cosmetic?.value
+    await invalidation.value
+    #expect(system.handle.updates.count == 2)
+    #expect(system.handle.updates.last?.bearing == nil)
+    #expect(system.handle.updates.last?.status == .slow)
+    #expect(system.handle.updates.last?.appearance?.showDegrees == false)
+  }
+
   @Test func disabledAndRequestFailureAreReported() async {
     let system = TestActivitySystem()
     let controller = CompassActivityController(system: system)
@@ -76,10 +141,10 @@ struct CompassActivityControllerTests {
     await controller.update(.init(sample: sample, status: .usable))
     #expect(system.handle.updates.count == 1)
     #expect(system.handle.updates[0].expiry == time.addingTimeInterval(5))
-    let json =
-      try JSONSerialization.jsonObject(with: JSONEncoder().encode(system.handle.updates[0]))
-      as! [String: Any]
-    #expect(Set(json.keys) == ["bearing", "status", "sampleTime", "expiry"])
+    let encoded = try JSONEncoder().encode(system.handle.updates[0])
+    let decoded = try JSONDecoder().decode(
+      CompassActivityAttributes.ContentState.self, from: encoded)
+    #expect(decoded == system.handle.updates[0])
     time = time.addingTimeInterval(1)
     let heartbeat = CompassSample(
       degrees: 42, source: .vehicleCourse, reference: .trueNorth,
@@ -104,9 +169,17 @@ struct CompassActivityControllerTests {
 @MainActor private final class TestActivityHandle: CompassActivityHandle {
   var onDismiss: (() -> Void)?
   var updates: [CompassActivityAttributes.ContentState] = []
+  var suspendNextUpdate = false
+  var resumeUpdate: CheckedContinuation<Void, Never>?
   var ends = 0
   var finalState: CompassActivityAttributes.ContentState?
-  func update(_ state: CompassActivityAttributes.ContentState) async { updates.append(state) }
+  func update(_ state: CompassActivityAttributes.ContentState) async {
+    updates.append(state)
+    if suspendNextUpdate {
+      suspendNextUpdate = false
+      await withCheckedContinuation { resumeUpdate = $0 }
+    }
+  }
   func end(_ finalState: CompassActivityAttributes.ContentState) async {
     self.finalState = finalState
     ends += 1
