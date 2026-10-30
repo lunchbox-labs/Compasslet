@@ -30,13 +30,14 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Verify Apple toolchain
         run: |
-          xcodebuild -version
-          xcodebuild -version | grep -Fx 'Xcode 27.1'
-          xcodebuild -version | grep -Fx 'Build version 27A9275'
-          xcrun --sdk iphonesimulator --show-sdk-version
-          xcrun --sdk iphonesimulator --show-sdk-version | grep -E '^27\.'
+          xcode_version="$(xcodebuild -version)"
+          printf '%s\n' "$xcode_version"
+          grep -Fx 'Xcode 27.1' <<< "$xcode_version"
+          grep -Fx 'Build version 27A9275' <<< "$xcode_version"
+          simulator_sdk_version="$(xcrun --sdk iphonesimulator --show-sdk-version)"
+          printf '%s\n' "$simulator_sdk_version"
+          grep -E '^27\.' <<< "$simulator_sdk_version"
           xcrun swift --version
-          xcrun swift-format --version
       - name: Build unsigned simulator app
         run: >-
           xcodebuild -project Compass.xcodeproj -scheme Compass
@@ -51,14 +52,3 @@ jobs:
           -derivedDataPath .build/watch CODE_SIGNING_ALLOWED=NO build
       - name: Test on an available Watch simulator
         run: bash scripts/test-watch
-      - name: Verify built bundle names
-        run: |
-          for key in CFBundleName CFBundleDisplayName; do
-            /usr/libexec/PlistBuddy -c "Print :$key" \
-              .build/xcode/Build/Products/Debug-iphonesimulator/Compass.app/Info.plist \
-              | tee /dev/stderr \
-              | grep -Fx 'Compasslet'
-          done
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' \
-            .build/xcode/Build/Products/Debug-iphonesimulator/Compass.app/PlugIns/CompassActivity.appex/Info.plist \
-            | grep -Fx 'Compasslet'

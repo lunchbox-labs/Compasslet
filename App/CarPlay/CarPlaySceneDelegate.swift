@@ -90,11 +90,5 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
       CPInformationItem(title: "Dashboard", detail: value.compact),
     ]
     _ = try? CompassDiagnostics.shared?.record(.fullscreen, kind: .templateUpdated)
-    information.actions =
-      value.canEndDrive
-      ? [
-        CPTextButton(title: "End Drive", textStyle: .cancel) { [weak self] _ in self?.bridge?.end()
-        }
-      ] : []
   }
 }
