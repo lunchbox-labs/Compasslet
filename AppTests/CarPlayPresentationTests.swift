@@ -109,7 +109,6 @@ final class CarPlayPresentationTests: XCTestCase {
     XCTAssertEqual(
       header.subtitle, "Travel · True north · \(now.formatted(date: .omitted, time: .standard))")
     XCTAssertEqual(header.bodyVariants.map(\.string), ["Updates limited to once every 10 seconds"])
-    XCTAssertEqual(header.thumbnail.image.scale, 2)
     XCTAssertTrue(header.actionButtons.isEmpty)
     XCTAssertTrue(screen.template.sections.isEmpty)
     XCTAssertFalse(screen.template.showsSpinnerWhileEmpty)
@@ -118,6 +117,28 @@ final class CarPlayPresentationTests: XCTestCase {
     screen.update(dialValue(59, at: now, now: now.addingTimeInterval(6)), traits: car)
     XCTAssertEqual(screen.template.listHeader?.title, "—")
     XCTAssertEqual(screen.template.listHeader?.subtitle, "Travel · True north")
+  }
+
+  func testStyleChangeRedrawsTheCurrentContentWithoutANewValue() throws {
+    let screen = CarPlayCompassTemplate()
+    let now = Date(timeIntervalSince1970: 100)
+    let day = UITraitCollection { traits in
+      traits.displayScale = 2
+      traits.userInterfaceStyle = .light
+    }
+    let night = UITraitCollection { traits in
+      traits.displayScale = 2
+      traits.userInterfaceStyle = .dark
+    }
+    screen.update(dialValue(59, at: now), traits: day)
+    let before = try XCTUnwrap(screen.template.listHeader)
+    screen.refresh(traits: day)
+    XCTAssertTrue(screen.template.listHeader === before)
+    screen.refresh(traits: night)
+    let after = try XCTUnwrap(screen.template.listHeader)
+    XCTAssertFalse(after === before)
+    XCTAssertEqual(after.title, before.title)
+    XCTAssertNotEqual(after.thumbnail.image.pngData(), before.thumbnail.image.pngData())
   }
 
   func testDialSnapshotFitsThumbnailLimitAndMatchesCarScaleAndStyle() throws {
@@ -131,19 +152,20 @@ final class CarPlayPresentationTests: XCTestCase {
     XCTAssertLessThanOrEqual(image.size.width, maximum.width)
     XCTAssertLessThanOrEqual(image.size.height, maximum.height)
     XCTAssertEqual(image.scale, 2)
-    let asset = try XCTUnwrap(image.imageAsset)
-    let light = asset.image(with: UITraitCollection(userInterfaceStyle: .light))
-    let dark = asset.image(with: UITraitCollection(userInterfaceStyle: .dark))
-    XCTAssertNotEqual(light.pngData(), dark.pngData())
-    XCTAssertEqual(image.pngData(), dark.pngData())
+    XCTAssertNil(image.imageAsset)
+    let light = CarPlayCompassTemplate.dialImage(
+      course: 59,
+      traits: UITraitCollection { traits in
+        traits.displayScale = 2
+        traits.userInterfaceStyle = .light
+      })
+    XCTAssertNotEqual(light.pngData(), image.pngData())
     let unavailable = CarPlayCompassTemplate.dialImage(course: nil, traits: car)
     XCTAssertNotEqual(image.pngData(), unavailable.pngData())
-    // Unspecified traits fall back to a one-point scale and the light variant.
+    // Unspecified traits fall back to a one-point scale and the light style.
     let fallback = CarPlayCompassTemplate.dialImage(course: 59, traits: UITraitCollection())
     XCTAssertEqual(fallback.scale, 1)
-    XCTAssertEqual(
-      fallback.pngData(),
-      fallback.imageAsset?.image(with: .init(userInterfaceStyle: .light)).pngData())
+    XCTAssertEqual(fallback.size, light.size)
   }
 
   func testDisplayInfoRecordsScaleThumbnailLimitAndStyle() throws {

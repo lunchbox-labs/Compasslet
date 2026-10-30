@@ -14,8 +14,11 @@ final class CarPlayCompassTemplate {
     template.emptyViewSubtitleVariants = [""]
   }
 
+  private var rendered: (value: CarPlayPresentation, traits: UITraitCollection)?
+
   /// Renders for the car display described by `traits`, which CarPlay supplies per connection.
   func update(_ value: CarPlayPresentation, traits: UITraitCollection) {
+    rendered = (value, traits)
     let title: String
     let subtitle: String
     if let timestamp = value.sampleTimestamp {
@@ -32,34 +35,34 @@ final class CarPlayCompassTemplate {
       bodyVariants: [NSAttributedString(string: value.status)], actionButtons: [])
   }
 
-  /// Draws at the car display's scale, with light and dark variants registered for that scale.
-  /// The returned image matches the car's current style; each update renders again.
+  /// Redraws the current content when the car's style or scale changes between updates.
+  func refresh(traits: UITraitCollection) {
+    guard let rendered,
+      rendered.traits.userInterfaceStyle != traits.userInterfaceStyle
+        || rendered.traits.displayScale != traits.displayScale
+    else { return }
+    update(rendered.value, traits: traits)
+  }
+
+  /// Draws one plain image at the car display's scale in its current style. A single image,
+  /// rather than a trait-resolved asset, is sent so the phone's own traits cannot re-resolve it.
   static func dialImage(course: Double?, traits car: UITraitCollection) -> UIImage {
     let maximum = CPThumbnailImage.maximumImageSize(forAspectRatio: 1)
     let side = min(160, maximum.width, maximum.height)
     let scale = car.displayScale > 0 ? car.displayScale : 1
-    let asset = UIImageAsset()
-    for style: UIUserInterfaceStyle in [.light, .dark] {
-      let traits = UITraitCollection { traits in
-        traits.userInterfaceStyle = style
-        traits.displayScale = scale
-      }
-      let format = UIGraphicsImageRendererFormat()
-      format.scale = scale
-      format.opaque = true
-      let image = UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format)
-        .image { context in
-          traits.performAsCurrent {
-            drawDial(course: course, side: side, context: context.cgContext)
-          }
-        }
-      asset.register(image, with: traits)
+    let traits = UITraitCollection { traits in
+      traits.userInterfaceStyle = car.userInterfaceStyle == .dark ? .dark : .light
+      traits.displayScale = scale
     }
-    return asset.image(
-      with: UITraitCollection { traits in
-        traits.userInterfaceStyle = car.userInterfaceStyle == .dark ? .dark : .light
-        traits.displayScale = scale
-      })
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = scale
+    format.opaque = true
+    return UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format)
+      .image { context in
+        traits.performAsCurrent {
+          drawDial(course: course, side: side, context: context.cgContext)
+        }
+      }
   }
 
   private static func drawDial(course: Double?, side: CGFloat, context: CGContext) {

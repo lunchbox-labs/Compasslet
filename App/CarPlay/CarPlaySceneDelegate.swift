@@ -74,6 +74,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
   private func render() {
     guard let drive, let compass, let interfaceController else { return }
     try? CompassDiagnostics.shared?.observe(.fullscreen, active: sceneActive && drive.isDriving)
+    compass.refresh(traits: interfaceController.carTraitCollection)
     let now = Date()
     let value = CarPlayPresentation(
       presentation: drive.presentation, setup: drive.setupStatus,
