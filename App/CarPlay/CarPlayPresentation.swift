@@ -3,6 +3,8 @@ import Foundation
 
 struct CarPlayPresentation: Equatable {
   let bearing: String
+  private(set) var courseDegrees: Double?
+  private(set) var sampleTimestamp: Date?
   let status: String
   let compact: String
   let reference = "Travel · True north"
@@ -45,6 +47,8 @@ struct CarPlayPresentation: Equatable {
           now.timeIntervalSince1970.isFinite,
           (0...5).contains(now.timeIntervalSince(sample.timestamp))
         {
+          courseDegrees = sample.angle.degrees
+          sampleTimestamp = sample.timestamp
           let degrees = Int(sample.angle.degrees.rounded()) % 360
           let names = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
           bearing = "\(degrees)° \(names[Int((sample.angle.degrees + 22.5) / 45) % 8])"
@@ -55,6 +59,28 @@ struct CarPlayPresentation: Equatable {
       }
     }
     self.bearing = bearing
+  }
+
+}
+
+/// Publishes explicitly sampled course while checking current input on every render.
+struct CarPlayUpdateGate {
+  private var latest: CarPlayPresentation?
+  private var lastBearingUpdate: Date?
+
+  mutating func update(_ value: CarPlayPresentation, now: Date) -> CarPlayPresentation? {
+    // A fresh input sample is required even while retaining the previous snapshot.
+    // Its original timestamp stays visible. Ten-second slots plus the five-second
+    // input freshness limit bound snapshot age to fifteen seconds while rendering.
+    if value.courseDegrees != nil, let lastBearingUpdate,
+      now.timeIntervalSince(lastBearingUpdate) < 10
+    {
+      return nil
+    }
+    guard value != latest else { return nil }
+    latest = value
+    if value.courseDegrees != nil { lastBearingUpdate = now }
+    return value
   }
 }
 

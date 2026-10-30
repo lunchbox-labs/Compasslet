@@ -1,9 +1,147 @@
+import CarPlay
 import CompassCore
+import UIKit
 import XCTest
 @testable import Compass
 
 @MainActor
 final class CarPlayPresentationTests: XCTestCase {
+  func testDialUsesOnlyValidatedTrueCourse() {
+    let now = Date(timeIntervalSince1970: 100)
+    let valid = dialValue(59, at: now)
+    XCTAssertEqual(valid.courseDegrees, 59)
+    XCTAssertEqual(valid.sampleTimestamp, now)
+    let stale = dialValue(59, at: now, now: now.addingTimeInterval(5.01))
+    XCTAssertNil(stale.courseDegrees)
+    XCTAssertNil(stale.sampleTimestamp)
+    let wrongSource = CarPlayPresentation(
+      presentation: .init(
+        sample: CompassSample(
+          degrees: 59, source: .deviceHeading, reference: .magnetic,
+          accuracy: 1, timestamp: now), status: .usable),
+      setup: .ready, driving: true, compact: .active, now: now)
+    XCTAssertNil(wrongSource.courseDegrees)
+  }
+
+  func testFreshChangingAndUnchangedStreamsKeepTimestampedSnapshotsBetweenSlots() {
+    let start = Date(timeIntervalSince1970: 100)
+    for changing in [false, true] {
+      var gate = CarPlayUpdateGate()
+      var displayed: CarPlayPresentation?
+      var updateTimes: [Double] = []
+      for tick in 0...120 {
+        let elapsed = Double(tick) / 4
+        let now = start.addingTimeInterval(elapsed)
+        let course = changing ? Double(tick) : 59
+        if let next = gate.update(dialValue(course, at: now), now: now) {
+          displayed = next
+          updateTimes.append(elapsed)
+        }
+        XCTAssertNotNil(displayed?.courseDegrees)
+        // The visible timestamp belongs to the sampled slot, never to intervening input.
+        let slot = floor(elapsed / 10) * 10
+        XCTAssertEqual(displayed?.sampleTimestamp, start.addingTimeInterval(slot))
+        XCTAssertEqual(displayed?.courseDegrees, changing ? slot * 4 : 59)
+      }
+      XCTAssertEqual(updateTimes, [0, 10, 20, 30])
+    }
+  }
+
+  func testDelayedFreshInputDoesNotExtendDisplayedTimestampAndLossClearsIt() {
+    let start = Date(timeIntervalSince1970: 100)
+    var gate = CarPlayUpdateGate()
+    let original = start.addingTimeInterval(-4.5)
+    let first = gate.update(dialValue(59, at: original, now: start), now: start)
+    XCTAssertEqual(first?.sampleTimestamp, original)
+    for elapsed in [1.0, 5.0, 9.75] {
+      let now = start.addingTimeInterval(elapsed)
+      XCTAssertNil(
+        gate.update(
+          dialValue(90, at: now.addingTimeInterval(-4.5), now: now), now: now))
+    }
+    // Genuine input loss: the most recent sensor sample is now older than five seconds.
+    let failure = start.addingTimeInterval(10.5)
+    let lastSensorTime = start.addingTimeInterval(5.25)
+    let cleared = gate.update(dialValue(90, at: lastSensorTime, now: failure), now: failure)
+    XCTAssertNotNil(cleared)
+    XCTAssertNil(cleared?.courseDegrees)
+    XCTAssertNil(cleared?.sampleTimestamp)
+  }
+
+  func testInputLossOrPermissionLossClearsSnapshotBeforeNextSlot() {
+    let start = Date(timeIntervalSince1970: 100)
+    for permissionLost in [false, true] {
+      var gate = CarPlayUpdateGate()
+      _ = gate.update(dialValue(59, at: start), now: start)
+      let now = start.addingTimeInterval(permissionLost ? 1 : 5.25)
+      let input =
+        permissionLost
+        ? CarPlayPresentation(
+          presentation: .init(sample: nil, status: .unavailable), setup: .denied,
+          driving: false, compact: .inactive, now: now)
+        : dialValue(59, at: start, now: now)
+      let cleared = gate.update(input, now: now)
+      XCTAssertNotNil(cleared)
+      XCTAssertNil(cleared?.courseDegrees)
+      XCTAssertNil(cleared?.sampleTimestamp)
+    }
+  }
+
+  func testInvalidationBypassesRateLimitButRecoveryDoesNot() {
+    let start = Date(timeIntervalSince1970: 100)
+    var gate = CarPlayUpdateGate()
+    _ = gate.update(dialValue(0, at: start), now: start)
+    let invalid = CarPlayPresentation(
+      presentation: .init(sample: nil, status: .unreliable), setup: .ready,
+      driving: true, compact: .active, now: start.addingTimeInterval(1))
+    XCTAssertEqual(gate.update(invalid, now: start.addingTimeInterval(1))?.bearing, "—")
+    let recovery = start.addingTimeInterval(2)
+    XCTAssertNil(gate.update(dialValue(90, at: recovery), now: recovery))
+  }
+
+  func testNativeHeaderHasNoActionsAndClearsItsCourse() throws {
+    let screen = CarPlayCompassTemplate()
+    let now = Date(timeIntervalSince1970: 100)
+    screen.update(dialValue(59, at: now))
+    let header = try XCTUnwrap(screen.template.listHeader)
+    XCTAssertEqual(header.title, "Sampled 59° NE")
+    XCTAssertEqual(
+      header.subtitle, "Travel · True north · \(now.formatted(date: .omitted, time: .standard))")
+    XCTAssertTrue(header.actionButtons.isEmpty)
+    XCTAssertTrue(screen.template.sections.isEmpty)
+    XCTAssertFalse(screen.template.showsSpinnerWhileEmpty)
+    XCTAssertEqual(screen.template.emptyViewTitleVariants, [""])
+    XCTAssertEqual(screen.template.emptyViewSubtitleVariants, [""])
+    screen.update(dialValue(59, at: now, now: now.addingTimeInterval(6)))
+    XCTAssertEqual(screen.template.listHeader?.title, "—")
+    XCTAssertEqual(screen.template.listHeader?.subtitle, "Travel · True north")
+  }
+
+  func testDialSnapshotFitsThumbnailLimitAndHasAppearanceVariants() throws {
+    let image = CarPlayCompassTemplate.dialImage(course: 59)
+    let maximum = CPThumbnailImage.maximumImageSize(forAspectRatio: 1)
+    XCTAssertGreaterThan(image.size.width, 0)
+    XCTAssertLessThanOrEqual(image.size.width, maximum.width)
+    XCTAssertLessThanOrEqual(image.size.height, maximum.height)
+    let asset = try XCTUnwrap(image.imageAsset)
+    let light = asset.image(with: UITraitCollection(userInterfaceStyle: .light))
+    let dark = asset.image(with: UITraitCollection(userInterfaceStyle: .dark))
+    XCTAssertNotEqual(light.pngData(), dark.pngData())
+    let unavailable = CarPlayCompassTemplate.dialImage(course: nil)
+    XCTAssertNotEqual(image.pngData(), unavailable.pngData())
+  }
+
+  private func dialValue(_ degrees: Double, at timestamp: Date, now: Date? = nil)
+    -> CarPlayPresentation
+  {
+    CarPlayPresentation(
+      presentation: .init(
+        sample: CompassSample(
+          degrees: degrees, source: .vehicleCourse, reference: .trueNorth,
+          accuracy: 1, timestamp: timestamp), status: .usable),
+      setup: .ready, driving: true, compact: .active, now: now ?? timestamp)
+  }
+
   func testInvalidStatesNeverExposeBearing() {
     let now = Date()
     let sample = CompassSample(

@@ -5,11 +5,10 @@ import UIKit
 @MainActor
 final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
   private var interfaceController: CPInterfaceController?
-  private var information: CPInformationTemplate?
+  private var compass: CarPlayCompassTemplate?
   private var subscriptions: Set<AnyCancellable> = []
   private var ticker: Task<Void, Never>?
-  private var latest: CarPlayPresentation?
-  private var lastBearingUpdate = Date.distantPast
+  private var updates = CarPlayUpdateGate()
   private var bridge: CarPlayLifecycleBridge?
   private var drive: DriveSessionController?
   private var sceneActive = false
@@ -22,10 +21,11 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     drive = coordinator
     bridge = CarPlayLifecycleBridge(drive: coordinator)
     self.interfaceController = interfaceController
-    let template = CPInformationTemplate(
-      title: "Compasslet", layout: .leading, items: [], actions: [])
-    information = template
-    interfaceController.setRootTemplate(template, animated: false, completion: nil)
+    let screen = CarPlayCompassTemplate()
+    compass = screen
+    updates = CarPlayUpdateGate()
+    render()
+    interfaceController.setRootTemplate(screen.template, animated: false, completion: nil)
     coordinator.objectWillChange.sink { [weak self] in
       Task { @MainActor in self?.render() }
     }.store(in: &subscriptions)
@@ -64,31 +64,21 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     ticker?.cancel()
     ticker = nil
     subscriptions.removeAll()
-    information = nil
+    compass = nil
     interfaceController = nil
     drive = nil
-    latest = nil
+    updates = CarPlayUpdateGate()
   }
 
   private func render() {
-    guard let drive, let information else { return }
+    guard let drive, let compass else { return }
     try? CompassDiagnostics.shared?.observe(.fullscreen, active: sceneActive && drive.isDriving)
     let now = Date()
     let value = CarPlayPresentation(
       presentation: drive.presentation, setup: drive.setupStatus,
       driving: drive.isDriving, compact: drive.compactStatus, now: now)
-    guard value != latest else { return }
-    // Bearing-free invalidation bypasses the usable-bearing rate ceiling.
-    if value.bearing != "—", now.timeIntervalSince(lastBearingUpdate) < 10 {
-      return
-    }
-    latest = value
-    if value.bearing != "—" { lastBearingUpdate = now }
-    information.items = [
-      CPInformationItem(title: value.reference, detail: value.bearing),
-      CPInformationItem(title: "Status", detail: value.status),
-      CPInformationItem(title: "Dashboard", detail: value.compact),
-    ]
+    guard let next = updates.update(value, now: now) else { return }
+    compass.update(next)
     _ = try? CompassDiagnostics.shared?.record(.fullscreen, kind: .templateUpdated)
   }
 }
