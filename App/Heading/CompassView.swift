@@ -34,7 +34,7 @@ struct CompassView: View {
     ScrollView {
       VStack(spacing: 28) {
         VStack(spacing: 8) {
-          Text("COMPASS").font(.caption.weight(.semibold)).tracking(4)
+          Text("Compass+").font(.caption.weight(.semibold)).tracking(4)
             .foregroundStyle(.secondary)
           Text("Find your bearing").font(.title2.weight(.semibold))
         }
