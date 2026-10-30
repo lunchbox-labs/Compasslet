@@ -1,0 +1,13 @@
+# Core project configuration and automation.
+/Compass.xcodeproj/ @lunchbox-labs/trusted-developers
+/Package.swift @lunchbox-labs/trusted-developers
+*.plist @lunchbox-labs/trusted-developers
+*.entitlements @lunchbox-labs/trusted-developers
+*.xcprivacy @lunchbox-labs/trusted-developers
+/.github/workflows/ @lunchbox-labs/trusted-developers
+/scripts/ @lunchbox-labs/trusted-developers
+/.swift-format @lunchbox-labs/trusted-developers
+/.gitignore @lunchbox-labs/trusted-developers
+/AGENTS.md @lunchbox-labs/trusted-developers
+/.agents/ @lunchbox-labs/trusted-developers
+/.github/CODEOWNERS @lunchbox-labs/trusted-developers
