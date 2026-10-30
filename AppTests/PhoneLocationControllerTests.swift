@@ -15,6 +15,64 @@ final class PhoneLocationControllerTests: XCTestCase {
     func stop() { stops += 1 }
   }
 
+  private final class CityLookup: PhoneCityLookup {
+    var completions: [@MainActor (String?) -> Void] = []
+    var cancellations = 0
+    func lookup(_ location: CLLocation, completion: @escaping @MainActor (String?) -> Void) {
+      completions.append(completion)
+    }
+    func cancel() { cancellations += 1 }
+  }
+
+  func testCityRequestsAreThrottledAndFailuresKeepCoordinates() {
+    let sensor = Sensor()
+    let lookup = CityLookup()
+    var now = time
+    let controller = PhoneLocationController(sensor: sensor, cityLookup: lookup, now: { now })
+    controller.start()
+    sensor.receive?(.location(fix(at: now)))
+    XCTAssertEqual(lookup.completions.count, 1)
+    sensor.receive?(.location(fix(at: now)))
+    XCTAssertEqual(lookup.completions.count, 1)
+    lookup.completions[0](nil)
+    XCTAssertNotNil(controller.location)
+    XCTAssertEqual(controller.elevation, -20)
+    now += 59
+    sensor.receive?(.location(fix(at: now)))
+    XCTAssertEqual(lookup.completions.count, 1)
+    now += 1
+    sensor.receive?(.location(fix(at: now)))
+    XCTAssertEqual(lookup.completions.count, 2)
+    lookup.completions[1]("Sample City")
+    now += 60
+    sensor.receive?(.location(fix(at: now)))
+    XCTAssertEqual(lookup.completions.count, 2)
+    XCTAssertEqual(controller.city, "Sample City")
+  }
+
+  func testMovementAndStopDiscardLateCityResults() {
+    let sensor = Sensor()
+    let lookup = CityLookup()
+    var now = time
+    let controller = PhoneLocationController(sensor: sensor, cityLookup: lookup, now: { now })
+    controller.start()
+    sensor.receive?(.location(fix(at: now)))
+    now += 61
+    let distant = CLLocation(
+      coordinate: .init(latitude: 13, longitude: -78), altitude: 1,
+      horizontalAccuracy: 5, verticalAccuracy: 5, timestamp: now)
+    sensor.receive?(.location(distant))
+    XCTAssertEqual(lookup.completions.count, 2)
+    lookup.completions[0]("Old City")
+    XCTAssertNil(controller.city)
+    lookup.completions[1]("Current City")
+    XCTAssertEqual(controller.city, "Current City")
+    controller.stop()
+    lookup.completions[1]("Late City")
+    XCTAssertNil(controller.city)
+    XCTAssertNil(controller.location)
+  }
+
   private let time = Date(timeIntervalSince1970: 1_000)
   private func fix(at date: Date, verticalAccuracy: Double = 5) -> CLLocation {
     CLLocation(
@@ -25,7 +83,8 @@ final class PhoneLocationControllerTests: XCTestCase {
   func testForegroundAuthorizationControlsAcquisitionAndClearsOnRevocation() {
     let sensor = Sensor()
     sensor.authorized = false
-    let controller = PhoneLocationController(sensor: sensor, now: { self.time })
+    let controller = PhoneLocationController(
+      sensor: sensor, cityLookup: CityLookup(), now: { self.time })
     controller.start()
     XCTAssertEqual(sensor.starts, 0)
     sensor.authorized = true
@@ -41,7 +100,8 @@ final class PhoneLocationControllerTests: XCTestCase {
 
   func testStopRejectsLateCallbacksAndNextStartRequiresFreshFix() {
     let sensor = Sensor()
-    let controller = PhoneLocationController(sensor: sensor, now: { self.time })
+    let controller = PhoneLocationController(
+      sensor: sensor, cityLookup: CityLookup(), now: { self.time })
     controller.start()
     sensor.receive?(.location(fix(at: time)))
     controller.stop()
@@ -55,7 +115,7 @@ final class PhoneLocationControllerTests: XCTestCase {
   func testFutureAndExpiredFixesNeverRemainVisible() {
     let sensor = Sensor()
     var now = time
-    let controller = PhoneLocationController(sensor: sensor, now: { now })
+    let controller = PhoneLocationController(sensor: sensor, cityLookup: CityLookup(), now: { now })
     controller.start()
     sensor.receive?(.location(fix(at: time + 1)))
     XCTAssertNil(controller.location)
@@ -70,7 +130,8 @@ final class PhoneLocationControllerTests: XCTestCase {
 
   func testPoorAltitudeDoesNotHideValidCoordinatesOrInventZeroElevation() {
     let sensor = Sensor()
-    let controller = PhoneLocationController(sensor: sensor, now: { self.time })
+    let controller = PhoneLocationController(
+      sensor: sensor, cityLookup: CityLookup(), now: { self.time })
     controller.start()
     for accuracy in [-1.0, 0, 100, .nan] {
       sensor.receive?(.location(fix(at: time, verticalAccuracy: accuracy)))
@@ -83,7 +144,8 @@ final class PhoneLocationControllerTests: XCTestCase {
 
   func testReducedAccuracyAndServiceFailureRemovePreciseValues() {
     let sensor = Sensor()
-    let controller = PhoneLocationController(sensor: sensor, now: { self.time })
+    let controller = PhoneLocationController(
+      sensor: sensor, cityLookup: CityLookup(), now: { self.time })
     controller.start()
     sensor.receive?(.location(fix(at: time)))
     sensor.precise = false

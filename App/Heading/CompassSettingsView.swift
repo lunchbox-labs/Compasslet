@@ -111,6 +111,9 @@ struct PhoneLocationReadout: View {
           }
         }
         .font(.subheadline).monospacedDigit()
+        if let city = location.city {
+          Text(city)
+        }
         if let elevation = location.elevation {
           Text("\(formattedElevation(elevation)) Elevation")
         } else {
