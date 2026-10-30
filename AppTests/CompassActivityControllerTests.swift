@@ -5,7 +5,38 @@ import Testing
 
 @Suite @MainActor
 struct CompassActivityControllerTests {
-  @Test func appearanceChangesPreserveSampleExpiryAndCannotReviveStaleCourse() async throws {
+  @Test func stopsAndMissingCourseKeepOriginalReadingUntilNextValidSample() async throws {
+    let system = TestActivitySystem()
+    var time = Date(timeIntervalSince1970: 100)
+    let controller = CompassActivityController(system: system, now: { time })
+    try await controller.start()
+    let sample = CompassSample(
+      degrees: 42, source: .vehicleCourse, reference: .trueNorth,
+      accuracy: 1, timestamp: time)
+    await controller.update(.init(sample: sample, status: .usable))
+    let original = try #require(system.handle.updates.last)
+    #expect(original.expiry == nil)
+    for status in [TravelStatus.slow, .unreliable, .unavailable] {
+      time += 60
+      await controller.update(.init(sample: nil, status: status))
+      #expect(system.handle.updates.last == original)
+    }
+    let next = CompassSample(
+      degrees: 90, source: .vehicleCourse, reference: .trueNorth,
+      accuracy: 1, timestamp: time)
+    await controller.update(.init(sample: next, status: .usable))
+    #expect(system.handle.updates.last?.bearing == 90)
+    #expect(system.handle.updates.last?.sampleTime == time)
+    await controller.end()
+    try await controller.start()
+    let count = system.handle.updates.count
+    await controller.update(.init(sample: nil, status: .slow))
+    #expect(system.handle.updates.count == count + 1)
+    #expect(system.handle.updates.last?.bearing == nil)
+    await controller.end()
+  }
+
+  @Test func appearanceChangesKeepOriginalLastReadingTimestamp() async throws {
     let system = TestActivitySystem()
     var time = Date(timeIntervalSince1970: 100)
     let controller = CompassActivityController(system: system, now: { time })
@@ -27,8 +58,9 @@ struct CompassActivityControllerTests {
     time = time.addingTimeInterval(6)
     appearance.showDegrees = true
     await controller.updateAppearance(appearance)?.value
-    #expect(system.handle.updates.last?.bearing == nil)
-    #expect(system.handle.updates.last?.expiry == original.expiry)
+    #expect(system.handle.updates.last?.bearing == original.bearing)
+    #expect(system.handle.updates.last?.sampleTime == original.sampleTime)
+    #expect(system.handle.updates.last?.expiry == nil)
     await controller.end()
     let count = system.handle.updates.count
     await controller.updateAppearance(appearance)?.value
@@ -57,7 +89,7 @@ struct CompassActivityControllerTests {
     appearance.showDegrees = false
     let cosmetic = controller.updateAppearance(appearance)
     watchInvalidation = true
-    let invalidation = Task { await controller.update(.init(sample: nil, status: .slow)) }
+    let invalidation = Task { await controller.invalidateReading() }
     // now() runs synchronously before the invalidation joins the serial queue.
     while !invalidationBegan { await Task.yield() }
     system.handle.resumeUpdate?.resume()
@@ -66,7 +98,7 @@ struct CompassActivityControllerTests {
     await invalidation.value
     #expect(system.handle.updates.count == 2)
     #expect(system.handle.updates.last?.bearing == nil)
-    #expect(system.handle.updates.last?.status == .slow)
+    #expect(system.handle.updates.last?.status == .unavailable)
     #expect(system.handle.updates.last?.appearance?.showDegrees == false)
   }
 
@@ -112,12 +144,12 @@ struct CompassActivityControllerTests {
     #expect(system.handle.finalState == .init(bearing: nil, status: .unavailable))
   }
 
-  @Test func laggedTimestampsRefreshBeforeTheStaleDateLapses() async throws {
+  @Test func unchangedReadingsDoNotRenewTheRecordedSampleTime() async throws {
     let system = TestActivitySystem()
     var time = Date(timeIntervalSince1970: 100)
     let controller = CompassActivityController(system: system, now: { time })
     try await controller.start()
-    // Location timestamps precede delivery; an unchanged reading must still refresh in time.
+    // New accepted input remains fresh, but unchanged displayed directions need no heartbeat.
     for delivery in 0..<6 {
       time = Date(timeIntervalSince1970: 100 + Double(delivery))
       let sample = try #require(
@@ -125,10 +157,10 @@ struct CompassActivityControllerTests {
           degrees: 270, source: .vehicleCourse, reference: .trueNorth,
           accuracy: 1, timestamp: time.addingTimeInterval(-1.5)))
       await controller.update(.init(sample: sample, status: .usable))
-      let expiry = try #require(system.handle.updates.last?.expiry)
-      #expect(expiry > time)
+      #expect(system.handle.updates.last?.expiry == nil)
+      #expect(system.handle.updates.last?.sampleTime == Date(timeIntervalSince1970: 98.5))
     }
-    #expect(system.handle.updates.count == 3)
+    #expect(system.handle.updates.count == 1)
     #expect(CompassActivityController.sameReading(22.4, 22.4))
     #expect(!CompassActivityController.sameReading(22.4, 22.5))
     #expect(CompassActivityController.sameReading(359.6, 0.2))
@@ -199,70 +231,151 @@ struct CompassActivityControllerTests {
     }
   }
 
-  @Test func payloadPrivacyFreshnessAndInvalidationBypassThrottle() async throws {
+  @Test func explicitFailureClearsAndRecoveryRemainsRateLimited() async throws {
     let system = TestActivitySystem()
     var time = Date(timeIntervalSince1970: 100)
     let controller = CompassActivityController(system: system, now: { time })
     try await controller.start()
-    let sample = CompassSample(
-      degrees: 42, source: .vehicleCourse, reference: .trueNorth,
-      accuracy: 1, timestamp: time)
-    await controller.update(.init(sample: sample, status: .usable))
-    await controller.update(.init(sample: sample, status: .usable))
-    #expect(system.handle.updates.count == 1)
-    #expect(system.handle.updates[0].expiry == time.addingTimeInterval(5))
-    let encoded = try JSONEncoder().encode(system.handle.updates[0])
-    let decoded = try JSONDecoder().decode(
-      CompassActivityAttributes.ContentState.self, from: encoded)
-    #expect(decoded == system.handle.updates[0])
-    func usable(_ degrees: Double) -> TravelPresentation {
-      let sample = CompassSample(
-        degrees: degrees, source: .vehicleCourse, reference: .trueNorth,
-        accuracy: 1, timestamp: time)
-      return .init(sample: sample, status: .usable)
+    func reading(_ degrees: Double) -> TravelPresentation {
+      .init(
+        sample: CompassSample(
+          degrees: degrees, source: .vehicleCourse, reference: .trueNorth,
+          accuracy: 1, timestamp: time), status: .usable)
     }
-    // The same displayed reading is not pushed again while its stale date has time left.
-    time = time.addingTimeInterval(1)
-    await controller.update(usable(42.4))
+    await controller.update(reading(42))
+    let encoded = try JSONEncoder().encode(system.handle.updates[0])
+    #expect(
+      try JSONDecoder().decode(CompassActivityAttributes.ContentState.self, from: encoded)
+        == system.handle.updates[0])
+    time += 0.5
+    await controller.update(reading(90))
     #expect(system.handle.updates.count == 1)
-    time = time.addingTimeInterval(1)
-    await controller.update(usable(43))
-    #expect(system.handle.updates.count == 2)
-    #expect(system.handle.updates.last?.bearing == 43)
-    #expect(system.handle.updates.last?.expiry == time.addingTimeInterval(5))
-    time = time.addingTimeInterval(0.5)
-    await controller.update(usable(44))
-    #expect(system.handle.updates.count == 2)
-    time = time.addingTimeInterval(1.5)
-    await controller.update(usable(43.2))
-    #expect(system.handle.updates.count == 2)
-    // Two seconds before the pushed stale date lapses, the same reading refreshes it.
-    time = time.addingTimeInterval(1)
-    await controller.update(usable(43.2))
-    #expect(system.handle.updates.count == 3)
-    #expect(system.handle.updates.last?.bearing == 43.2)
-    #expect(system.handle.updates.last?.expiry == time.addingTimeInterval(5))
-    await controller.update(.init(sample: nil, status: .slow))
+    await controller.invalidateReading()
     #expect(system.handle.updates.last?.bearing == nil)
-    #expect(system.handle.updates.count == 4)
-    // Recovery after invalidation is a changed reading, not a repeat.
-    time = time.addingTimeInterval(0.5)
-    await controller.update(usable(43))
-    #expect(system.handle.updates.count == 4)
-    time = time.addingTimeInterval(0.5)
-    await controller.update(usable(43))
-    #expect(system.handle.updates.count == 5)
-    #expect(system.handle.updates.last?.bearing == 43)
-    time = time.addingTimeInterval(6)
-    await controller.update(.init(sample: sample, status: .usable))
+    await controller.update(reading(90))
     #expect(system.handle.updates.last?.bearing == nil)
+    time += 0.5
+    await controller.update(reading(90))
+    #expect(system.handle.updates.last?.bearing == 90)
     await controller.end()
     #expect(system.handle.finalState == .init(bearing: nil, status: .unavailable))
-    #expect(system.finalState == .init(bearing: nil, status: .unavailable))
     let count = system.handle.updates.count
-    await controller.update(.init(sample: sample, status: .usable))
+    await controller.update(reading(180))
     #expect(system.handle.updates.count == count)
   }
+
+  @Test func startupInterruptionCannotClearTheNewReadingAfterRecovery() async throws {
+    let system = TestActivitySystem()
+    system.suspend = true
+    let time = Date(timeIntervalSince1970: 100)
+    let activity = CompassActivityController(system: system, now: { time })
+    let sensor = TestTravelSensor()
+    let drive = DriveSessionController(
+      sensor: sensor, activity: activity,
+      now: { time }, automaticTick: false)
+    let startup = Task { await drive.carPlayActivated() }
+    while system.resume == nil { await Task.yield() }
+    sensor.receive?(.interrupted)
+    sensor.receive?(
+      .reading(
+        TravelReading(
+          course: 90, courseAccuracy: 1, speed: 10,
+          speedAccuracy: 1, horizontalAccuracy: 5, timestamp: time)))
+    system.resume?.resume()
+    await startup.value
+    await drive.waitForPendingOperations()
+    #expect(system.handle.updates.last?.bearing == 90)
+    await drive.endDrive()
+  }
+
+  @Test func secondInterruptionCannotRepublishReadingCapturedBeforeIt() async throws {
+    let system = TestActivitySystem()
+    var time = Date(timeIntervalSince1970: 100)
+    let sensor = TestTravelSensor()
+    let activity = CompassActivityController(system: system, now: { time })
+    let drive = DriveSessionController(
+      sensor: sensor, activity: activity, now: { time }, automaticTick: false)
+    await drive.carPlayActivated()
+    func send(_ degrees: Double) {
+      sensor.receive?(
+        .reading(
+          .init(
+            course: degrees, courseAccuracy: 1, speed: 10, speedAccuracy: 1, horizontalAccuracy: 1,
+            timestamp: time)))
+    }
+    send(42)
+    await drive.waitForPendingOperations()
+    time += 2
+    system.handle.suspendNextUpdate = true
+    sensor.receive?(.interrupted)
+    send(90)
+    while system.handle.resumeUpdate == nil { await Task.yield() }
+    let countBeforeSecondInterruption = system.handle.updates.count
+    sensor.receive?(.interrupted)
+    system.handle.resumeUpdate?.resume()
+    await drive.waitForPendingOperations()
+    #expect(
+      system.handle.updates.dropFirst(countBeforeSecondInterruption).allSatisfy {
+        $0.bearing == nil
+      })
+    await drive.endDrive()
+  }
+
+  @Test func sampleAlreadyExpiredInDriveQueueDoesNotClearAcceptedReading() async throws {
+    let system = TestActivitySystem()
+    var time = Date(timeIntervalSince1970: 100)
+    let controller = CompassActivityController(system: system, now: { time })
+    try await controller.start()
+    let first = CompassSample(
+      degrees: 42, source: .vehicleCourse, reference: .trueNorth,
+      accuracy: 1, timestamp: time)
+    await controller.update(.init(sample: first, status: .usable))
+    let delayed = CompassSample(
+      degrees: 90, source: .vehicleCourse, reference: .trueNorth,
+      accuracy: 1, timestamp: time + 1)
+    time += 10
+    await controller.update(.init(sample: delayed, status: .usable))
+    #expect(system.handle.updates.map(\.bearing) == [42])
+    #expect(system.handle.updates.last?.sampleTime == first?.timestamp)
+    await controller.end()
+  }
+
+  @Test func sampleExpiringInQueueCannotReplaceTheLastAcceptedCourse() async throws {
+    let system = TestActivitySystem()
+    var time = Date(timeIntervalSince1970: 100)
+    var evaluations = 0
+    let controller = CompassActivityController(
+      system: system,
+      now: {
+        evaluations += 1; return time
+      })
+    try await controller.start()
+    func reading(_ degrees: Double) -> TravelPresentation {
+      .init(
+        sample: CompassSample(
+          degrees: degrees, source: .vehicleCourse, reference: .trueNorth,
+          accuracy: 1, timestamp: time), status: .usable)
+    }
+    system.handle.suspendNextUpdate = true
+    let first = reading(42)
+    let writing = Task { await controller.update(first) }
+    while system.handle.resumeUpdate == nil { await Task.yield() }
+    time += 1
+    let next = reading(90)
+    let before = evaluations
+    let queued = Task { await controller.update(next) }
+    while evaluations == before { await Task.yield() }
+    time += 60
+    system.handle.resumeUpdate?.resume()
+    await writing.value
+    await queued.value
+    #expect(system.handle.updates.map(\.bearing) == [42])
+    #expect(system.handle.updates.last?.sampleTime == Date(timeIntervalSince1970: 100))
+    await controller.update(reading(90))
+    #expect(system.handle.updates.last?.bearing == 90)
+    await controller.end()
+  }
+
 }
 
 @MainActor private final class TestActivityHandle: CompassActivityHandle {
@@ -306,4 +419,15 @@ struct CompassActivityControllerTests {
     self.finalState = finalState
     cleanups += 1
   }
+}
+
+@MainActor private final class TestTravelSensor: TravelLocationSensor {
+  var authorization: TravelAuthorization = .authorized
+  var fullAccuracy = true
+  var servicesEnabled = true
+  var available = true
+  var receive: ((TravelSensorEvent) -> Void)?
+  func requestAuthorization() {}
+  func start() throws {}
+  func stop() {}
 }
