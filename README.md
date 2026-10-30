@@ -82,6 +82,24 @@ failure to do so blocks release of the compact numeric readout. Updates are boun
 to at most once per second for usable bearings, with immediate invalidation in the
 producer; iOS does not guarantee rendering cadence.
 
+## Travel widget
+
+The small Travel Compass widget shows one **last recorded** vehicle travel direction
+and its update age. It becomes **Stale** after five seconds and is retained for at
+most two minutes when no fresh sample arrives. It is not a live heading indicator.
+Invalid measurements, stopping acquisition or losing permission clear the shared
+reading. WidgetKit controls delivery, so clearing and expiry can appear late; the
+recorded age remains visible. The widget does not start location collection or
+read the phone's magnetic compass. Open Compasslet on CarPlay to start the travel
+feed; simply displaying a widget does not start it.
+
+Debug Mode adds bounded acquisition reasons, shared-file read/write outcomes,
+provider timestamps and sample ages to diagnostics. These records contain no
+coordinates or bearings and are capped at 256 records over the latest 30 minutes
+of recorded wall-clock time, separately from the existing active-feed timing log.
+They help distinguish missing acquisition, storage failures and delayed delivery;
+a reload request or provider invocation does not prove a screen redraw.
+
 ## Swift style
 
 Use **Swift 6.4.1**, including its bundled **swift-format 6.4.1**, on Linux.

@@ -136,6 +136,79 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertEqual(sensor.starts, 0)
   }
 
+  func testStartupReloadsWaitingAndHistoryClearsOnDeniedPermission() async {
+    let sensor = Sensor(), activity = Activity()
+    var snapshots: [LatestCourseSnapshot] = []
+    var snapshot = LatestCourseSnapshot.unavailable(at: time)
+    let controller = DriveSessionController(
+      sensor: sensor, activity: activity, now: { self.time }, automaticTick: false,
+      reloadWidget: { _ in snapshots.append(snapshot) }, writeWidget: { snapshot = $0 })
+    await controller.carPlayActivated()
+    XCTAssertEqual(snapshots.map(\.status), [.waiting])
+    sensor.receive?(reading())
+    let sampleTime = time
+    time += 60
+    controller.tick()
+    XCTAssertEqual(snapshot.status, .historical)
+    XCTAssertEqual(snapshot.sampleTime, sampleTime)
+    XCTAssertEqual(snapshot.bearing, 90)
+    XCTAssertNil(controller.presentation.sample)
+    sensor.authorization = .denied
+    sensor.receive?(.authorizationChanged)
+    XCTAssertNil(snapshot.bearing)
+    XCTAssertEqual(snapshot.status, .unavailable)
+    XCTAssertFalse(controller.isDriving)
+    await controller.waitForPendingOperations()
+  }
+
+  func testInterruptionClearsHistoricalFileBeforeNextReloadSlot() async {
+    let sensor = Sensor(), activity = Activity()
+    var snapshot = LatestCourseSnapshot.unavailable(at: time)
+    let controller = DriveSessionController(
+      sensor: sensor, activity: activity, now: { self.time }, automaticTick: false,
+      writeWidget: { snapshot = $0 })
+    await controller.carPlayActivated()
+    sensor.receive?(reading())
+    time += 6
+    controller.tick()
+    XCTAssertEqual(snapshot.status, .historical)
+    time += 0.1
+    sensor.receive?(.interrupted)
+    XCTAssertNil(snapshot.bearing)
+    await controller.endDrive()
+  }
+
+  func testAcquisitionDiagnosticsIdentifyStartAndTeardownReason() async {
+    for reason in ["disconnect", "permission", "timeout", "dismissal"] {
+      let sensor = Sensor(), activity = Activity()
+      var events: [CompassDiagnostics.WidgetOutcome] = []
+      let controller = DriveSessionController(
+        sensor: sensor, activity: activity, now: { self.time }, automaticTick: false,
+        diagnose: { _, outcome in events.append(outcome) })
+      await controller.carPlayActivated()
+      XCTAssertEqual(events, [.success])
+      let expected: CompassDiagnostics.WidgetOutcome
+      switch reason {
+      case "disconnect":
+        expected = .disconnected
+        await controller.carPlayDisconnected()
+      case "permission":
+        expected = .permission
+        sensor.authorization = .denied
+        sensor.receive?(.authorizationChanged)
+      case "timeout":
+        expected = .timeout
+        time += 8 * 60 * 60
+        controller.tick()
+      default:
+        expected = .dismissed
+        activity.onDismiss?()
+      }
+      XCTAssertEqual(events, [.success, expected])
+      await controller.waitForPendingOperations()
+    }
+  }
+
   func testWidgetReloadsCoalesceReadingsAndStatusAtMostOncePerSecond() async {
     let sensor = Sensor(), activity = Activity()
     var reloads = 0
@@ -143,29 +216,29 @@ final class DriveSessionControllerTests: XCTestCase {
       sensor: sensor, activity: activity, now: { self.time }, automaticTick: false,
       reloadWidget: { _ in reloads += 1 })
     await controller.carPlayActivated()
-    XCTAssertEqual(reloads, 0)
-    sensor.receive?(reading())
     XCTAssertEqual(reloads, 1)
-    time += 0.5
     sensor.receive?(reading())
-    XCTAssertEqual(reloads, 1)
+    XCTAssertEqual(reloads, 2)
     time += 0.5
     sensor.receive?(reading())
     XCTAssertEqual(reloads, 2)
+    time += 0.5
+    sensor.receive?(reading())
+    XCTAssertEqual(reloads, 3)
     time += 1
     sensor.receive?(reading(-1))
-    XCTAssertEqual(reloads, 3)
+    XCTAssertEqual(reloads, 4)
     let staleReading = reading()
     time += 6
     sensor.receive?(staleReading)
-    XCTAssertEqual(reloads, 4)
-    controller.tick()
-    XCTAssertEqual(reloads, 4)
-    sensor.receive?(reading())
-    XCTAssertEqual(reloads, 4)
-    time += 1
+    XCTAssertEqual(reloads, 5)
     controller.tick()
     XCTAssertEqual(reloads, 5)
+    sensor.receive?(reading())
+    XCTAssertEqual(reloads, 5)
+    time += 1
+    controller.tick()
+    XCTAssertEqual(reloads, 6)
     await controller.endDrive()
   }
 
@@ -183,21 +256,22 @@ final class DriveSessionControllerTests: XCTestCase {
     sensor.receive?(reading(-1))
     XCTAssertNil(snapshot.bearing)
     XCTAssertEqual(snapshot.status, .unreliable)
-    XCTAssertEqual(displayed.count, 1)
+    XCTAssertEqual(displayed.count, 2)
     time += 0.5
     controller.tick()
     XCTAssertEqual(displayed.last?.status, .unreliable)
-    XCTAssertEqual(displayed.count, 2)
+    XCTAssertEqual(displayed.count, 3)
     time += 0.1
     sensor.receive?(reading(180))
-    XCTAssertEqual(displayed.count, 2)
+    XCTAssertEqual(displayed.count, 3)
     time += 0.9
     controller.tick()
     XCTAssertEqual(displayed.last?.bearing, 180)
     time += 6
     controller.tick()
-    XCTAssertEqual(snapshot.status, .unavailable)
-    XCTAssertNil(displayed.last?.bearing)
+    XCTAssertEqual(snapshot.status, .historical)
+    XCTAssertEqual(displayed.last?.bearing, 180)
+    XCTAssertNil(controller.presentation.sample)
     await controller.endDrive()
     XCTAssertEqual(displayed.last?.status, .unavailable)
     XCTAssertNil(displayed.last?.bearing)
@@ -259,12 +333,12 @@ final class DriveSessionControllerTests: XCTestCase {
         sensor: sensor, activity: activity, now: { self.time }, automaticTick: false,
         reloadWidget: { _ in
           reloads += 1
-          if reloads == 2 { XCTAssertNil(snapshot.bearing) }
+          if reloads == 3 { XCTAssertNil(snapshot.bearing) }
         }, writeWidget: { snapshot = $0 })
       await controller.carPlayActivated()
       let lateDelivery = sensor.receive
       sensor.receive?(reading())
-      XCTAssertEqual(reloads, 1)
+      XCTAssertEqual(reloads, 2)
       switch stop {
       case "end": await controller.endDrive()
       case "disconnect": await controller.carPlayDisconnected()
@@ -277,12 +351,12 @@ final class DriveSessionControllerTests: XCTestCase {
       }
       XCTAssertFalse(controller.isDriving)
       XCTAssertEqual(snapshot.status, .unavailable)
-      XCTAssertEqual(reloads, 2)
+      XCTAssertEqual(reloads, 3)
       time += 2
       lateDelivery?(reading())
       controller.tick()
       await controller.endDrive()
-      XCTAssertEqual(reloads, 2)
+      XCTAssertEqual(reloads, 3)
       await controller.waitForPendingOperations()
     }
   }

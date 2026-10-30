@@ -24,7 +24,7 @@ private struct CourseProvider: TimelineProvider {
     let date = Date()
     completion(
       CourseEntry(
-        date: date, snapshot: LatestCourseStore.shared?.read(now: date) ?? .unavailable(at: date),
+        date: date, snapshot: readSnapshot(at: date),
         generatedAt: date, delivery: nil))
   }
 
@@ -34,34 +34,57 @@ private struct CourseProvider: TimelineProvider {
       return value
     }
     let date = Date()
-    let snapshot = LatestCourseStore.shared?.read(now: date) ?? .unavailable(at: date)
+    try? CompassDiagnostics.shared?.recordWidget(.providerInvoked, outcome: .success)
+    let snapshot = readSnapshot(at: date)
     let debugging = (try? CompassDiagnostics.shared?.isEnabled()) == true
     _ = try? CompassDiagnostics.shared?.record(.widget, kind: .providerCreated)
     var entries = [
       CourseEntry(
         date: date, snapshot: snapshot, generatedAt: date, delivery: debugging ? delivery : nil)
     ]
-    if snapshot.status != .unavailable, snapshot.expiry > date {
-      // This requests expiry rendering; WidgetKit can delay delivering any timeline entry.
+    for transition in snapshot.transitionDates(after: date) where snapshot.status != .unavailable {
+      // WidgetKit may delay delivery; every numeric layout also identifies its original sample age.
       entries.append(
         CourseEntry(
-          date: snapshot.expiry, snapshot: .unavailable(at: snapshot.expiry),
+          date: transition, snapshot: snapshot.validated(at: transition),
           generatedAt: date, delivery: debugging ? delivery : nil))
     }
     completion(Timeline(entries: entries, policy: .never))
   }
+  private func readSnapshot(at date: Date) -> LatestCourseSnapshot {
+    guard let store = LatestCourseStore.shared else {
+      try? CompassDiagnostics.shared?.recordWidget(.snapshotRead, outcome: .unavailable)
+      return .unavailable(at: date)
+    }
+    return store.read(now: date) { result, observed in
+      let outcome: CompassDiagnostics.WidgetOutcome
+      switch result {
+      case .success: outcome = .success
+      case .missing: outcome = .missing
+      case .corrupt: outcome = .corrupt
+      case .failure: outcome = .failure
+      }
+      try? CompassDiagnostics.shared?.recordWidget(
+        .snapshotRead, outcome: outcome,
+        sampleAge: outcome == .success ? date.timeIntervalSince(observed.sampleTime) : nil,
+        status: observed.validated(at: date).status)
+    }
+  }
+
 }
 
 struct CompassCourseWidget: Widget {
   var body: some WidgetConfiguration {
     // Preserve existing widget installations while replacing the diagnostic probe's content.
     StaticConfiguration(kind: "CompassRefreshProbe", provider: CourseProvider()) { entry in
-      let snapshot = entry.snapshot.validated(at: Date())
+      let snapshot = entry.snapshot.validated(at: max(Date(), entry.date))
       CourseWidgetView(entry: entry, snapshot: snapshot)
         .containerBackground(.fill.tertiary, for: .widget)
     }
     .configurationDisplayName("Travel Compass (Experimental)")
-    .description("Sampled vehicle travel direction. Updates and expiry may be delayed by CarPlay.")
+    .description(
+      "Last recorded travel direction, with its age. Stale after 5 seconds; kept for up to 2 minutes. Delivery may be delayed."
+    )
     .supportedFamilies([.systemSmall])
   }
 }
@@ -90,7 +113,7 @@ private struct CourseWidgetView: View {
               CompassDial(bearing: bearing, appearance: entry.appearance)
                 .frame(minHeight: 60)
             }
-            Text("Last known").font(.caption2).foregroundStyle(.secondary)
+            sampleAge
           }
           .padding(.top, entry.delivery == nil ? 0 : debugInset)
           .frame(maxWidth: .infinity)
@@ -124,7 +147,7 @@ private struct CourseWidgetView: View {
         CompassReadout(bearing: bearing, appearance: entry.appearance, compact: true)
           .fixedSize(horizontal: false, vertical: true)
       }
-      Text("Last known").font(.caption2).foregroundStyle(.secondary).fixedSize()
+      sampleAge
       if detailed, let delivery = entry.delivery {
         VStack(spacing: 1) {
           Text("Sample \(snapshot.sampleTime, format: .dateTime.hour().minute().second())")
@@ -138,6 +161,15 @@ private struct CourseWidgetView: View {
     .overlay(alignment: .topTrailing) {
       if !detailed { debugIndicator }
     }
+  }
+
+  private var sampleAge: some View {
+    VStack(spacing: 1) {
+      Text(snapshot.status == .historical ? "Last recorded · Stale" : "Last recorded")
+      Text("Updated \(snapshot.sampleTime, style: .relative) ago")
+    }
+    .font(.caption2).foregroundStyle(.secondary)
+    .fixedSize(horizontal: false, vertical: true)
   }
 
   @ViewBuilder private var debugIndicator: some View {
@@ -155,11 +187,17 @@ private struct CourseWidgetView: View {
     let reading: Text
     if let bearing = snapshot.bearing {
       reading = Text(
-        "\(Int(bearing.rounded()) % 360) degrees, \(cardinal(bearing)), last known travel direction, true north."
+        "\(Int(bearing.rounded()) % 360) degrees, \(cardinal(bearing)), last recorded travel direction, true north."
       )
     } else {
       reading = Text(status)
     }
+    let age: Text =
+      snapshot.bearing == nil
+      ? reading
+      : Text(
+        "\(reading) \(snapshot.status == .historical ? "Stale." : "") Recorded \(snapshot.sampleTime, style: .relative) ago."
+      )
     if let delivery = entry.delivery {
       if snapshot.bearing == nil {
         return Text(
@@ -167,10 +205,10 @@ private struct CourseWidgetView: View {
         )
       }
       return Text(
-        "\(reading) Sample \(snapshot.sampleTime, format: .dateTime.hour().minute().second()). Provider \(delivery), \(entry.generatedAt, format: .dateTime.hour().minute().second())."
+        "\(age) Sample \(snapshot.sampleTime, format: .dateTime.hour().minute().second()). Provider \(delivery), \(entry.generatedAt, format: .dateTime.hour().minute().second())."
       )
     }
-    return reading
+    return age
   }
 
   private var status: String {
@@ -178,7 +216,7 @@ private struct CourseWidgetView: View {
     case .waiting: "Waiting for travel"
     case .slow: "Stopped or moving slowly"
     case .unreliable: "Direction uncertain"
-    case .usable, .unavailable: "Travel unavailable"
+    case .usable, .historical, .unavailable: "Travel unavailable"
     }
   }
 }
