@@ -44,6 +44,13 @@ jobs:
           -derivedDataPath .build/xcode CODE_SIGNING_ALLOWED=NO build
       - name: Test on an available iPhone simulator
         run: bash scripts/test-ios
+      - name: Build unsigned Watch app
+        run: >-
+          xcodebuild -project Compass.xcodeproj -scheme CompassWatch
+          -destination 'generic/platform=watchOS Simulator'
+          -derivedDataPath .build/watch CODE_SIGNING_ALLOWED=NO build
+      - name: Test on an available Watch simulator
+        run: bash scripts/test-watch
       - name: Verify built bundle names
         run: |
           for key in CFBundleName CFBundleDisplayName; do

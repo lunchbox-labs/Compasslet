@@ -6,6 +6,7 @@ struct CompassDial: View {
   let bearing: Double?
   let appearance: AppearanceValues
   var showsReadout = true
+  var unavailableSymbol = "safari"
 
   var body: some View {
     GeometryReader { geometry in
@@ -50,7 +51,7 @@ struct CompassDial: View {
               .rotationEffect(.degrees(bearing))
           }
         } else {
-          Image(systemName: "safari").font(.largeTitle).foregroundStyle(.tertiary)
+          Image(systemName: unavailableSymbol).font(.largeTitle).foregroundStyle(.tertiary)
         }
       }
       .opacity(bearing == nil ? 0.35 : 1)

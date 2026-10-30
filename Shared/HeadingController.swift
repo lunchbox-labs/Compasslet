@@ -30,7 +30,6 @@ final class DeviceHeadingSensor: NSObject, HeadingSensor, @preconcurrency CLLoca
   override init() {
     super.init()
     manager.delegate = self
-    // CoreLocation defaults to portrait, matching the app’s supported orientation.
     manager.headingFilter = 1
   }
 
@@ -49,7 +48,11 @@ final class DeviceHeadingSensor: NSObject, HeadingSensor, @preconcurrency CLLoca
     receive?(code == .denied ? .denied : .interrupted)
   }
 
-  func locationManagerShouldDisplayHeadingCalibration(_ manager: CLLocationManager) -> Bool { true }
+  #if os(iOS)
+    func locationManagerShouldDisplayHeadingCalibration(_ manager: CLLocationManager) -> Bool {
+      true
+    }
+  #endif
 }
 
 /// All visible readouts are removed on invalid, stale, or interrupted input.

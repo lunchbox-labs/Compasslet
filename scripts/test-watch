@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+destination="$(xcrun simctl list devices available --json | python3 -c '
+import json, re, sys
+for runtime, devices in sorted(json.load(sys.stdin)["devices"].items(), reverse=True):
+    match = re.search(r"\.watchOS-(\d+)-", runtime)
+    if not match or int(match.group(1)) < 27:
+        continue
+    for device in devices:
+        if device.get("isAvailable") and device["name"].startswith("Apple Watch"):
+            print(device["udid"])
+            sys.exit(0)
+sys.exit("No available watchOS 27+ Apple Watch simulator")
+')"
+mkdir -p .build
+result_directory="$(mktemp -d .build/watch-test-results.XXXXXX)"
+xcodebuild -project Compass.xcodeproj -scheme CompassWatch \
+  -destination "platform=watchOS Simulator,id=$destination" \
+  -derivedDataPath .build/watch -resultBundlePath "$result_directory/CompassWatchTests.xcresult" \
+  CODE_SIGNING_ALLOWED=NO test

@@ -16,6 +16,7 @@ import uuid
 
 APP = 'dev.lunchbox-labs.carplay-compass'
 ACTIVITY = APP + '.activity'
+WATCH = APP + '.watchkitapp'
 
 ROOT = Path(__file__).resolve().parents[1]
 WORK = Path(os.environ.get('RUNNER_TEMP', '/tmp')) / 'compass-testflight'
@@ -139,6 +140,8 @@ def publish():
     require(re.fullmatch('[A-Z0-9]{10}', team) and re.fullmatch('[A-Z0-9]+', key), 'Missing/invalid team or API key ID.')
     uuid.UUID(issuer)
     require(os.environ.get('IOS_DISTRIBUTION_P12_PASSWORD'), 'Missing p12 password.')
+    require(os.environ.get('WATCH_APP_PROFILE_BASE64'),
+            'Watch publishing requires WATCH_APP_PROFILE_BASE64 for ' + WATCH + '; configure its distribution profile before publishing.')
     require(not WORK.exists(), 'Stale signing directory; run cleanup first.')
     WORK.mkdir(mode=0o700)
     state = {'keychains': shlex.split(run('security', 'list-keychains', '-d', 'user', operation='read keychain search list').stdout.decode()), 'profiles': []}
@@ -147,7 +150,8 @@ def publish():
     STAGE = 'signing setup'
     p12 = decode('IOS_DISTRIBUTION_P12_BASE64', 'identity.p12')
     paths = [decode('IOS_APP_PROFILE_BASE64', 'app.mobileprovision'),
-             decode('IOS_ACTIVITY_PROFILE_BASE64', 'activity.mobileprovision')]
+             decode('IOS_ACTIVITY_PROFILE_BASE64', 'activity.mobileprovision'),
+             decode('WATCH_APP_PROFILE_BASE64', 'watch.mobileprovision')]
     decode('ASC_API_PRIVATE_KEY_BASE64', 'AuthKey_' + key + '.p8')
     password = secrets.token_urlsafe(32)
     mask(password)
@@ -187,15 +191,15 @@ def publish():
     for obj in data['objects'].values():
         settings = obj.get('buildSettings', {})
         bundle = settings.get('PRODUCT_BUNDLE_IDENTIFIER')
-        if bundle in [APP, ACTIVITY]:
-            profile_id = profiles[[APP, ACTIVITY].index(bundle)]
+        if bundle in [APP, ACTIVITY, WATCH]:
+            profile_id = profiles[[APP, ACTIVITY, WATCH].index(bundle)]
             settings.update(CODE_SIGN_STYLE='Manual', DEVELOPMENT_TEAM=team,
                             CODE_SIGN_IDENTITY='Apple Distribution', PROVISIONING_PROFILE_SPECIFIER=profile_id,
                             CURRENT_PROJECT_VERSION=build)
             if version is not None:
                 settings['MARKETING_VERSION'] = version
             seen.add(bundle)
-    require(seen == {APP, ACTIVITY}, 'Project target IDs changed; review signing configuration.')
+    require(seen == {APP, ACTIVITY, WATCH}, 'Project target IDs changed; review signing configuration.')
     project.write_bytes(plistlib.dumps(data))
     STAGE = 'archive'
     archive = WORK / 'Compass.xcarchive'
@@ -206,7 +210,7 @@ def publish():
     options = WORK / 'ExportOptions.plist'
     options.write_bytes(plistlib.dumps({'method': 'app-store-connect', 'destination': 'export',
         'teamID': team, 'signingStyle': 'manual', 'signingCertificate': 'Apple Distribution',
-        'provisioningProfiles': dict(zip([APP, ACTIVITY], profiles)),
+        'provisioningProfiles': dict(zip([APP, ACTIVITY, WATCH], profiles)),
         'testFlightInternalTestingOnly': event == 'workflow_dispatch', 'manageAppVersionAndBuildNumber': False}))
     exported = WORK / 'export'
     run('xcodebuild', '-exportArchive', '-archivePath', archive, '-exportPath', exported,
