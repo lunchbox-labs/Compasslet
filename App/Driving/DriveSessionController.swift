@@ -19,7 +19,9 @@ final class DriveSessionController: ObservableObject {
   private let now: () -> Date
   private let automaticTick: Bool
   private let reloadWidget: @MainActor (String) -> Void
+  private let writeWidget: @MainActor (LatestCourseSnapshot) -> Void
   private var lastWidgetReload: Date?
+  private var pendingWidgetReload = false
   private var filter = TravelCourseFilter()
   private var lastReading: TravelReading?
   private var startedAt: Date?
@@ -36,13 +38,15 @@ final class DriveSessionController: ObservableObject {
   init(
     sensor: any TravelLocationSensor, activity: any CompassActivityPresenting,
     now: @escaping () -> Date = Date.init, automaticTick: Bool = true,
-    reloadWidget: @escaping @MainActor (String) -> Void = { _ in }
+    reloadWidget: @escaping @MainActor (String) -> Void = { _ in },
+    writeWidget: @escaping @MainActor (LatestCourseSnapshot) -> Void = { _ in }
   ) {
     self.sensor = sensor
     self.activity = activity
     self.now = now
     self.automaticTick = automaticTick
     self.reloadWidget = reloadWidget
+    self.writeWidget = writeWidget
     refreshSetupStatus()
     observeAuthorization()
   }
@@ -96,9 +100,11 @@ final class DriveSessionController: ObservableObject {
     try? CompassDiagnostics.shared?.observe(.widget, active: true)
     startedAt = now()
     lastWidgetReload = nil
+    pendingWidgetReload = false
     filter.reset()
     lastReading = nil
     presentation = TravelPresentation(sample: nil, status: .waiting)
+    writeWidget(Self.widgetSnapshot(presentation, now: now()))
     compactStatus = .starting
     startTicker()
     let operation = enqueue { [weak self, activity] in
@@ -155,6 +161,7 @@ final class DriveSessionController: ObservableObject {
       publish(filter.update(nil, now: now()))
       self.lastReading = nil
     }
+    flushWidgetReload()
   }
 
   func waitForPendingOperations() async { await activityOperation?.value }
@@ -197,21 +204,18 @@ final class DriveSessionController: ObservableObject {
       publish(filter.update(nil, now: now()))
     case .reading(let reading):
       lastReading = reading
-      let value = filter.update(reading, now: now())
-      publish(value)
-      let currentTime = now()
-      if value.status == .usable, let sample = value.sample,
-        sample.isFresh(now: currentTime, maximumAge: 5),
-        lastWidgetReload.map({ currentTime.timeIntervalSince($0) >= 1 }) ?? true
-      {
-        lastWidgetReload = currentTime
-        reloadWidget("fresh reading")
-      }
+      publish(filter.update(reading, now: now()))
     }
   }
 
   private func publish(_ value: TravelPresentation) {
+    let invalidation = value.status != .usable && value.status != presentation.status
     presentation = value
+    if invalidation {
+      writeWidget(Self.widgetSnapshot(value, now: now(), observedAt: lastReading?.timestamp))
+    }
+    pendingWidgetReload = true
+    flushWidgetReload()
     pendingPresentation = value
     let token = generation
     guard drainGeneration != token else { return }
@@ -229,6 +233,40 @@ final class DriveSessionController: ObservableObject {
         self.drainGeneration = nil
       }
     }
+  }
+
+  private func flushWidgetReload() {
+    let date = now()
+    guard pendingWidgetReload,
+      lastWidgetReload.map({ date.timeIntervalSince($0) >= 1 }) ?? true
+    else { return }
+    pendingWidgetReload = false
+    lastWidgetReload = date
+    writeWidget(Self.widgetSnapshot(presentation, now: date, observedAt: lastReading?.timestamp))
+    reloadWidget("latest presentation")
+  }
+
+  static func widgetSnapshot(
+    _ value: TravelPresentation, now: Date, observedAt: Date? = nil
+  ) -> LatestCourseSnapshot {
+    let status: LatestCourseSnapshot.Status
+    switch value.status {
+    case .waiting: status = .waiting
+    case .usable: status = .usable
+    case .slow: status = .slow
+    case .unreliable: status = .unreliable
+    case .unavailable: status = .unavailable
+    }
+    guard status == .usable else {
+      return LatestCourseSnapshot(bearing: nil, status: status, sampleTime: observedAt ?? now)
+        .validated(at: now)
+    }
+    guard let sample = value.sample, sample.source == .vehicleCourse,
+      sample.reference == .trueNorth, sample.isFresh(now: now, maximumAge: 5)
+    else { return .unavailable(at: now) }
+    return LatestCourseSnapshot(
+      bearing: sample.angle.degrees, status: .usable, sampleTime: sample.timestamp
+    ).validated(at: now)
   }
 
   @discardableResult
@@ -249,6 +287,8 @@ final class DriveSessionController: ObservableObject {
     presentation = TravelPresentation(sample: nil, status: .unavailable)
     compactStatus = .inactive
     lastWidgetReload = nil
+    pendingWidgetReload = false
+    writeWidget(.unavailable(at: now()))
     reloadWidget("session ended")
     try? CompassDiagnostics.shared?.observe(.widget, active: false)
     return enqueue { [activity] in

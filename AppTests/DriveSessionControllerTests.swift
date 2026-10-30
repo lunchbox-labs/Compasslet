@@ -136,7 +136,7 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertEqual(sensor.starts, 0)
   }
 
-  func testWidgetReloadsOnlyForFreshUsableReadingsAtMostOncePerSecond() async {
+  func testWidgetReloadsCoalesceReadingsAndStatusAtMostOncePerSecond() async {
     let sensor = Sensor(), activity = Activity()
     var reloads = 0
     let controller = DriveSessionController(
@@ -154,15 +154,99 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertEqual(reloads, 2)
     time += 1
     sensor.receive?(reading(-1))
-    XCTAssertEqual(reloads, 2)
+    XCTAssertEqual(reloads, 3)
     let staleReading = reading()
     time += 6
     sensor.receive?(staleReading)
-    XCTAssertEqual(reloads, 2)
+    XCTAssertEqual(reloads, 4)
     controller.tick()
-    XCTAssertEqual(reloads, 2)
+    XCTAssertEqual(reloads, 4)
     sensor.receive?(reading())
-    XCTAssertEqual(reloads, 3)
+    XCTAssertEqual(reloads, 4)
+    time += 1
+    controller.tick()
+    XCTAssertEqual(reloads, 5)
+    await controller.endDrive()
+  }
+
+  func testWidgetInvalidationPrecedesReloadAndCoalescesInsideTheCadence() async {
+    let sensor = Sensor(), activity = Activity()
+    var snapshot = LatestCourseSnapshot.unavailable(at: time)
+    var displayed: [LatestCourseSnapshot] = []
+    let controller = DriveSessionController(
+      sensor: sensor, activity: activity, now: { self.time }, automaticTick: false,
+      reloadWidget: { _ in displayed.append(snapshot) }, writeWidget: { snapshot = $0 })
+    await controller.carPlayActivated()
+    sensor.receive?(reading())
+    XCTAssertEqual(displayed.last?.bearing, 90)
+    time += 0.5
+    sensor.receive?(reading(-1))
+    XCTAssertNil(snapshot.bearing)
+    XCTAssertEqual(snapshot.status, .unreliable)
+    XCTAssertEqual(displayed.count, 1)
+    time += 0.5
+    controller.tick()
+    XCTAssertEqual(displayed.last?.status, .unreliable)
+    XCTAssertEqual(displayed.count, 2)
+    time += 0.1
+    sensor.receive?(reading(180))
+    XCTAssertEqual(displayed.count, 2)
+    time += 0.9
+    controller.tick()
+    XCTAssertEqual(displayed.last?.bearing, 180)
+    time += 6
+    controller.tick()
+    XCTAssertEqual(snapshot.status, .unavailable)
+    XCTAssertNil(displayed.last?.bearing)
+    await controller.endDrive()
+    XCTAssertEqual(displayed.last?.status, .unavailable)
+    XCTAssertNil(displayed.last?.bearing)
+  }
+
+  func testWidgetSnapshotRejectsHeadingMagneticAndFutureSamples() {
+    for sample in [
+      CompassSample(
+        degrees: 90, source: .deviceHeading, reference: .trueNorth,
+        accuracy: 1, timestamp: time),
+      CompassSample(
+        degrees: 90, source: .vehicleCourse, reference: .magnetic,
+        accuracy: 1, timestamp: time),
+      CompassSample(
+        degrees: 90, source: .vehicleCourse, reference: .trueNorth,
+        accuracy: 1, timestamp: time + 1),
+    ] {
+      let snapshot = DriveSessionController.widgetSnapshot(
+        .init(sample: sample, status: .usable), now: time)
+      XCTAssertNil(snapshot.bearing)
+      XCTAssertEqual(snapshot.status, .unavailable)
+    }
+  }
+
+  func testWidgetKeepsObservedSlowStateFreshWithoutInventingNewSamples() async {
+    let sensor = Sensor(), activity = Activity()
+    var snapshot = LatestCourseSnapshot.unavailable(at: time)
+    let controller = DriveSessionController(
+      sensor: sensor, activity: activity, now: { self.time }, automaticTick: false,
+      writeWidget: { snapshot = $0 })
+    await controller.carPlayActivated()
+    for _ in 0..<10 {
+      time += 1
+      sensor.receive?(
+        .reading(
+          TravelReading(
+            course: 90, courseAccuracy: 2, speed: 0, speedAccuracy: 1,
+            horizontalAccuracy: 5, timestamp: time)))
+      XCTAssertEqual(snapshot.status, .slow)
+      XCTAssertEqual(snapshot.sampleTime, time)
+      XCTAssertNil(snapshot.bearing)
+    }
+    let lastObservation = snapshot.sampleTime
+    time += 1
+    controller.tick()
+    XCTAssertEqual(snapshot.sampleTime, lastObservation)
+    time += 5
+    controller.tick()
+    XCTAssertEqual(snapshot.status, .unavailable)
     await controller.endDrive()
   }
 
@@ -170,9 +254,13 @@ final class DriveSessionControllerTests: XCTestCase {
     for stop in ["end", "disconnect", "permission", "services"] {
       let sensor = Sensor(), activity = Activity()
       var reloads = 0
+      var snapshot = LatestCourseSnapshot.unavailable(at: time)
       let controller = DriveSessionController(
         sensor: sensor, activity: activity, now: { self.time }, automaticTick: false,
-        reloadWidget: { _ in reloads += 1 })
+        reloadWidget: { _ in
+          reloads += 1
+          if reloads == 2 { XCTAssertNil(snapshot.bearing) }
+        }, writeWidget: { snapshot = $0 })
       await controller.carPlayActivated()
       let lateDelivery = sensor.receive
       sensor.receive?(reading())
@@ -188,6 +276,7 @@ final class DriveSessionControllerTests: XCTestCase {
         controller.tick()
       }
       XCTAssertFalse(controller.isDriving)
+      XCTAssertEqual(snapshot.status, .unavailable)
       XCTAssertEqual(reloads, 2)
       time += 2
       lateDelivery?(reading())
