@@ -53,11 +53,11 @@ alone does not guarantee app launch. Setup and permission repair happen on iPhon
 while parked. Never grant Always authorization for this feature.
 
 The full-screen readout uses Apple’s information template and shows **Travel ·
-True north**, bearing, freshness/status, and **End Drive**. Switching to Maps keeps
-the drive running with the background location indicator. End Drive, actual
-CarPlay scene disconnect, lost permission, Live Activity dismissal, or an
-eight-hour limit stops acquisition. Reopen the CarPlay app after leaving it to
-start a new drive. An ordinary phone launch never resumes a drive. Slow movement,
+True north**, bearing, and freshness/status. There are no manual drive controls
+on iPhone or CarPlay. Switching to Maps keeps the drive running with the background
+location indicator. A CarPlay template scene disconnect, lost permission, Live
+Activity dismissal, or an eight-hour limit stops acquisition. Reopen the CarPlay
+app after leaving it to start a new drive. An ordinary phone launch never resumes a drive. Slow movement,
 poor measurements, and data older than five seconds remove the bearing.
 
 The compact Dashboard surface uses a Live Activity. iOS and user settings control

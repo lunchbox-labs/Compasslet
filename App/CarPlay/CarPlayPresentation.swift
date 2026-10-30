@@ -5,14 +5,12 @@ struct CarPlayPresentation: Equatable {
   let bearing: String
   let status: String
   let compact: String
-  let canEndDrive: Bool
   let reference = "Travel · True north"
 
   init(
     presentation: TravelPresentation, setup: DriveSessionController.SetupStatus,
     driving: Bool, compact: DriveSessionController.CompactStatus, now: Date
   ) {
-    canEndDrive = driving
     self.compact =
       switch compact {
       case .active: "Compact display requested"
@@ -66,24 +64,22 @@ final class CarPlayLifecycleBridge {
   private let onActivate: () async -> Void
   private let onResign: () -> Void
   private let onDisconnect: () async -> Void
-  private let onEnd: () async -> Void
   private var generation = UUID()
 
   init(
     activate: @escaping () async -> Void, resign: @escaping () -> Void,
-    disconnect: @escaping () async -> Void, end: @escaping () async -> Void
+    disconnect: @escaping () async -> Void
   ) {
     onActivate = activate
     onResign = resign
     onDisconnect = disconnect
-    onEnd = end
   }
 
   convenience init(drive: DriveSessionController) {
     self.init(
       activate: { await drive.carPlayActivated() },
       resign: { drive.carPlayResignedActive() },
-      disconnect: { await drive.carPlayDisconnected() }, end: { await drive.endDrive() })
+      disconnect: { await drive.carPlayDisconnected() })
   }
 
   func activate() {
@@ -104,6 +100,4 @@ final class CarPlayLifecycleBridge {
     resign()
     Task { await onDisconnect() }
   }
-
-  func end() { Task { await onEnd() } }
 }

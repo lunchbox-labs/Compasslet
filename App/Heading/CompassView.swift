@@ -141,12 +141,7 @@ struct CompassView: View {
       Spacer(minLength: 8)
       Text("Compasslet").font(.headline)
       Spacer(minLength: 8)
-      if drive.isDriving {
-        Button("End Drive", role: .destructive) { Task { await drive.endDrive() } }
-          .frame(minWidth: 44, minHeight: 44)
-      } else {
-        Color.clear.frame(width: 44, height: 44).accessibilityHidden(true)
-      }
+      Color.clear.frame(width: 44, height: 44).accessibilityHidden(true)
     }
     .padding(.horizontal, 16).padding(.vertical, 8)
   }
