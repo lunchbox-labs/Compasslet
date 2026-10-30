@@ -97,8 +97,9 @@ immediate in the producer. iOS does not guarantee rendering cadence.
 ## Travel widget
 
 The small Travel Compass widget shows one **last recorded** vehicle travel direction
-and its update age. It becomes **Stale** after five seconds and is retained for at
-most two minutes when no fresh sample arrives. It is not a live heading indicator.
+and its update age, which counts up live. The reading is retained for at most two
+minutes when no fresh sample arrives, then removed. It is not a live heading
+indicator; the CarPlay screen and the Live Activity keep their five-second freshness.
 Invalid measurements, stopping acquisition or losing permission clear the shared
 reading. WidgetKit adapts its refresh budget and delivery to usage, with exemptions
 for foreground apps and certain active sessions. To reduce reload requests, the app
