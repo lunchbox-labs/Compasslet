@@ -1,7 +1,7 @@
 import CompassCore
 import SwiftUI
 
-/// The phone, widget, and settings previews use the same dial geometry.
+/// The phone and settings previews use the same dial geometry.
 struct CompassDial: View {
   let bearing: Double?
   let appearance: AppearanceValues

@@ -3,24 +3,10 @@ import SQLite3
 
 /// Local timing evidence only. An event never proves that CarPlay painted a frame.
 final class CompassDiagnostics: @unchecked Sendable {
-  enum Surface: String, Codable, CaseIterable { case widget, activity, fullscreen }
+  enum Surface: String, Codable, CaseIterable { case activity, fullscreen }
   enum Kind: String, Codable {
-    case started, paused, reloadRequested, providerCreated, updateRequested, updateCompleted
+    case started, paused, updateRequested, updateCompleted
     case templateUpdated
-  }
-  enum WidgetKind: String, Codable {
-    case acquisitionStarted, acquisitionStopped, snapshotWrite, snapshotRead, providerInvoked
-  }
-  enum WidgetOutcome: String, Codable {
-    case success, failure, missing, corrupt, unavailable, permission, disconnected, dismissed
-    case timeout, explicitStop, initialized, servicesUnavailable, startFailed
-  }
-  struct WidgetEvent: Codable, Equatable {
-    let timestamp: Double
-    let kind: WidgetKind
-    let outcome: WidgetOutcome
-    let sampleAgeSeconds: Double?
-    let status: LatestCourseSnapshot.Status?
   }
   struct Event: Codable, Equatable {
     let sequence: Int64
@@ -45,7 +31,6 @@ final class CompassDiagnostics: @unchecked Sendable {
     let explanation: String
     let surfaces: [SurfaceSummary]
     let events: [Event]
-    let widgetEvents: [WidgetEvent]
   }
   enum Failure: Error, LocalizedError {
     case unavailable, database
@@ -119,9 +104,11 @@ final class CompassDiagnostics: @unchecked Sendable {
           wall REAL NOT NULL, uptime REAL NOT NULL, elapsed REAL NOT NULL, session TEXT NOT NULL)
         """)
       try execute("CREATE INDEX IF NOT EXISTS events_surface ON events(surface, elapsed)")
-      try execute(
-        "CREATE TABLE IF NOT EXISTS widget_events (sequence INTEGER PRIMARY KEY AUTOINCREMENT, wall REAL NOT NULL, payload TEXT NOT NULL)"
-      )
+      try transaction {
+        try execute("DELETE FROM events WHERE surface='widget'")
+        try execute("DELETE FROM clocks WHERE surface='widget'")
+        try execute("DROP TABLE IF EXISTS widget_events")
+      }
     } catch {
       sqlite3_close(handle)
       throw error
@@ -197,7 +184,7 @@ final class CompassDiagnostics: @unchecked Sendable {
     }
   }
 
-  /// Providers may append only while the app has recently observed an eligible feed.
+  /// Append only while the app has recently observed an eligible feed.
   @discardableResult
   func record(
     _ surface: Surface, kind: Kind,
@@ -221,33 +208,9 @@ final class CompassDiagnostics: @unchecked Sendable {
     }
   }
 
-  /// Fixed-enum metadata only; independent of active-feed clocks so missing acquisition is visible.
-  /// Retains at most 256 events from the latest 30 wall-clock minutes, only when Debug Mode is on.
-  func recordWidget(
-    _ kind: WidgetKind, outcome: WidgetOutcome, sampleAge: Double? = nil,
-    status: LatestCourseSnapshot.Status? = nil, wall: Double = Date().timeIntervalSince1970
-  ) throws {
-    guard wall.isFinite else { return }
-    try transaction {
-      guard try enabled() else { return }
-      let age = sampleAge.flatMap { $0.isFinite && $0 >= 0 ? min($0, 86_400) : nil }
-      let event = WidgetEvent(
-        timestamp: wall, kind: kind, outcome: outcome, sampleAgeSeconds: age, status: status)
-      let payload = String(decoding: try JSONEncoder().encode(event), as: UTF8.self)
-      try execute("INSERT INTO widget_events(wall,payload) VALUES (?,?)", [String(wall), payload])
-      try execute(
-        "DELETE FROM widget_events WHERE wall < ? OR wall > ?",
-        [String(wall - 1800), String(wall)])
-      try execute(
-        "DELETE FROM widget_events WHERE sequence NOT IN (SELECT sequence FROM widget_events ORDER BY sequence DESC LIMIT 256)"
-      )
-    }
-  }
-
   func clear() throws {
     try transaction {
       try execute("DELETE FROM events")
-      try execute("DELETE FROM widget_events")
       try execute("DELETE FROM clocks")
       lastObservation.removeAll()
     }
@@ -299,11 +262,8 @@ final class CompassDiagnostics: @unchecked Sendable {
       }
       return Snapshot(
         explanation:
-          "Timing evidence, not screen visibility or paint. Each surface retains up to 30 observed active-feed minutes across sessions (maximum 50000 events). Gaps over 2 seconds and process restarts are not counted. Intervals are grouped by event kind within sessions. Timestamps are Unix seconds. Event elapsed times are relative to the first retained event in that session; raw boot uptime is not exported. Widget metadata is a separate opt-in stream capped at 256 records and 30 wall-clock minutes relative to the latest event; it records lifecycle, I/O outcomes and sample age, not screen visibility.",
-        surfaces: summaries, events: events,
-        widgetEvents: try rows("SELECT payload FROM widget_events ORDER BY sequence").map {
-          try JSONDecoder().decode(WidgetEvent.self, from: Data($0[0].utf8))
-        })
+          "Timing evidence, not screen visibility or paint. Each surface retains up to 30 observed active-feed minutes across sessions (maximum 50000 events). Gaps over 2 seconds and process restarts are not counted. Intervals are grouped by event kind within sessions. Timestamps are Unix seconds. Event elapsed times are relative to the first retained event in that session; raw boot uptime is not exported.",
+        surfaces: summaries, events: events)
     }
   }
 

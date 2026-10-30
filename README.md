@@ -55,8 +55,7 @@ while parked. Never grant Always authorization for this feature.
 The full-screen readout uses Apple’s native list details header with a compass
 thumbnail, an explicitly **Sampled** course, **Travel · True north**, the original
 sample time, and status. The thumbnail is drawn at the car display’s own scale and
-style; after a CarPlay connection, the phone’s Settings diagnostics section shows the
-scale, thumbnail limit and style the car reported. It is a snapshot rather than a continuously live compass.
+style. It is a snapshot rather than a continuously live compass.
 New snapshots appear at most once every ten seconds. Fresh sensor input keeps the
 previous snapshot visible between updates without changing its timestamp. Missing,
 unreliable or older-than-five-second sensor input immediately removes the numeric
@@ -84,7 +83,7 @@ lifecycle and rendering. No prior-drive reading is restored.
 Only bearing/status/sample time reaches ActivityKit. No route history or backend
 is added. Physical-device checks must verify the retained sample label, stop and
 recovery behavior, and clearing on teardown. This activity policy does not change
-the phone compass, full-screen CarPlay or regular widget retention rules.
+the phone compass or full-screen CarPlay freshness rules.
 
 The checked-in driving-task entitlement is a declaration only. Full-screen
 CarPlay on a physical device requires Apple’s approval and matching signing and
@@ -102,29 +101,9 @@ valid course, and clear on explicit acquisition failure or teardown. A changed
 reading is pushed at most once per second; unchanged readings need no heartbeat.
 iOS does not guarantee rendering cadence.
 
-## Travel widget
-
-The small Travel Compass widget shows one **last recorded** vehicle travel direction
-and its update age, which counts up live. The reading is retained for at most two
-minutes when no fresh sample arrives, then removed. It is not a live heading
-indicator; the CarPlay screen and the Live Activity keep their five-second freshness.
-Invalid measurements, stopping acquisition or losing permission clear the shared
-reading. WidgetKit adapts its refresh budget and delivery to usage, with exemptions
-for foreground apps and certain active sessions. To reduce reload requests, the app
-requests one when a drive starts or stops and when its first reading arrives, at most
-every ten seconds when a recorded reading is cleared, and otherwise at most once a
-minute; the shared file is rewritten about once a second so a delivered refresh reads
-the latest sample. WidgetKit controls delivery, so clearing and expiry can appear late; the
-recorded age remains visible. The widget does not start location collection or
-read the phone's magnetic compass. Open Compasslet on CarPlay to start the travel
-feed; simply displaying a widget does not start it.
-
-Debug Mode adds bounded acquisition reasons, shared-file read/write outcomes,
-provider timestamps and sample ages to diagnostics. These records contain no
-coordinates or bearings and are capped at 256 records over the latest 30 minutes
-of recorded wall-clock time, separately from the existing active-feed timing log.
-They help distinguish missing acquisition, storage failures and delayed delivery;
-a reload request or provider invocation does not prove a screen redraw.
+Ordinary Home Screen, Lock Screen and CarPlay timeline widgets are not included.
+The Live Activity uses the retained WidgetKit extension with ActivityKit updates,
+not timeline refresh requests. Existing widget placements should be removed.
 
 ## Swift style
 

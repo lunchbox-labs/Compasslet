@@ -2,7 +2,7 @@ import Foundation
 
 /// Presentations that can follow global appearance or store a whole-surface override.
 public enum AppearanceSurface: String, CaseIterable, Codable, Sendable {
-  case phone, widget, activity
+  case phone, activity
 }
 
 /// Position of the four cardinal rim labels, independent of center text.
@@ -66,7 +66,6 @@ public struct AppearancePreferences: Codable, Hashable, Sendable {
   /// Shared values used by surfaces without an override.
   public private(set) var global = AppearanceValues()
   private var phone: AppearanceValues?
-  private var widget: AppearanceValues?
   private var activity: AppearanceValues?
 
   /// Creates the standard appearance.
@@ -112,7 +111,6 @@ public struct AppearancePreferences: Codable, Hashable, Sendable {
   private func override(for surface: AppearanceSurface) -> AppearanceValues? {
     switch surface {
     case .phone: phone
-    case .widget: widget
     case .activity: activity
     }
   }
@@ -120,7 +118,6 @@ public struct AppearancePreferences: Codable, Hashable, Sendable {
   private mutating func set(_ value: AppearanceValues?, for surface: AppearanceSurface) {
     switch surface {
     case .phone: phone = value
-    case .widget: widget = value
     case .activity: activity = value
     }
   }

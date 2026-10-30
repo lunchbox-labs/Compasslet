@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 import XCTest
 @testable import Compass
 
@@ -13,46 +14,70 @@ final class CompassDiagnosticsTests: XCTestCase {
     return try CompassDiagnostics(url: url)
   }
 
-  func testWidgetMetadataIsBoundedOptInAndClearableWithoutAnActiveClock() throws {
+  func testUpgradeDropsWidgetRecordsAndKeepsActivityDiagnostics() throws {
     let store = try makeStore()
-    try store.recordWidget(.providerInvoked, outcome: .success, sampleAge: 60, wall: 100)
-    XCTAssertTrue(try store.snapshot().widgetEvents.isEmpty)
     try store.setEnabled(true)
-    for second in 0..<300 {
-      try store.recordWidget(
-        .snapshotRead, outcome: .success, sampleAge: 60,
-        status: .historical, wall: Double(100 + second))
-    }
-    let events = try store.snapshot().widgetEvents
-    XCTAssertEqual(events.count, 256)
-    XCTAssertEqual(events.last?.sampleAgeSeconds, 60)
-    XCTAssertEqual(events.last?.status, .historical)
-    try store.recordWidget(.acquisitionStopped, outcome: .permission, wall: 2500)
-    XCTAssertEqual(try store.snapshot().widgetEvents.count, 1)
-    try store.setEnabled(false)
-    try store.recordWidget(.snapshotWrite, outcome: .failure, wall: 2501)
-    XCTAssertEqual(try store.snapshot().widgetEvents.count, 1)
-    let json = String(decoding: try store.exportJSON(), as: UTF8.self)
-    XCTAssertFalse(json.contains("bearing"))
-    XCTAssertFalse(json.contains("coordinate"))
-    try store.clear()
-    XCTAssertTrue(try store.snapshot().widgetEvents.isEmpty)
+    try store.observe(.activity, active: true, wall: 100, uptime: 100)
+    try store.record(.activity, kind: .updateCompleted, wall: 100, uptime: 100)
+    var database: OpaquePointer?
+    XCTAssertEqual(sqlite3_open(store.url.path, &database), SQLITE_OK)
+    defer { sqlite3_close(database) }
+    let legacy = """
+      CREATE TABLE widget_events (sequence INTEGER PRIMARY KEY, wall REAL, payload TEXT);
+      INSERT INTO widget_events VALUES (1, 100, '{}');
+      INSERT INTO events(surface,kind,wall,uptime,elapsed,session)
+        VALUES ('widget','reloadRequested',100,100,0,'legacy');
+      INSERT INTO clocks VALUES ('widget',0,100,100,'old','legacy',1);
+      """
+    XCTAssertEqual(sqlite3_exec(database, legacy, nil, nil, nil), SQLITE_OK)
+    let upgraded = try CompassDiagnostics(url: store.url)
+    XCTAssertTrue(try upgraded.isEnabled())
+    let snapshot = try upgraded.snapshot()
+    XCTAssertEqual(snapshot.events.count, 2)
+    XCTAssertTrue(snapshot.events.allSatisfy { $0.surface == .activity })
+    XCTAssertTrue(snapshot.events.contains { $0.kind == .updateCompleted })
+    let exported = String(decoding: try upgraded.exportJSON(), as: UTF8.self)
+    XCTAssertFalse(exported.contains("widget"))
+    var query: OpaquePointer?
+    XCTAssertEqual(
+      sqlite3_prepare_v2(
+        database,
+        "SELECT COUNT(*) FROM sqlite_master WHERE name='widget_events'", -1, &query, nil), SQLITE_OK
+    )
+    defer { sqlite3_finalize(query) }
+    XCTAssertEqual(sqlite3_step(query), SQLITE_ROW)
+    XCTAssertEqual(sqlite3_column_int(query, 0), 0)
+    XCTAssertNoThrow(try CompassDiagnostics(url: store.url).exportJSON())
+  }
+
+  func testRetiredSampleCleanupPreservesOtherSharedDataAndIsRepeatable() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let retired = root.appendingPathComponent("LatestCourse", isDirectory: true)
+    try FileManager.default.createDirectory(at: retired, withIntermediateDirectories: true)
+    try Data("old reading".utf8).write(to: retired.appendingPathComponent("latest.json"))
+    let retained = root.appendingPathComponent("preferences")
+    try Data("retained".utf8).write(to: retained)
+    try RetiredWidgetData.remove(from: root)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: retired.path))
+    XCTAssertEqual(try String(contentsOf: retained, encoding: .utf8), "retained")
+    XCTAssertNoThrow(try RetiredWidgetData.remove(from: root))
   }
 
   func testRetentionUsesSeparateActiveClocksAndDoesNotCountIdleGaps() throws {
     let store = try makeStore()
     try store.setEnabled(true)
-    try store.observe(.widget, active: true, wall: 100, uptime: 100)
-    try store.record(.widget, kind: .reloadRequested, wall: 100, uptime: 100)
+    try store.observe(.fullscreen, active: true, wall: 100, uptime: 100)
+    try store.record(.fullscreen, kind: .templateUpdated, wall: 100, uptime: 100)
     try store.observe(.activity, active: true, wall: 100, uptime: 100)
     try store.record(.activity, kind: .updateCompleted, wall: 100, uptime: 100)
     for second in 1...1801 {
       try store.observe(
-        .widget, active: true, wall: Double(100 + second), uptime: Double(100 + second))
+        .fullscreen, active: true, wall: Double(100 + second), uptime: Double(100 + second))
     }
     let snapshot = try store.snapshot()
     XCTAssertFalse(
-      snapshot.events.contains { $0.surface == .widget && $0.kind == .reloadRequested })
+      snapshot.events.contains { $0.surface == .fullscreen && $0.kind == .templateUpdated })
     XCTAssertTrue(
       snapshot.events.contains { $0.surface == .activity && $0.kind == .updateCompleted })
     try store.observe(.activity, active: true, wall: 100_000, uptime: 100_000)
@@ -63,14 +88,14 @@ final class CompassDiagnosticsTests: XCTestCase {
   func testDisableRetainsLogsAndClearDoesNotReenableCollection() throws {
     let store = try makeStore()
     try store.setEnabled(true)
-    try store.observe(.widget, active: true, wall: 100, uptime: 100)
-    try store.record(.widget, kind: .reloadRequested, wall: 100, uptime: 100)
+    try store.observe(.fullscreen, active: true, wall: 100, uptime: 100)
+    try store.record(.fullscreen, kind: .templateUpdated, wall: 100, uptime: 100)
     try store.setEnabled(false)
     let retained = try store.snapshot().events
-    try store.record(.widget, kind: .providerCreated, wall: 101, uptime: 101)
+    try store.record(.fullscreen, kind: .updateRequested, wall: 101, uptime: 101)
     XCTAssertEqual(try store.snapshot().events, retained)
     try store.clear()
-    try store.observe(.widget, active: true, wall: 102, uptime: 102)
+    try store.observe(.fullscreen, active: true, wall: 102, uptime: 102)
     XCTAssertTrue(try store.snapshot().events.isEmpty)
     XCTAssertFalse(try store.isEnabled())
   }
@@ -78,70 +103,70 @@ final class CompassDiagnosticsTests: XCTestCase {
   func testPauseResumeAndRestartExcludeIdleTimeFromIntervals() throws {
     let store = try makeStore()
     try store.setEnabled(true)
-    try store.observe(.widget, active: true, wall: 100, uptime: 100)
-    try store.record(.widget, kind: .reloadRequested, wall: 100, uptime: 100)
-    try store.observe(.widget, active: true, wall: 101, uptime: 101)
-    try store.record(.widget, kind: .reloadRequested, wall: 101, uptime: 101)
-    try store.observe(.widget, active: false, wall: 102, uptime: 102)
-    try store.observe(.widget, active: true, wall: 10_000, uptime: 10_000)
-    try store.record(.widget, kind: .reloadRequested, wall: 10_000, uptime: 10_000)
+    try store.observe(.fullscreen, active: true, wall: 100, uptime: 100)
+    try store.record(.fullscreen, kind: .templateUpdated, wall: 100, uptime: 100)
+    try store.observe(.fullscreen, active: true, wall: 101, uptime: 101)
+    try store.record(.fullscreen, kind: .templateUpdated, wall: 101, uptime: 101)
+    try store.observe(.fullscreen, active: false, wall: 102, uptime: 102)
+    try store.observe(.fullscreen, active: true, wall: 10_000, uptime: 10_000)
+    try store.record(.fullscreen, kind: .templateUpdated, wall: 10_000, uptime: 10_000)
     let restarted = try CompassDiagnostics(url: store.url)
-    try restarted.observe(.widget, active: true, wall: 10_001, uptime: 10_001)
-    let summary = try XCTUnwrap(restarted.snapshot().surfaces.first { $0.surface == .widget })
+    try restarted.observe(.fullscreen, active: true, wall: 10_001, uptime: 10_001)
+    let summary = try XCTUnwrap(restarted.snapshot().surfaces.first { $0.surface == .fullscreen })
     XCTAssertEqual(summary.activeSeconds, 2)
-    XCTAssertEqual(summary.intervals.first { $0.kind == .reloadRequested }?.meanIntervalSeconds, 1)
+    XCTAssertEqual(summary.intervals.first { $0.kind == .templateUpdated }?.meanIntervalSeconds, 1)
     try restarted.clear()
     XCTAssertTrue(try restarted.isEnabled())
-    try restarted.observe(.widget, active: true, wall: 10_002, uptime: 10_002)
+    try restarted.observe(.fullscreen, active: true, wall: 10_002, uptime: 10_002)
     XCTAssertEqual(
-      try restarted.snapshot().surfaces.first { $0.surface == .widget }?.activeSeconds, 0)
+      try restarted.snapshot().surfaces.first { $0.surface == .fullscreen }?.activeSeconds, 0)
   }
 
   func testExportContainsElapsedIntervalsWithoutRawBootUptime() throws {
     let store = try makeStore()
     try store.setEnabled(true)
-    try store.observe(.widget, active: true, wall: 100, uptime: 987654)
-    try store.record(.widget, kind: .reloadRequested, wall: 100, uptime: 987654)
-    try store.observe(.widget, active: true, wall: 101, uptime: 987655)
-    try store.record(.widget, kind: .reloadRequested, wall: 101, uptime: 987655)
+    try store.observe(.fullscreen, active: true, wall: 100, uptime: 987654)
+    try store.record(.fullscreen, kind: .templateUpdated, wall: 100, uptime: 987654)
+    try store.observe(.fullscreen, active: true, wall: 101, uptime: 987655)
+    try store.record(.fullscreen, kind: .templateUpdated, wall: 101, uptime: 987655)
     let data = try store.exportJSON()
     let text = try XCTUnwrap(String(data: data, encoding: .utf8))
     XCTAssertFalse(text.contains("987654"))
     XCTAssertFalse(text.contains("987655"))
     let snapshot = try JSONDecoder().decode(CompassDiagnostics.Snapshot.self, from: data)
     XCTAssertEqual(
-      snapshot.events.filter { $0.kind == .reloadRequested }.map(\.elapsedSinceFirstRetainedEvent),
+      snapshot.events.filter { $0.kind == .templateUpdated }.map(\.elapsedSinceFirstRetainedEvent),
       [0, 1])
     XCTAssertEqual(
-      snapshot.surfaces.first { $0.surface == .widget }?.intervals.first {
-        $0.kind == .reloadRequested
+      snapshot.surfaces.first { $0.surface == .fullscreen }?.intervals.first {
+        $0.kind == .templateUpdated
       }?.meanIntervalSeconds, 1)
   }
 
   func testConcurrentConnectionsExportConsistentEventsAndIntervals() throws {
     let store = try makeStore()
-    let provider = try CompassDiagnostics(url: store.url)
+    let secondConnection = try CompassDiagnostics(url: store.url)
     try store.setEnabled(true)
-    try store.observe(.widget, active: true, wall: 100, uptime: 100)
+    try store.observe(.fullscreen, active: true, wall: 100, uptime: 100)
     DispatchQueue.concurrentPerform(iterations: 20) { _ in
       do {
-        try provider.record(.widget, kind: .providerCreated, wall: 100, uptime: 100)
+        try secondConnection.record(.fullscreen, kind: .updateRequested, wall: 100, uptime: 100)
         let snapshot = try JSONDecoder().decode(
           CompassDiagnostics.Snapshot.self, from: store.exportJSON())
         let summarized = snapshot.surfaces.flatMap(\.intervals).reduce(0) { $0 + $1.count }
         XCTAssertEqual(summarized, snapshot.events.count)
         XCTAssertEqual(Set(snapshot.events.map(\.sequence)).count, snapshot.events.count)
-        try store.record(.widget, kind: .reloadRequested, wall: 100, uptime: 100)
+        try store.record(.fullscreen, kind: .templateUpdated, wall: 100, uptime: 100)
       } catch { XCTFail("Concurrent write failed: \(error)") }
     }
     let data = try store.exportJSON()
     let snapshot = try JSONDecoder().decode(CompassDiagnostics.Snapshot.self, from: data)
-    XCTAssertEqual(snapshot.events.filter { $0.kind == .providerCreated }.count, 20)
-    XCTAssertEqual(snapshot.events.filter { $0.kind == .reloadRequested }.count, 20)
+    XCTAssertEqual(snapshot.events.filter { $0.kind == .updateRequested }.count, 20)
+    XCTAssertEqual(snapshot.events.filter { $0.kind == .templateUpdated }.count, 20)
     XCTAssertEqual(Set(snapshot.events.map(\.sequence)).count, snapshot.events.count)
-    try store.observe(.widget, active: false, wall: 101, uptime: 101)
+    try store.observe(.fullscreen, active: false, wall: 101, uptime: 101)
     let count = try store.snapshot().events.count
-    try provider.record(.widget, kind: .providerCreated, wall: 102, uptime: 102)
+    try secondConnection.record(.fullscreen, kind: .updateRequested, wall: 102, uptime: 102)
     XCTAssertEqual(try store.snapshot().events.count, count)
   }
 }

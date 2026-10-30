@@ -1,3 +1,5 @@
+> Historical: the ordinary timeline widget described here was removed. The ActivityKit Live Activity remains supported.
+
 # Historical travel widget
 
 Keep one last recorded vehicle-course sample for at most 120 seconds. Freshness remains five seconds; after that the sample is explicitly stale. Every numeric rendering says Last recorded and includes its sample age/time, even if WidgetKit delays a state transition. The widget never acquires location and no permissions or capabilities change. Stop, denied/revoked permissions, service loss and invalid measurements clear the shared bearing; lack of new data may retain a historical sample within its age limit. Cached system renders may lag invalidation; do not claim immediate screen removal.

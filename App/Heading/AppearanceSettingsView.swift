@@ -150,12 +150,6 @@ private struct AppearanceDetailView: View {
           }
         }
       }
-      if surface == .widget {
-        Section {
-          Text("Widget changes appear when iOS refreshes the widget.")
-            .foregroundStyle(.secondary)
-        }
-      }
     }
     .navigationTitle(surface?.title ?? "Global Appearance")
     .navigationBarTitleDisplayMode(.inline)
@@ -188,26 +182,19 @@ private struct AppearancePreview: View {
     VStack(spacing: 16) {
       if surface != .activity {
         VStack(spacing: 4) {
-          Text(surface == .phone ? "Phone · Magnetic north" : "Travel · True north")
+          Text("Phone · Magnetic north")
             .font(.caption2).foregroundStyle(.secondary)
           CompassDial(
             bearing: 45, appearance: appearance,
-            showsReadout: surface != .phone && !dynamicTypeSize.isAccessibilitySize
+            showsReadout: false
           )
           .frame(height: 180)
-          if surface == .phone, appearance.hasReadout {
+          if appearance.hasReadout {
             ViewThatFits(in: .horizontal) {
               PhoneCompassReadout(bearing: 45, appearance: appearance)
               PhoneCompassReadout(bearing: 45, appearance: appearance, maximumTextSize: 40)
             }
             .dynamicTypeSize(appearance.readoutTextSize(system: dynamicTypeSize))
-          } else if (appearance.rotation == .arrow || dynamicTypeSize.isAccessibilitySize)
-            && appearance.hasReadout
-          {
-            CompassReadout(bearing: 45, appearance: appearance, compact: true)
-          }
-          if surface != .phone {
-            Text("Last known").font(.caption2).foregroundStyle(.secondary)
           }
         }
         .padding().frame(maxWidth: 260)
@@ -231,7 +218,6 @@ extension AppearanceSurface {
   fileprivate var title: String {
     switch self {
     case .phone: "iPhone Compass"
-    case .widget: "Compass Widget"
     case .activity: "Live Activity"
     }
   }
