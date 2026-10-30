@@ -154,7 +154,7 @@
 		5709DC2A44CD7E40AD7E2C2E /* CompassWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CompassWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5B26188BCA24C591A1887EE6 /* Compass.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = Compass.entitlements; sourceTree = "<group>"; };
 		610060C3F3A54EBB9B3CFE8E /* HeadingControllerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HeadingControllerTests.swift; sourceTree = "<group>"; };
-		6698F06759C45097DC5CED5C /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/WatchOS.platform/Developer/SDKs/WatchOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		6698F06759C45097DC5CED5C /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
 		702BE22E645F27DDFA66ADFA /* CompassWatchApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompassWatchApp.swift; sourceTree = "<group>"; };
 		7BF0680E9674EB8E22601374 /* CarPlayPresentationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CarPlayPresentationTests.swift; sourceTree = "<group>"; };
 		82701719F862789BAC0BE6A0 /* HeadingStatus+Phone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HeadingStatus+Phone.swift"; sourceTree = "<group>"; };
