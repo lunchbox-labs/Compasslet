@@ -12,6 +12,26 @@ for runtime, devices in sorted(json.load(sys.stdin)["devices"].items(), reverse=
             sys.exit(0)
 sys.exit("No available watchOS 27+ Apple Watch simulator")
 ')"
+# XCTest uses the existing paired iPhone for its Watch transport. Wait for both
+# simulators to finish booting before starting the test runner's handshake.
+companion="$(xcrun simctl list pairs --json | python3 -c '
+import json, sys
+for pair in json.load(sys.stdin)["pairs"].values():
+    if pair["watch"]["udid"] == sys.argv[1]:
+        print(pair["phone"]["udid"])
+        sys.exit(0)
+sys.exit("Selected Watch simulator has no paired iPhone")
+' "$destination")"
+python3 - "$companion" "$destination" <<'PY'
+import subprocess, sys
+for device in sys.argv[1:]:
+    print("Waiting for simulator boot: " + device, flush=True)
+    try:
+        subprocess.run(["xcrun", "simctl", "bootstatus", device, "-b"],
+                       check=True, timeout=240)
+    except subprocess.TimeoutExpired:
+        sys.exit("Simulator boot did not finish within 240 seconds: " + device)
+PY
 mkdir -p .build
 result_directory="$(mktemp -d .build/watch-test-results.XXXXXX)"
 xcodebuild -project Compass.xcodeproj -scheme CompassWatch \
