@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		14E89346F4BEB1206AB95142 /* HeadingStatus+Phone.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82701719F862789BAC0BE6A0 /* HeadingStatus+Phone.swift */; };
 		10A9C1012AD54E0AA0676C01 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 10A9C1012AD54E0AA0676C02 /* Assets.xcassets */; };
 		020F1378FBC3CA202F0BD64E /* TravelLocationSensor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B8C91614F79675159741862 /* TravelLocationSensor.swift */; };
 		0838A3A568319EC0360654D0 /* HeadingController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A46DD5AFEAE45BDDC8C05D /* HeadingController.swift */; };
@@ -87,6 +88,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		82701719F862789BAC0BE6A0 /* HeadingStatus+Phone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HeadingStatus+Phone.swift"; sourceTree = "<group>"; };
 		10A9C1012AD54E0AA0676C02 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		13F96CE477553A99C1F0F39D /* CompassActivityControllerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompassActivityControllerTests.swift; sourceTree = "<group>"; };
 		1AC18E30C9DAEB073F3B849A /* Compass.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Compass.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -166,6 +168,7 @@
 		0ED2D4B5D1F95B9D14403EB8 /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				A1A46DD5AFEAE45BDDC8C05D /* HeadingController.swift */,
 				DE2F63BB5C501FDD96214F95 /* CompassActivityAttributes.swift */,
 				220B49D5093197C84DE6C5D3 /* CompassDiagnostics.swift */,
 				CF0000000000000000000003 /* LatestCourseSnapshot.swift */,
@@ -273,7 +276,7 @@
 		A3089B7FAE27BCA3309070E0 /* Heading */ = {
 			isa = PBXGroup;
 			children = (
-				A1A46DD5AFEAE45BDDC8C05D /* HeadingController.swift */,
+				82701719F862789BAC0BE6A0 /* HeadingStatus+Phone.swift */,
 				00E111F986E110C7D82BA48C /* PhoneLocationController.swift */,
 				82EE439CAC4B29FCB2B2652C /* CompassView.swift */,
 				55EF90D92525BD937AE2BA8E /* CompassSettingsView.swift */,
@@ -474,6 +477,7 @@
 				9E6DF7AA346C5341EE5E0E55 /* CompassApp.swift in Sources */,
 				90090CB56FF0934B45B2BA5B /* CompassView.swift in Sources */,
 				0838A3A568319EC0360654D0 /* HeadingController.swift in Sources */,
+				14E89346F4BEB1206AB95142 /* HeadingStatus+Phone.swift in Sources */,
 				7DAFBB08145E36C20B9711CD /* PhoneLocationController.swift in Sources */,
 				F48727869BD5AB3FA5D5F667 /* CompassSettingsView.swift in Sources */,
 				B37CF85048BCC053467427CB /* DriveSessionController.swift in Sources */,
