@@ -5,6 +5,36 @@ import Testing
 
 @Suite @MainActor
 struct CompassActivityControllerTests {
+  @Test func appearanceChangesPreserveSampleExpiryAndCannotReviveStaleCourse() async throws {
+    let system = TestActivitySystem()
+    var time = Date(timeIntervalSince1970: 100)
+    let controller = CompassActivityController(system: system, now: { time })
+    try await controller.start()
+    let sample = CompassSample(
+      degrees: 42, source: .vehicleCourse, reference: .trueNorth,
+      accuracy: 1, timestamp: time)
+    await controller.update(.init(sample: sample, status: .usable))
+    let original = try #require(system.handle.updates.last)
+    var appearance = AppearanceValues()
+    appearance.showDegrees = false
+    time = time.addingTimeInterval(0.5)
+    await controller.updateAppearance(appearance)
+    let changed = try #require(system.handle.updates.last)
+    #expect(changed.bearing == original.bearing)
+    #expect(changed.sampleTime == original.sampleTime)
+    #expect(changed.expiry == original.expiry)
+    #expect(changed.appearance?.showDegrees == false)
+    time = time.addingTimeInterval(6)
+    appearance.showDegrees = true
+    await controller.updateAppearance(appearance)
+    #expect(system.handle.updates.last?.bearing == nil)
+    #expect(system.handle.updates.last?.expiry == original.expiry)
+    await controller.end()
+    let count = system.handle.updates.count
+    await controller.updateAppearance(appearance)
+    #expect(system.handle.updates.count == count)
+  }
+
   @Test func disabledAndRequestFailureAreReported() async {
     let system = TestActivitySystem()
     let controller = CompassActivityController(system: system)
@@ -76,10 +106,10 @@ struct CompassActivityControllerTests {
     await controller.update(.init(sample: sample, status: .usable))
     #expect(system.handle.updates.count == 1)
     #expect(system.handle.updates[0].expiry == time.addingTimeInterval(5))
-    let json =
-      try JSONSerialization.jsonObject(with: JSONEncoder().encode(system.handle.updates[0]))
-      as! [String: Any]
-    #expect(Set(json.keys) == ["bearing", "status", "sampleTime", "expiry"])
+    let encoded = try JSONEncoder().encode(system.handle.updates[0])
+    let decoded = try JSONDecoder().decode(
+      CompassActivityAttributes.ContentState.self, from: encoded)
+    #expect(decoded == system.handle.updates[0])
     time = time.addingTimeInterval(1)
     let heartbeat = CompassSample(
       degrees: 42, source: .vehicleCourse, reference: .trueNorth,

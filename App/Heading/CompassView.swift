@@ -1,3 +1,4 @@
+import CompassCore
 import SwiftUI
 import UIKit
 
@@ -6,17 +7,19 @@ struct CompassView: View {
   @Environment(\.scenePhase) private var scenePhase
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @StateObject private var compass = HeadingController(sensor: DeviceHeadingSensor())
-  @AppStorage("rotatesCompassDial") private var rotatesDial = true
+  @ObservedObject private var appearanceStore = AppearanceStore.shared
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+  @ScaledMetric(relativeTo: .title2) private var dialSize = 260
+
+  private var appearance: AppearanceValues { appearanceStore.preferences.effective(for: .phone) }
+  private var externalReadout: Bool {
+    appearance.rotation == .arrow
+      || appearance.readoutTextSize(system: dynamicTypeSize).isAccessibilitySize
+  }
   @State private var showingSettings = false
 
   private var roundedDegrees: Int? {
     compass.sample.map { Int($0.angle.degrees.rounded()) % 360 }
-  }
-
-  private var direction: String {
-    guard let degrees = compass.sample?.angle.degrees else { return "—" }
-    let names = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
-    return names[Int((degrees + 22.5) / 45) % 8]
   }
 
   private var accessibilitySummary: String {
@@ -33,9 +36,13 @@ struct CompassView: View {
   var body: some View {
     VStack(spacing: 0) {
       HStack(alignment: .top) {
-        Button("Settings", systemImage: "line.3.horizontal") { showingSettings = true }
-          .labelStyle(.iconOnly)
-          .frame(width: 44, height: 44)
+        Button {
+          showingSettings = true
+        } label: {
+          Image(systemName: "line.3.horizontal").frame(width: 44, height: 44)
+            .contentShape(Rectangle())
+        }
+        .accessibilityLabel("Settings")
         Spacer(minLength: 8)
         VStack(spacing: 8) {
           Text("COMPASS").font(.caption.weight(.semibold)).tracking(4)
@@ -64,7 +71,10 @@ struct CompassView: View {
               }
             }
             dial
-            if !rotatesDial { headingReadout.accessibilityHidden(true) }
+            if externalReadout, appearance.hasReadout, let sample = compass.sample {
+              CompassReadout(bearing: sample.angle.degrees, appearance: appearance)
+                .accessibilityHidden(true)
+            }
             if let sample = compass.sample {
               Text("Accuracy ±\(Int(min(sample.accuracy, 360).rounded()))°")
                 .font(.subheadline).foregroundStyle(.secondary)
@@ -101,7 +111,7 @@ struct CompassView: View {
     }
     .background(Color(uiColor: .systemBackground))
     .sheet(isPresented: $showingSettings) {
-      CompassSettingsView(drive: drive, rotatesDial: $rotatesDial)
+      CompassSettingsView(drive: drive)
     }
     .task(id: scenePhase) {
       guard scenePhase == .active else {
@@ -116,15 +126,6 @@ struct CompassView: View {
     .onChange(of: reduceMotion) { _, value in compass.setReducedMotion(value) }
   }
 
-  private var headingReadout: some View {
-    Text(roundedDegrees.map { "\($0)° \(direction)" } ?? "—")
-      .font(.system(.largeTitle, design: .rounded, weight: .medium))
-      .monospacedDigit()
-      .contentTransition(.identity)
-      .lineLimit(1)
-      .minimumScaleFactor(0.7)
-  }
-
   private var locationNotice: String? {
     switch drive.setupStatus {
     case .ready: nil
@@ -137,49 +138,12 @@ struct CompassView: View {
   }
 
   private var dial: some View {
-    ZStack {
-      Circle().stroke(.quaternary, lineWidth: 2)
-      ZStack {
-        ForEach(0..<72) { index in
-          Capsule()
-            .fill(index % 9 == 0 ? Color.primary : Color.secondary.opacity(0.45))
-            .frame(width: index % 9 == 0 ? 2 : 1, height: index % 9 == 0 ? 16 : 7)
-            .offset(y: -118)
-            .rotationEffect(.degrees(Double(index) * 5))
-        }
-        ForEach(Array(["N", "E", "S", "W"].enumerated()), id: \.offset) { index, label in
-          Text(label).font(.headline)
-            .foregroundStyle(index == 0 ? Color.red : Color.secondary)
-            .offset(
-              x: index == 1 ? 90 : index == 3 ? -90 : 0,
-              y: index == 0 ? -90 : index == 2 ? 90 : 0)
-        }
-      }
-      // Samples are already circularly smoothed. No implicit interpolation means
-      // crossing north cannot animate a full revolution in either display style.
-      .rotationEffect(.degrees(rotatesDial ? -(compass.sample?.angle.degrees ?? 0) : 0))
-      .opacity(compass.sample == nil ? 0.35 : 1)
-      if let sample = compass.sample {
-        if rotatesDial {
-          Image(systemName: "triangle.fill")
-            .font(.caption)
-            .foregroundStyle(.tint)
-            .rotationEffect(.degrees(180))
-            .offset(y: -132)
-          headingReadout.frame(maxWidth: 150)
-        } else {
-          Image(systemName: "location.north.fill")
-            .font(.system(size: 100, weight: .ultraLight))
-            .foregroundStyle(.tint)
-            .rotationEffect(.degrees(sample.angle.degrees))
-          Circle().fill(.primary).frame(width: 8, height: 8)
-        }
-      } else {
-        Image(systemName: "safari")
-          .font(.system(size: 64, weight: .ultraLight)).foregroundStyle(.tertiary)
-      }
-    }
-    .frame(width: 260, height: 260)
+    CompassDial(
+      bearing: compass.sample?.angle.degrees, appearance: appearance,
+      showsReadout: !externalReadout
+    )
+    .frame(maxWidth: dialSize)
+    .aspectRatio(1, contentMode: .fit)
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(accessibilitySummary)
   }

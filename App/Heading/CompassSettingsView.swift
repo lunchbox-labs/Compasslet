@@ -3,16 +3,13 @@ import UIKit
 
 struct CompassSettingsView: View {
   @ObservedObject var drive: DriveSessionController
-  @Binding var rotatesDial: Bool
   @Environment(\.dismiss) private var dismiss
 
   var body: some View {
     NavigationStack {
       Form {
         Section("Display") {
-          Toggle("Rotate compass dial", isOn: $rotatesDial)
-          Text("Turn off to rotate the arrow instead.")
-            .foregroundStyle(.secondary)
+          NavigationLink("Appearance") { AppearanceSettingsView() }
         }
         Section("Location") {
           LabeledContent("Location Enabled", value: locationEnabled ? "Yes" : "No")
