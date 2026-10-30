@@ -57,7 +57,7 @@ struct CompassView: View {
               information(details: false)
                 .fixedSize(horizontal: false, vertical: true)
               // At extreme text sizes, keep the reading or critical status readable.
-              // All supporting details remain available in the scrollable drawer.
+              // All supporting details remain available in the scrollable Settings.
               essentialReading(height: content.size.height)
             }
             .padding(.horizontal, 24)
@@ -77,30 +77,11 @@ struct CompassView: View {
             }
         )
         if showingSettings {
-          Color.black.opacity(0.55)
-            .ignoresSafeArea()
-            .onTapGesture { closeSettings() }
-            .accessibilityHidden(true)
           CompassSettingsView(
             drive: drive, location: location, headingStatus: compass.status,
             showLocationDetails: showingLocationDetails, close: closeSettings
           )
-          .frame(width: min(420, max(0, geometry.size.width - 44)))
-          .overlay(alignment: .trailing) {
-            Capsule().fill(.secondary).frame(width: 4, height: 52)
-              .frame(width: 44, height: 100)
-              .contentShape(Rectangle())
-              .gesture(
-                DragGesture(minimumDistance: 24).onEnded { value in
-                  if value.translation.width < -40,
-                    abs(value.translation.height) < -value.translation.width / 2
-                  {
-                    closeSettings()
-                  }
-                }
-              )
-              .accessibilityHidden(true)
-          }
+          .frame(width: geometry.size.width, height: geometry.size.height)
           .accessibilityAddTraits(.isModal)
           .accessibilityAction(.escape, closeSettings)
           .transition(reduceMotion ? .opacity : .move(edge: .leading))
@@ -213,7 +194,7 @@ struct CompassView: View {
       }
     }
     // A readable compact status is the last resort, rather than clipping a
-    // full explanation. The drawer retains unrestricted Dynamic Type details.
+    // full explanation. Settings retains unrestricted Dynamic Type details.
     .font(.system(size: min(compactStatusSize, max(17, height / 6))))
     .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
