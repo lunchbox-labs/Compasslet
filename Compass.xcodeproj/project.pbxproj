@@ -481,7 +481,7 @@
 				INFOPLIST_FILE = App/Info.plist;
 				EXECUTABLE_NAME = Compass;
 				PRODUCT_MODULE_NAME = Compass;
-				PRODUCT_NAME = "CarPlay Compass";
+				PRODUCT_NAME = "Compass+";
 				WRAPPER_NAME = Compass.app;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
@@ -672,7 +672,7 @@
 				INFOPLIST_FILE = App/Info.plist;
 				EXECUTABLE_NAME = Compass;
 				PRODUCT_MODULE_NAME = Compass;
-				PRODUCT_NAME = "CarPlay Compass";
+				PRODUCT_NAME = "Compass+";
 				WRAPPER_NAME = Compass.app;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;

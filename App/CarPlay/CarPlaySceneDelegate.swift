@@ -22,7 +22,8 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     drive = coordinator
     bridge = CarPlayLifecycleBridge(drive: coordinator)
     self.interfaceController = interfaceController
-    let template = CPInformationTemplate(title: "Compass", layout: .leading, items: [], actions: [])
+    let template = CPInformationTemplate(
+      title: "Compass+", layout: .leading, items: [], actions: [])
     information = template
     interfaceController.setRootTemplate(template, animated: false, completion: nil)
     coordinator.objectWillChange.sink { [weak self] in

@@ -53,7 +53,7 @@ struct CompassRefreshProbeWidget: Widget {
       .accessibilityElement(children: .combine)
       .containerBackground(.fill.tertiary, for: .widget)
     }
-    .configurationDisplayName("Compass Refresh Probe")
+    .configurationDisplayName("Compass+ Refresh Probe")
     .description("Experimental refresh timing, not a compass reading. Counters reset on restart.")
     .supportedFamilies([.systemSmall])
   }

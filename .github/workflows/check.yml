@@ -50,8 +50,8 @@ jobs:
             /usr/libexec/PlistBuddy -c "Print :$key" \
               .build/xcode/Build/Products/Debug-iphonesimulator/Compass.app/Info.plist \
               | tee /dev/stderr \
-              | grep -Fx 'CarPlay Compass'
+              | grep -Fx 'Compass+'
           done
           /usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' \
             .build/xcode/Build/Products/Debug-iphonesimulator/Compass.app/PlugIns/CompassActivity.appex/Info.plist \
-            | grep -Fx 'CarPlay Compass'
+            | grep -Fx 'Compass+'
