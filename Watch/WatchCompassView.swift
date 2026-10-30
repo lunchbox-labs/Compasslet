@@ -24,10 +24,8 @@ struct WatchCompassView: View {
             CompassDial(
               bearing: compass.sample?.angle.degrees, appearance: appearance,
               showsReadout: false, unavailableSymbol: "minus")
-            if compass.sample != nil {
-              readout.frame(
-                width: max(0, min(geometry.size.width, geometry.size.height - 44)) * 0.50)
-            }
+            readout.frame(
+              width: max(0, min(geometry.size.width, geometry.size.height - 44)) * 0.50)
           }
           .aspectRatio(1, contentMode: .fit)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
