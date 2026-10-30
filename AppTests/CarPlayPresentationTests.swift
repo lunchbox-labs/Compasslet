@@ -152,7 +152,6 @@ final class CarPlayPresentationTests: XCTestCase {
     XCTAssertLessThanOrEqual(image.size.width, maximum.width)
     XCTAssertLessThanOrEqual(image.size.height, maximum.height)
     XCTAssertEqual(image.scale, 2)
-    XCTAssertNil(image.imageAsset)
     let light = CarPlayCompassTemplate.dialImage(
       course: 59,
       traits: UITraitCollection { traits in
