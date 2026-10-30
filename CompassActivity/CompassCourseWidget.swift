@@ -69,6 +69,7 @@ struct CompassCourseWidget: Widget {
 private struct CourseWidgetView: View {
   let entry: CourseEntry
   let snapshot: LatestCourseSnapshot
+  @Environment(\.dynamicTypeSize) private var systemTextSize
   @ScaledMetric(relativeTo: .caption2) private var minimumDialSize = 112
   @ScaledMetric(relativeTo: .caption2) private var debugInset = 16
 
@@ -76,8 +77,12 @@ private struct CourseWidgetView: View {
     Group {
       if let bearing = snapshot.bearing {
         ViewThatFits {
-          dial(bearing: bearing, detailed: true)
-          dial(bearing: bearing, detailed: false)
+          if !entry.appearance.hasReadout
+            || entry.appearance.readoutTextSize(system: systemTextSize) < .xxLarge
+          {
+            dial(bearing: bearing, detailed: true)
+            dial(bearing: bearing, detailed: false)
+          }
           VStack(spacing: 4) {
             if entry.appearance.hasReadout {
               CompassReadout(bearing: bearing, appearance: entry.appearance, compact: true)

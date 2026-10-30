@@ -42,7 +42,7 @@ struct CompassDial: View {
               CompassReadout(
                 bearing: bearing, appearance: appearance, degreesFirst: true, compact: true
               )
-              .frame(width: diameter * 0.56)
+              .frame(width: diameter * (appearance.labels == .outside ? 0.78 : 0.56))
             }
           } else {
             Image(systemName: "location.north.fill")
@@ -91,14 +91,14 @@ struct CompassReadout: View {
 
   @ViewBuilder private var direction: some View {
     if appearance.showDirection {
-      Text(cardinal).font((compact ? Font.title2 : Font.largeTitle).weight(.semibold))
+      Text(cardinal).font((compact ? Font.headline : Font.largeTitle).weight(.semibold))
     }
   }
 
   @ViewBuilder private var degrees: some View {
     if appearance.showDegrees {
       Text("\(Int(bearing.rounded()) % 360)°")
-        .font(.title2).monospacedDigit()
+        .font(compact ? .title3 : .title2).monospacedDigit()
     }
   }
 }

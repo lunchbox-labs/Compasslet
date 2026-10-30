@@ -46,7 +46,7 @@ final class CompassActivityController: CompassActivityPresenting {
     appearanceObservation = appearanceStore.$preferences
       .map { $0.effective(for: .activity) }.removeDuplicates().dropFirst()
       .sink { [weak self] value in
-        Task { @MainActor [weak self] in await self?.updateAppearance(value) }
+        self?.updateAppearance(value)
       }
   }
 
@@ -77,7 +77,7 @@ final class CompassActivityController: CompassActivityPresenting {
         self.lastUsableWrite = nil
         self.onDismiss?()
       }
-      if initial.appearance != appearance { await updateAppearance(appearance) }
+      if initial.appearance != appearance { await updateAppearance(appearance)?.value }
     } catch {
       if generation == token { starting = false }
       throw error
@@ -111,14 +111,18 @@ final class CompassActivityController: CompassActivityPresenting {
   }
 
   /// Changes only presentation, serialized with course updates and teardown.
-  func updateAppearance(_ value: AppearanceValues) async {
+  @discardableResult
+  func updateAppearance(_ value: AppearanceValues) -> Task<Void, Never>? {
     appearance = value.requiringReadout()
-    guard let handle else { return }
+    guard let handle else { return nil }
     let token = generation
+    let validityToken = validity
     let previous = operation
     let task = Task { @MainActor [weak self] in
       await previous?.value
-      guard let self, self.generation == token, var content = self.lastContent else { return }
+      guard let self, self.generation == token, self.validity == validityToken,
+        var content = self.lastContent
+      else { return }
       content.appearance = self.appearance
       // A cosmetic update must not turn a stale ActivityKit payload into a fresh one.
       if content.bearing != nil {
@@ -134,7 +138,7 @@ final class CompassActivityController: CompassActivityPresenting {
       await handle.update(content)
     }
     operation = task
-    await task.value
+    return task
   }
 
   func end() async {
