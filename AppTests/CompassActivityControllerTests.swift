@@ -112,7 +112,7 @@ struct CompassActivityControllerTests {
     #expect(system.handle.finalState == .init(bearing: nil, status: .unavailable))
   }
 
-  @Test func laggedTimestampsAndInFlightPushesNeverLetTheStaleDateLapse() async throws {
+  @Test func laggedTimestampsRefreshBeforeTheStaleDateLapses() async throws {
     let system = TestActivitySystem()
     var time = Date(timeIntervalSince1970: 100)
     let controller = CompassActivityController(system: system, now: { time })
@@ -129,24 +129,56 @@ struct CompassActivityControllerTests {
       #expect(expiry > time)
     }
     #expect(system.handle.updates.count == 3)
-    // A reading queued behind a slow push is compared with what the card is about to show.
-    system.handle.suspendNextUpdate = true
-    time = time.addingTimeInterval(1)
-    let turned = CompassSample(
-      degrees: 300, source: .vehicleCourse, reference: .trueNorth, accuracy: 1, timestamp: time)
-    let slow = Task { await controller.update(.init(sample: turned, status: .usable)) }
-    while system.handle.resumeUpdate == nil { await Task.yield() }
-    time = time.addingTimeInterval(1)
-    let back = CompassSample(
-      degrees: 270, source: .vehicleCourse, reference: .trueNorth, accuracy: 1, timestamp: time)
-    let queued = Task { await controller.update(.init(sample: back, status: .usable)) }
-    system.handle.resumeUpdate?.resume()
-    await slow.value
-    await queued.value
-    #expect(system.handle.updates.suffix(2).map(\.bearing) == [300, 270])
     #expect(CompassActivityController.sameReading(22.4, 22.4))
     #expect(!CompassActivityController.sameReading(22.4, 22.5))
     #expect(CompassActivityController.sameReading(359.6, 0.2))
+    await controller.end()
+  }
+
+  @Test func queuedReadingsCompareWithTheLastScheduledDirection() async throws {
+    let system = TestActivitySystem()
+    var time = Date(timeIntervalSince1970: 100)
+    var evaluations = 0
+    let controller = CompassActivityController(
+      system: system,
+      now: {
+        evaluations += 1
+        return time
+      })
+    try await controller.start()
+    func reading(_ degrees: Double) -> TravelPresentation {
+      .init(
+        sample: CompassSample(
+          degrees: degrees, source: .vehicleCourse, reference: .trueNorth,
+          accuracy: 1, timestamp: time), status: .usable)
+    }
+
+    system.handle.suspendNextUpdate = true
+    let first = reading(300)
+    let slow = Task { await controller.update(first) }
+    while system.handle.resumeUpdate == nil { await Task.yield() }
+
+    time = time.addingTimeInterval(1)
+    let second = reading(270)
+    let beforeSecond = evaluations
+    let queued = Task { await controller.update(second) }
+    // now() runs before the first suspension in update(), on this same main actor.
+    // Observing its call proves the second reading has joined the queue.
+    while evaluations == beforeSecond { await Task.yield() }
+
+    time = time.addingTimeInterval(1)
+    let third = reading(300)
+    let beforeThird = evaluations
+    let returned = Task { await controller.update(third) }
+    while evaluations == beforeThird { await Task.yield() }
+    // The first write is still suspended: comparing against its content would
+    // incorrectly suppress the return to 300 after the queued 270-degree reading.
+    #expect(system.handle.updates.map(\.bearing) == [300])
+    system.handle.resumeUpdate?.resume()
+    await slow.value
+    await queued.value
+    await returned.value
+    #expect(system.handle.updates.map(\.bearing) == [300, 270, 300])
     await controller.end()
   }
 
