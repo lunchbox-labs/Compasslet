@@ -161,9 +161,25 @@ struct CompassActivityControllerTests {
       #expect(system.handle.updates.last?.sampleTime == Date(timeIntervalSince1970: 98.5))
     }
     #expect(system.handle.updates.count == 1)
-    #expect(CompassActivityController.sameReading(22.4, 22.4))
-    #expect(!CompassActivityController.sameReading(22.4, 22.5))
-    #expect(CompassActivityController.sameReading(359.6, 0.2))
+    await controller.end()
+  }
+
+  @Test func deliveredReadingsChangeAtRoundedDegreeBoundariesAndWrapNorth() async throws {
+    let system = TestActivitySystem()
+    var time = Date(timeIntervalSince1970: 100)
+    let controller = CompassActivityController(system: system, now: { time })
+    try await controller.start()
+    for degrees in [22.1, 22.4, 22.5, 359.6, 0.2] {
+      let sample = CompassSample(
+        degrees: degrees, source: .vehicleCourse, reference: .trueNorth,
+        accuracy: 1, timestamp: time)
+      await controller.update(.init(sample: sample, status: .usable))
+      time += 1
+    }
+    #expect(system.handle.updates.map(\.bearing) == [22.1, 22.5, 359.6])
+    #expect(
+      system.handle.updates.map(\.sampleTime)
+        == [100.0, 102, 103].map(Date.init(timeIntervalSince1970:)))
     await controller.end()
   }
 
@@ -214,20 +230,29 @@ struct CompassActivityControllerTests {
     await controller.end()
   }
 
-  @Test func rejectsWrongSourceReferenceAndFuturePayload() {
+  @Test func rejectedCourseClearsPreviouslyDeliveredActivityReading() async throws {
     let now = Date(timeIntervalSince1970: 100)
     for (source, reference, timestamp) in [
       (CompassSource.deviceHeading, NorthReference.trueNorth, now),
       (.vehicleCourse, .magnetic, now),
       (.vehicleCourse, .trueNorth, now.addingTimeInterval(1)),
     ] {
-      let sample = CompassSample(
+      let system = TestActivitySystem()
+      let controller = CompassActivityController(system: system, now: { now })
+      try await controller.start()
+      let accepted = CompassSample(
+        degrees: 90, source: .vehicleCourse, reference: .trueNorth,
+        accuracy: 1, timestamp: now)
+      await controller.update(.init(sample: accepted, status: .usable))
+      #expect(system.handle.updates.last?.bearing == 90)
+      let rejected = CompassSample(
         degrees: 42, source: source, reference: reference,
         accuracy: 1, timestamp: timestamp)
-      let state = CompassActivityController.content(
-        .init(sample: sample, status: .usable), now: now)
-      #expect(state.bearing == nil)
-      #expect(state.status == .unavailable)
+      await controller.update(.init(sample: rejected, status: .usable))
+      let cleared = try #require(system.handle.updates.last)
+      #expect(cleared.bearing == nil)
+      #expect(cleared.status == .unavailable)
+      await controller.end()
     }
   }
 

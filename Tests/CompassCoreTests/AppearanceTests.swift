@@ -46,8 +46,20 @@ import Testing
   let data = try JSONEncoder().encode(preferences)
   #expect(AppearancePreferences.decode(data) == preferences)
   #expect(AppearancePreferences.decode(Data("bad json".utf8)).effective(for: .activity).hasReadout)
-  let invalid = Data("{\"global\":{\"showDirection\":false,\"showDegrees\":false}}".utf8)
-  #expect(AppearancePreferences.decode(invalid).effective(for: .activity).hasReadout)
+  // Keep a structurally valid stored document so normalization, not decoder fallback, is tested.
+  var stored = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+  var hidden = try #require(stored["global"] as? [String: Any])
+  hidden["showDirection"] = false
+  hidden["showDegrees"] = false
+  hidden["minorTicks"] = MinorTicks.eight.rawValue
+  stored["global"] = hidden
+  stored["activity"] = hidden
+  let normalized = AppearancePreferences.decode(try JSONSerialization.data(withJSONObject: stored))
+  #expect(normalized.global.hasReadout)
+  #expect(normalized.effective(for: .activity).hasReadout)
+  #expect(normalized.global.minorTicks == .eight)
+  #expect(normalized.effective(for: .activity).minorTicks == .eight)
+  #expect(normalized.effective(for: .phone) == custom)
 }
 
 @Test func tickChoicesDivideEveryQuadrantWithoutDuplicatedEndpoints() {
@@ -92,7 +104,7 @@ import Testing
   let decoded = AppearancePreferences.decode(try JSONSerialization.data(withJSONObject: legacy))
   #expect(decoded.effective(for: .phone) == phone)
   #expect(decoded.effective(for: .activity) == activity)
-  #expect(AppearanceSurface.allCases.map(\.rawValue) == ["phone", "activity"])
+  #expect(!AppearanceSurface.allCases.contains { $0.rawValue == "widget" })
   let saved = try #require(
     JSONSerialization.jsonObject(with: JSONEncoder().encode(decoded)) as? [String: Any])
   #expect(saved["widget"] == nil)
