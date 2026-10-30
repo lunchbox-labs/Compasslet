@@ -2,10 +2,19 @@ import CompassCore
 import SwiftUI
 
 /// The phone and settings previews use the same dial geometry.
+///
+/// North is marked by shape as well as color: its rim tick is a pointed marker that reaches
+/// the rim and is longer than the other major ticks, so it stays identifiable with cardinal
+/// labels hidden, in grayscale and with Differentiate Without Color on. Increase Contrast
+/// darkens the secondary marks and strokes that carry information.
 struct CompassDial: View {
   let bearing: Double?
   let appearance: AppearanceValues
   var showsReadout = true
+  @Environment(\.colorSchemeContrast) private var contrast
+
+  private var increasedContrast: Bool { contrast == .increased }
+  private var secondaryMark: Color { increasedContrast ? .primary : .secondary }
 
   var body: some View {
     GeometryReader { geometry in
@@ -14,22 +23,33 @@ struct CompassDial: View {
       let diameter = max(0, available - (appearance.labels == .outside ? 42 : 12))
       let radius = diameter / 2
       let rotation = appearance.rotation == .dial ? -(bearing ?? 0) : 0
+      let rim: HierarchicalShapeStyle = increasedContrast ? .secondary : .quaternary
       ZStack {
-        Circle().stroke(.quaternary, lineWidth: 1)
+        Circle().stroke(rim, lineWidth: increasedContrast ? 1.5 : 1)
         ForEach(Array(appearance.minorTicks.angles.enumerated()), id: \.offset) { index, angle in
           let major = index % (appearance.minorTicks.rawValue + 1) == 0
-          Capsule()
-            .fill(index == 0 ? Color.red : (major ? Color.primary : Color.secondary))
-            .frame(width: major ? 2 : 1, height: diameter * (major ? 0.06 : 0.025))
-            .offset(y: -radius * 0.9)
-            .rotationEffect(.degrees(angle + rotation))
+          Group {
+            if index == 0 {
+              NorthMarker()
+                .fill(Color.red)
+                .frame(width: diameter * 0.06, height: diameter * 0.1)
+            } else {
+              Capsule()
+                .fill(major ? Color.primary : secondaryMark)
+                .frame(
+                  width: major ? 2 : (increasedContrast ? 1.5 : 1),
+                  height: diameter * (major ? 0.06 : 0.025))
+            }
+          }
+          .offset(y: -radius * 0.9)
+          .rotationEffect(.degrees(angle + rotation))
         }
         if appearance.labels != .hidden {
           ForEach(Array(["N", "E", "S", "W"].enumerated()), id: \.offset) { index, label in
             let angle = (Double(index) * 90 + rotation - 90) * .pi / 180
             let distance = appearance.labels == .outside ? radius + 13 : radius * 0.7
             Text(label).font(.system(size: max(11, min(18, diameter * 0.085)), weight: .semibold))
-              .foregroundStyle(index == 0 ? Color.red : Color.secondary)
+              .foregroundStyle(index == 0 ? Color.red : secondaryMark)
               .offset(x: distance * CGFloat(cos(angle)), y: distance * CGFloat(sin(angle)))
           }
         }
@@ -46,17 +66,33 @@ struct CompassDial: View {
             }
           } else {
             Image(systemName: "location.north.fill")
-              .font(.system(size: diameter * 0.4, weight: .ultraLight)).foregroundStyle(.tint)
+              .font(
+                .system(size: diameter * 0.4, weight: increasedContrast ? .regular : .ultraLight)
+              )
+              .foregroundStyle(.tint)
               .rotationEffect(.degrees(bearing))
           }
         } else {
           Image(systemName: "safari").font(.largeTitle).foregroundStyle(.tertiary)
         }
       }
-      .opacity(bearing == nil ? 0.35 : 1)
+      // Without a reading the dial is dimmed; status text carries the explanation.
+      .opacity(bearing == nil ? (increasedContrast ? 0.6 : 0.35) : 1)
       .frame(width: diameter, height: diameter)
       .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+  }
+}
+
+/// A rim marker pointing outward: wider at the base than any tick and pointed at the rim.
+private struct NorthMarker: Shape {
+  func path(in rect: CGRect) -> Path {
+    var path = Path()
+    path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+    path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+    path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+    path.closeSubpath()
+    return path
   }
 }
 
