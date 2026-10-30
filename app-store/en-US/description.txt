@@ -9,4 +9,4 @@ See your direction of travel on a full-screen CarPlay display. Compasslet uses y
 AT A GLANCE
 Keep your direction and degrees visible in a compact Live Activity.
 
-No account needed. CarPlay direction requires location permission.
+No account needed.
