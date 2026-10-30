@@ -19,7 +19,7 @@ final class CarPlayPresentationTests: XCTestCase {
         sample: CompassSample(
           degrees: 59, source: .deviceHeading, reference: .magnetic,
           accuracy: 1, timestamp: now), status: .usable),
-      setup: .ready, driving: true, compact: .active, now: now)
+      setup: .ready, driving: true, now: now)
     XCTAssertNil(wrongSource.courseDegrees)
   }
 
@@ -78,7 +78,7 @@ final class CarPlayPresentationTests: XCTestCase {
         permissionLost
         ? CarPlayPresentation(
           presentation: .init(sample: nil, status: .unavailable), setup: .denied,
-          driving: false, compact: .inactive, now: now)
+          driving: false, now: now)
         : dialValue(59, at: start, now: now)
       let cleared = gate.update(input, now: now)
       XCTAssertNotNil(cleared)
@@ -93,7 +93,7 @@ final class CarPlayPresentationTests: XCTestCase {
     _ = gate.update(dialValue(0, at: start), now: start)
     let invalid = CarPlayPresentation(
       presentation: .init(sample: nil, status: .unreliable), setup: .ready,
-      driving: true, compact: .active, now: start.addingTimeInterval(1))
+      driving: true, now: start.addingTimeInterval(1))
     XCTAssertEqual(gate.update(invalid, now: start.addingTimeInterval(1))?.bearing, "—")
     let recovery = start.addingTimeInterval(2)
     XCTAssertNil(gate.update(dialValue(90, at: recovery), now: recovery))
@@ -102,33 +102,85 @@ final class CarPlayPresentationTests: XCTestCase {
   func testNativeHeaderHasNoActionsAndClearsItsCourse() throws {
     let screen = CarPlayCompassTemplate()
     let now = Date(timeIntervalSince1970: 100)
-    screen.update(dialValue(59, at: now))
+    let car = UITraitCollection(displayScale: 2)
+    screen.update(dialValue(59, at: now), traits: car)
     let header = try XCTUnwrap(screen.template.listHeader)
     XCTAssertEqual(header.title, "Sampled 59° NE")
     XCTAssertEqual(
       header.subtitle, "Travel · True north · \(now.formatted(date: .omitted, time: .standard))")
+    XCTAssertEqual(header.bodyVariants.map(\.string), ["Updates limited to once every 10 seconds"])
     XCTAssertTrue(header.actionButtons.isEmpty)
     XCTAssertTrue(screen.template.sections.isEmpty)
     XCTAssertFalse(screen.template.showsSpinnerWhileEmpty)
     XCTAssertEqual(screen.template.emptyViewTitleVariants, [""])
     XCTAssertEqual(screen.template.emptyViewSubtitleVariants, [""])
-    screen.update(dialValue(59, at: now, now: now.addingTimeInterval(6)))
+    screen.update(dialValue(59, at: now, now: now.addingTimeInterval(6)), traits: car)
     XCTAssertEqual(screen.template.listHeader?.title, "—")
     XCTAssertEqual(screen.template.listHeader?.subtitle, "Travel · True north")
   }
 
-  func testDialSnapshotFitsThumbnailLimitAndHasAppearanceVariants() throws {
-    let image = CarPlayCompassTemplate.dialImage(course: 59)
+  func testStyleChangeRedrawsTheCurrentContentWithoutANewValue() throws {
+    let screen = CarPlayCompassTemplate()
+    let now = Date(timeIntervalSince1970: 100)
+    let day = UITraitCollection { traits in
+      traits.displayScale = 2
+      traits.userInterfaceStyle = .light
+    }
+    let night = UITraitCollection { traits in
+      traits.displayScale = 2
+      traits.userInterfaceStyle = .dark
+    }
+    screen.update(dialValue(59, at: now), traits: day)
+    let before = try XCTUnwrap(screen.template.listHeader)
+    screen.refresh(traits: day)
+    XCTAssertTrue(screen.template.listHeader === before)
+    screen.refresh(traits: night)
+    let after = try XCTUnwrap(screen.template.listHeader)
+    XCTAssertFalse(after === before)
+    XCTAssertEqual(after.title, before.title)
+    XCTAssertNotEqual(after.thumbnail.image.pngData(), before.thumbnail.image.pngData())
+  }
+
+  func testDialSnapshotFitsThumbnailLimitAndMatchesCarScaleAndStyle() throws {
+    let car = UITraitCollection { traits in
+      traits.displayScale = 2
+      traits.userInterfaceStyle = .dark
+    }
+    let image = CarPlayCompassTemplate.dialImage(course: 59, traits: car)
     let maximum = CPThumbnailImage.maximumImageSize(forAspectRatio: 1)
     XCTAssertGreaterThan(image.size.width, 0)
     XCTAssertLessThanOrEqual(image.size.width, maximum.width)
     XCTAssertLessThanOrEqual(image.size.height, maximum.height)
-    let asset = try XCTUnwrap(image.imageAsset)
-    let light = asset.image(with: UITraitCollection(userInterfaceStyle: .light))
-    let dark = asset.image(with: UITraitCollection(userInterfaceStyle: .dark))
-    XCTAssertNotEqual(light.pngData(), dark.pngData())
-    let unavailable = CarPlayCompassTemplate.dialImage(course: nil)
+    XCTAssertEqual(image.scale, 2)
+    let light = CarPlayCompassTemplate.dialImage(
+      course: 59,
+      traits: UITraitCollection { traits in
+        traits.displayScale = 2
+        traits.userInterfaceStyle = .light
+      })
+    XCTAssertNotEqual(light.pngData(), image.pngData())
+    let unavailable = CarPlayCompassTemplate.dialImage(course: nil, traits: car)
     XCTAssertNotEqual(image.pngData(), unavailable.pngData())
+    // Unspecified traits fall back to a one-point scale and the light style.
+    let fallback = CarPlayCompassTemplate.dialImage(course: 59, traits: UITraitCollection())
+    XCTAssertEqual(fallback.scale, 1)
+    XCTAssertEqual(fallback.size, light.size)
+  }
+
+  func testDisplayInfoRecordsScaleThumbnailLimitAndStyle() throws {
+    let defaults = try XCTUnwrap(UserDefaults(suiteName: "CarPlayDisplayInfoTests"))
+    defaults.removePersistentDomain(forName: "CarPlayDisplayInfoTests")
+    XCTAssertNil(CarPlayDisplayInfo.recorded(defaults: defaults))
+    let car = UITraitCollection { traits in
+      traits.displayScale = 2
+      traits.userInterfaceStyle = .dark
+    }
+    CarPlayDisplayInfo.record(car, defaults: defaults)
+    let maximum = CPThumbnailImage.maximumImageSize(forAspectRatio: 1)
+    XCTAssertEqual(
+      CarPlayDisplayInfo.recorded(defaults: defaults),
+      "2× display · \(Int(maximum.width))×\(Int(maximum.height)) pt thumbnail · dark style")
+    defaults.removePersistentDomain(forName: "CarPlayDisplayInfoTests")
   }
 
   private func dialValue(_ degrees: Double, at timestamp: Date, now: Date? = nil)
@@ -139,7 +191,7 @@ final class CarPlayPresentationTests: XCTestCase {
         sample: CompassSample(
           degrees: degrees, source: .vehicleCourse, reference: .trueNorth,
           accuracy: 1, timestamp: timestamp), status: .usable),
-      setup: .ready, driving: true, compact: .active, now: now ?? timestamp)
+      setup: .ready, driving: true, now: now ?? timestamp)
   }
 
   func testInvalidStatesNeverExposeBearing() {
@@ -150,31 +202,30 @@ final class CarPlayPresentationTests: XCTestCase {
     for status: TravelStatus in [.waiting, .slow, .unreliable, .unavailable] {
       let value = CarPlayPresentation(
         presentation: .init(sample: sample, status: status),
-        setup: .ready, driving: true, compact: .active, now: now)
+        setup: .ready, driving: true, now: now)
       XCTAssertEqual(value.bearing, "—")
     }
     let stale = CarPlayPresentation(
       presentation: .init(sample: sample, status: .usable),
-      setup: .ready, driving: true, compact: .active, now: now.addingTimeInterval(6))
+      setup: .ready, driving: true, now: now.addingTimeInterval(6))
     XCTAssertEqual(stale.bearing, "—")
     let setup = CarPlayPresentation(
       presentation: .init(sample: sample, status: .usable),
-      setup: .permissionRequired, driving: false, compact: .inactive, now: now)
+      setup: .permissionRequired, driving: false, now: now)
     XCTAssertEqual(setup.bearing, "—")
     XCTAssertTrue(setup.status.contains("parked"))
   }
 
-  func testTrueNorthCourseRoundingAndCompactFailure() {
+  func testTrueNorthCourseRounding() {
     let now = Date()
     let sample = CompassSample(
       degrees: 359.8, source: .vehicleCourse, reference: .trueNorth,
       accuracy: 1, timestamp: now)
     let value = CarPlayPresentation(
       presentation: .init(sample: sample, status: .usable),
-      setup: .ready, driving: true, compact: .unavailable, now: now)
+      setup: .ready, driving: true, now: now)
     XCTAssertEqual(value.bearing, "0° N")
     XCTAssertEqual(value.reference, "Travel · True north")
-    XCTAssertTrue(value.compact.contains("unavailable"))
   }
 
   func testWrongSourceFutureTimeAndNonfiniteInputNeverExposeBearing() {
@@ -192,7 +243,7 @@ final class CarPlayPresentationTests: XCTestCase {
     ] {
       let value = CarPlayPresentation(
         presentation: .init(sample: sample, status: .usable),
-        setup: .ready, driving: true, compact: .active, now: now)
+        setup: .ready, driving: true, now: now)
       XCTAssertEqual(value.bearing, "—")
     }
   }

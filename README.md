@@ -54,7 +54,9 @@ while parked. Never grant Always authorization for this feature.
 
 The full-screen readout uses Apple’s native list details header with a compass
 thumbnail, an explicitly **Sampled** course, **Travel · True north**, the original
-sample time, and status. It is a snapshot rather than a continuously live compass.
+sample time, and status. The thumbnail is drawn at the car display’s own scale and
+style; after a CarPlay connection, the phone’s Settings diagnostics section shows the
+scale, thumbnail limit and style the car reported. It is a snapshot rather than a continuously live compass.
 New snapshots appear at most once every ten seconds. Fresh sensor input keeps the
 previous snapshot visible between updates without changing its timestamp. Missing,
 unreliable or older-than-five-second sensor input immediately removes the numeric

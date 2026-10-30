@@ -6,21 +6,12 @@ struct CarPlayPresentation: Equatable {
   private(set) var courseDegrees: Double?
   private(set) var sampleTimestamp: Date?
   let status: String
-  let compact: String
   let reference = "Travel · True north"
 
   init(
     presentation: TravelPresentation, setup: DriveSessionController.SetupStatus,
-    driving: Bool, compact: DriveSessionController.CompactStatus, now: Date
+    driving: Bool, now: Date
   ) {
-    self.compact =
-      switch compact {
-      case .active: "Compact display requested"
-      case .starting: "Starting compact display"
-      case .unavailable: "Compact display unavailable"
-      case .dismissed: "Compact display dismissed"
-      case .inactive: "Compact display inactive"
-      }
     var bearing = "—"
     if setup != .ready {
       status =
