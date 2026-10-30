@@ -37,7 +37,6 @@ final class CarPlayPresentationTests: XCTestCase {
     XCTAssertEqual(value.bearing, "0° N")
     XCTAssertEqual(value.reference, "Travel · True north")
     XCTAssertTrue(value.compact.contains("unavailable"))
-    XCTAssertTrue(value.canEndDrive)
   }
 
   func testWrongSourceFutureTimeAndNonfiniteInputNeverExposeBearing() {
@@ -68,20 +67,17 @@ final class CarPlayPresentationTests: XCTestCase {
         events.append("active")
         await withCheckedContinuation { continuation = $0 }
       },
-      resign: { events.append("resign") }, disconnect: { events.append("disconnect") },
-      end: { events.append("end") })
+      resign: { events.append("resign") }, disconnect: { events.append("disconnect") })
     bridge.activate()
     for _ in 0..<100 where continuation == nil { await Task.yield() }
     XCTAssertNotNil(continuation)
     bridge.resign()
     XCTAssertEqual(events, ["active", "resign"])
     bridge.disconnect()
-    bridge.end()
-    for _ in 0..<100 where !events.contains("end") || !events.contains("disconnect") {
+    for _ in 0..<100 where !events.contains("disconnect") {
       await Task.yield()
     }
     XCTAssertTrue(events.contains("disconnect"))
-    XCTAssertTrue(events.contains("end"))
     continuation?.resume()
   }
   func testRealBridgeRetainsDriveOnResignButDisconnectStopsDuringActivityStart() async {
