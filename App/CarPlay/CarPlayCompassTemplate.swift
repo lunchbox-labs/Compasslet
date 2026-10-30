@@ -14,7 +14,8 @@ final class CarPlayCompassTemplate {
     template.emptyViewSubtitleVariants = [""]
   }
 
-  func update(_ value: CarPlayPresentation) {
+  /// Renders for the car display described by `traits`, which CarPlay supplies per connection.
+  func update(_ value: CarPlayPresentation, traits: UITraitCollection) {
     let title: String
     let subtitle: String
     if let timestamp = value.sampleTimestamp {
@@ -25,25 +26,26 @@ final class CarPlayCompassTemplate {
       subtitle = value.reference
     }
     template.listHeader = CPListTemplateDetailsHeader(
-      thumbnail: CPThumbnailImage(image: Self.dialImage(course: value.courseDegrees)),
+      thumbnail: CPThumbnailImage(
+        image: Self.dialImage(course: value.courseDegrees, traits: traits)),
       title: title, subtitle: subtitle,
-      bodyVariants: [
-        NSAttributedString(string: "\(value.status)\n\(value.compact)"),
-        NSAttributedString(string: value.status),
-      ], actionButtons: [])
+      bodyVariants: [NSAttributedString(string: value.status)], actionButtons: [])
   }
 
-  static func dialImage(course: Double?) -> UIImage {
+  /// Draws at the car display's scale, with light and dark variants registered for that scale.
+  /// The returned image matches the car's current style; each update renders again.
+  static func dialImage(course: Double?, traits car: UITraitCollection) -> UIImage {
     let maximum = CPThumbnailImage.maximumImageSize(forAspectRatio: 1)
     let side = min(160, maximum.width, maximum.height)
+    let scale = car.displayScale > 0 ? car.displayScale : 1
     let asset = UIImageAsset()
     for style: UIUserInterfaceStyle in [.light, .dark] {
       let traits = UITraitCollection { traits in
         traits.userInterfaceStyle = style
-        traits.displayScale = 1
+        traits.displayScale = scale
       }
       let format = UIGraphicsImageRendererFormat()
-      format.scale = 1
+      format.scale = scale
       format.opaque = true
       let image = UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format)
         .image { context in
@@ -53,7 +55,11 @@ final class CarPlayCompassTemplate {
         }
       asset.register(image, with: traits)
     }
-    return asset.image(with: UITraitCollection(userInterfaceStyle: .light))
+    return asset.image(
+      with: UITraitCollection { traits in
+        traits.userInterfaceStyle = car.userInterfaceStyle == .dark ? .dark : .light
+        traits.displayScale = scale
+      })
   }
 
   private static func drawDial(course: Double?, side: CGFloat, context: CGContext) {
@@ -115,5 +121,32 @@ final class CarPlayCompassTemplate {
     context.closePath()
     context.fillPath()
     context.restoreGState()
+  }
+}
+
+/// The display scale and thumbnail limit the car reported, shown in the phone's diagnostics.
+@MainActor
+enum CarPlayDisplayInfo {
+  static let key = "carPlayDisplaySummary"
+
+  static func summary(for traits: UITraitCollection) -> String {
+    let maximum = CPThumbnailImage.maximumImageSize(forAspectRatio: 1)
+    let style =
+      switch traits.userInterfaceStyle {
+      case .dark: "dark"
+      case .light: "light"
+      default: "unspecified"
+      }
+    let scale = traits.displayScale.formatted(.number.locale(Locale(identifier: "en_US_POSIX")))
+    return "\(scale)× display · "
+      + "\(Int(maximum.width))×\(Int(maximum.height)) pt thumbnail · \(style) style"
+  }
+
+  static func record(_ traits: UITraitCollection, defaults: UserDefaults = .standard) {
+    defaults.set(summary(for: traits), forKey: key)
+  }
+
+  static func recorded(defaults: UserDefaults = .standard) -> String? {
+    defaults.string(forKey: key)
   }
 }

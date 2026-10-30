@@ -9,9 +9,13 @@ struct DiagnosticsSettingsSection: View {
   @State private var exportURL: URL?
   @State private var exportItem: ExportItem?
   @State private var confirmingClear = false
+  @State private var carPlayDisplay = CarPlayDisplayInfo.recorded()
 
   var body: some View {
     Section("Diagnostics") {
+      if let carPlayDisplay {
+        LabeledContent("CarPlay display", value: carPlayDisplay)
+      }
       Toggle("Debug Mode", isOn: Binding(get: { enabled }, set: setEnabled))
       Text(
         "Show small timing details and save local diagnostics. Turning off hides timing details and keeps saved logs. Up to 30 active-feed minutes per display; timing does not measure visibility or screen refresh."
@@ -25,6 +29,7 @@ struct DiagnosticsSettingsSection: View {
       if let error { Text(error).font(.footnote).foregroundStyle(.secondary) }
     }
     .task {
+      carPlayDisplay = CarPlayDisplayInfo.recorded()
       do { enabled = try store().isEnabled() } catch { self.error = error.localizedDescription }
     }
     .confirmationDialog("Delete the saved diagnostic logs?", isPresented: $confirmingClear) {

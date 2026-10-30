@@ -21,6 +21,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     drive = coordinator
     bridge = CarPlayLifecycleBridge(drive: coordinator)
     self.interfaceController = interfaceController
+    CarPlayDisplayInfo.record(interfaceController.carTraitCollection)
     let screen = CarPlayCompassTemplate()
     compass = screen
     updates = CarPlayUpdateGate()
@@ -71,14 +72,14 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
   }
 
   private func render() {
-    guard let drive, let compass else { return }
+    guard let drive, let compass, let interfaceController else { return }
     try? CompassDiagnostics.shared?.observe(.fullscreen, active: sceneActive && drive.isDriving)
     let now = Date()
     let value = CarPlayPresentation(
       presentation: drive.presentation, setup: drive.setupStatus,
-      driving: drive.isDriving, compact: drive.compactStatus, now: now)
+      driving: drive.isDriving, now: now)
     guard let next = updates.update(value, now: now) else { return }
-    compass.update(next)
+    compass.update(next, traits: interfaceController.carTraitCollection)
     _ = try? CompassDiagnostics.shared?.record(.fullscreen, kind: .templateUpdated)
   }
 }
