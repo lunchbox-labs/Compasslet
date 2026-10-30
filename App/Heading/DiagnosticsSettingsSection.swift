@@ -13,7 +13,7 @@ struct DiagnosticsSettingsSection: View {
     Section("Diagnostics") {
       Toggle("Debug Mode", isOn: Binding(get: { enabled }, set: setEnabled))
       Text(
-        "Keep up to 30 active-feed minutes per display. Timing does not measure visibility or screen refresh. Turning off retains logs."
+        "Show small timing details and save local diagnostics. Turning off hides timing details and keeps saved logs. Up to 30 active-feed minutes per display; timing does not measure visibility or screen refresh."
       )
       .font(.footnote).foregroundStyle(.secondary)
       Button("Export Diagnostics", action: export)

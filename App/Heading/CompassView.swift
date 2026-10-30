@@ -31,60 +31,73 @@ struct CompassView: View {
   }
 
   var body: some View {
-    ScrollView {
-      VStack(spacing: 28) {
+    VStack(spacing: 0) {
+      HStack(alignment: .top) {
+        Button("Settings", systemImage: "line.3.horizontal") { showingSettings = true }
+          .labelStyle(.iconOnly)
+          .frame(width: 44, height: 44)
+        Spacer(minLength: 8)
         VStack(spacing: 8) {
           Text("COMPASS").font(.caption.weight(.semibold)).tracking(4)
             .foregroundStyle(.secondary)
           Text("Find your bearing").font(.title2.weight(.semibold))
         }
-        HStack {
-          if drive.isDriving {
-            Button("End Drive", role: .destructive) { Task { await drive.endDrive() } }
-          }
-          Spacer()
-          Button("Settings", systemImage: "gearshape") { showingSettings = true }
-            .labelStyle(.iconOnly)
-        }
-        if let notice = locationNotice {
-          Button {
-            showingSettings = true
-          } label: {
-            Label(notice, systemImage: "location.slash")
-              .font(.subheadline)
-          }
-        }
-        dial
-        if !rotatesDial { headingReadout.accessibilityHidden(true) }
-        if let sample = compass.sample {
-          Text("Accuracy ±\(Int(min(sample.accuracy, 360).rounded()))°")
-            .font(.subheadline).foregroundStyle(.secondary)
-        }
-        VStack(spacing: 10) {
-          Label(
-            compass.status.title,
-            systemImage: compass.sample == nil ? "info.circle" : "location.north"
-          )
-          .font(.headline)
-          Text(compass.status.detail).foregroundStyle(.secondary)
-          if compass.status == .denied, let url = URL(string: UIApplication.openSettingsURLString) {
-            Link("Open Settings", destination: url).buttonStyle(.bordered)
-          }
-        }
         .multilineTextAlignment(.center)
-        .frame(maxWidth: .infinity)
-        .padding(20)
-        .background(.quaternary, in: RoundedRectangle(cornerRadius: 24))
-        Text("PHONE HEADING · MAGNETIC NORTH")
-          .font(.caption2.weight(.medium)).foregroundStyle(.secondary)
-        Text(
-          "Direction follows your phone, including when you are standing still. Nearby magnets and metal can affect accuracy."
-        )
-        .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
+        Spacer(minLength: 8)
+        Color.clear.frame(width: 44, height: 44).accessibilityHidden(true)
       }
-      .padding(24)
-      .frame(maxWidth: 520)
-      .frame(maxWidth: .infinity)
+      .padding(.horizontal, 16)
+      .padding(.top, 8)
+      if drive.isDriving {
+        Button("End Drive", role: .destructive) { Task { await drive.endDrive() } }
+          .padding(.top, 12)
+      }
+      GeometryReader { geometry in
+        ScrollView {
+          VStack(spacing: 28) {
+            if let notice = locationNotice {
+              Button {
+                showingSettings = true
+              } label: {
+                Label(notice, systemImage: "location.slash")
+                  .font(.subheadline)
+              }
+            }
+            dial
+            if !rotatesDial { headingReadout.accessibilityHidden(true) }
+            if let sample = compass.sample {
+              Text("Accuracy ±\(Int(min(sample.accuracy, 360).rounded()))°")
+                .font(.subheadline).foregroundStyle(.secondary)
+            }
+            VStack(spacing: 10) {
+              Label(
+                compass.status.title,
+                systemImage: compass.sample == nil ? "info.circle" : "location.north"
+              )
+              .font(.headline)
+              Text(compass.status.detail).foregroundStyle(.secondary)
+              if compass.status == .denied,
+                let url = URL(string: UIApplication.openSettingsURLString)
+              {
+                Link("Open Settings", destination: url).buttonStyle(.bordered)
+              }
+            }
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+            .padding(20)
+            .background(.quaternary, in: RoundedRectangle(cornerRadius: 24))
+            Text("PHONE HEADING · MAGNETIC NORTH")
+              .font(.caption2.weight(.medium)).foregroundStyle(.secondary)
+            Text(
+              "Direction follows your phone, including when you are standing still. Nearby magnets and metal can affect accuracy."
+            )
+            .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
+          }
+          .padding(24)
+          .frame(maxWidth: 520)
+          .frame(maxWidth: .infinity, minHeight: geometry.size.height)
+        }
+      }
     }
     .background(Color(uiColor: .systemBackground))
     .sheet(isPresented: $showingSettings) {

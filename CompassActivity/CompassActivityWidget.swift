@@ -65,12 +65,17 @@ private struct CompassActivityView: View {
         Text(status).font(.caption)
       }
       if let update = context.state.debugUpdateTime {
-        Text("Update \(update, format: .dateTime.hour().minute().second())").font(.caption2)
-        if let sample = context.state.sampleTime {
-          Text("Sample \(sample, format: .dateTime.hour().minute().second())").font(.caption2)
+        VStack(spacing: 1) {
+          Text("Update \(update, format: .dateTime.hour().minute().second())")
+          if let sample = context.state.sampleTime {
+            Text("Sample \(sample, format: .dateTime.hour().minute().second())")
+          }
         }
+        .font(.caption2).foregroundStyle(.secondary).monospacedDigit()
       }
     }
+    .multilineTextAlignment(.center)
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
     .accessibilityElement(children: .combine)
   }
 
