@@ -29,9 +29,10 @@ final class CarPlayCompassTemplate {
     let side = min(160, maximum.width, maximum.height)
     let asset = UIImageAsset()
     for style: UIUserInterfaceStyle in [.light, .dark] {
-      let traits = UITraitCollection(traitsFrom: [
-        UITraitCollection(userInterfaceStyle: style), UITraitCollection(displayScale: 1),
-      ])
+      let traits = UITraitCollection { traits in
+        traits.userInterfaceStyle = style
+        traits.displayScale = 1
+      }
       let format = UIGraphicsImageRendererFormat()
       format.scale = 1
       format.opaque = true
