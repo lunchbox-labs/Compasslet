@@ -160,7 +160,6 @@ final class PhoneLocationController: ObservableObject {
     if acquiring { sensor.stop() }
     acquiring = false
     clearLocation()
-    lastCityAttempt = nil
     approximate = false
   }
 

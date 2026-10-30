@@ -71,6 +71,9 @@ final class PhoneLocationControllerTests: XCTestCase {
     lookup.completions[1]("Late City")
     XCTAssertNil(controller.city)
     XCTAssertNil(controller.location)
+    controller.start()
+    sensor.receive?(.location(distant))
+    XCTAssertEqual(lookup.completions.count, 2)
   }
 
   private let time = Date(timeIntervalSince1970: 1_000)
