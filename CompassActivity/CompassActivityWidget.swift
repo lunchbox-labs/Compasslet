@@ -23,7 +23,8 @@ struct CompassActivityWidget: Widget {
       } compactTrailing: {
         ActivityCompactReadout(context: context)
       } minimal: {
-        ActivityCompactReadout(context: context)
+        Image(systemName: "location.north")
+          .accessibilityLabel("Last recorded travel direction. Expand for reading.")
       }
     }
     .supplementalActivityFamilies([.small])
@@ -45,7 +46,12 @@ private struct CompassActivityCard: View {
           secondaryLine
         }
         .fixedSize(horizontal: false, vertical: true)
-        readout
+        VStack(spacing: 1) {
+          readout
+          if CompassActivityView.reading(context) != nil {
+            Text("Last travel").font(.caption2).foregroundStyle(.secondary)
+          }
+        }
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
       .padding(.horizontal, 8)
@@ -77,8 +83,8 @@ private struct CompassActivityCard: View {
 
   private var secondaryLine: some View {
     Group {
-      if let update = context.state.debugUpdateTime {
-        Text("Update \(update, format: .dateTime.hour().minute().second())")
+      if CompassActivityView.reading(context) != nil, let sample = context.state.sampleTime {
+        Text("Last travel \(sample, style: .time)")
       } else {
         Text("Travel · True north")
       }
@@ -91,7 +97,13 @@ private struct CompassActivityCard: View {
     let reading =
       CompassActivityView.reading(context) == nil
       ? Text(status) : Text(CompassActivityView.bearing(context))
-    let summary = Text("\(reading), travel direction, true north.")
+    let summary: Text
+    if let sample = context.state.sampleTime, CompassActivityView.reading(context) != nil {
+      summary = Text(
+        "\(reading), last recorded travel direction, true north, sampled \(sample, style: .time).")
+    } else {
+      summary = Text("\(reading), travel direction, true north.")
+    }
     guard let update = context.state.debugUpdateTime else { return summary }
     let debug = Text("\(summary) Update \(update, format: .dateTime.hour().minute().second()).")
     guard let sample = context.state.sampleTime else { return debug }
@@ -134,6 +146,9 @@ private struct CompassActivityView: View {
         Text("—").font(.largeTitle.bold())
       }
       Text("Travel · True north").font(.caption2)
+      if Self.reading(context) != nil, let sample = context.state.sampleTime {
+        Text("Last travel \(sample, style: .time)").font(.caption2).foregroundStyle(.secondary)
+      }
       if context.isStale {
         Text("Travel unavailable").font(.caption)
       } else if context.state.status != .usable {
@@ -169,9 +184,16 @@ private struct ActivityCompactReadout: View {
   @Environment(\.dynamicTypeSize) private var systemTextSize
 
   var body: some View {
-    Text(CompassActivityView.bearing(context))
-      .font(.caption).lineLimit(1).minimumScaleFactor(0.85)
-      .dynamicTypeSize(
-        (context.state.appearance ?? AppearanceValues()).readoutTextSize(system: systemTextSize))
+    Text(
+      CompassActivityView.reading(context) == nil
+        ? "—" : "Last \(CompassActivityView.bearing(context))"
+    )
+    .font(.caption).lineLimit(1).minimumScaleFactor(0.85)
+    .dynamicTypeSize(
+      (context.state.appearance ?? AppearanceValues()).readoutTextSize(system: systemTextSize)
+    )
+    .accessibilityLabel(
+      Text("\(CompassActivityView.bearing(context)), last recorded travel direction, true north.")
+    )
   }
 }

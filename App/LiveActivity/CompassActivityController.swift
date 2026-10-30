@@ -85,41 +85,54 @@ final class CompassActivityController: CompassActivityPresenting {
     }
   }
 
-  /// Usable readings push when their displayed direction changes, at most once a second, and
-  /// otherwise only when the pushed stale date is within this margin of lapsing. Samples are
-  /// timestamped before delivery, so the margin is measured from the stale date, not the push.
+  /// This is a sampled last-reading display, not a promise of live vehicle orientation.
+  /// Unchanged readings need no expiry heartbeat; changed readings remain rate-limited.
   static let changedReadingInterval: TimeInterval = 1
-  static let staleDateRefreshMargin: TimeInterval = 2
 
-  /// The reading most recently scheduled for the card, tracked synchronously so each sample is
-  /// compared with what the card is about to show rather than what an in-flight push replaced.
   private struct ScheduledReading {
     let bearing: Double
-    let expiry: Date
+    let token = UUID()
   }
   private var scheduledReading: ScheduledReading?
 
   func update(_ presentation: TravelPresentation) async {
+    await publish(presentation, retainLastReading: true)
+  }
+
+  func invalidateReading() async {
+    await publish(.init(sample: nil, status: .unavailable), retainLastReading: false)
+  }
+
+  private func publish(_ presentation: TravelPresentation, retainLastReading: Bool) async {
     guard let handle else { return }
     let date = now()
     let state = Self.content(presentation, now: date)
-    if let bearing = state.bearing, let expiry = state.expiry {
+    let expiredTravelSample =
+      presentation.sample.map {
+        $0.source == .vehicleCourse && $0.reference == .trueNorth
+          && date.timeIntervalSince1970.isFinite && date.timeIntervalSince($0.timestamp) > 5
+      } ?? false
+    if state.bearing == nil, retainLastReading, scheduledReading != nil,
+      (presentation.status != .usable || expiredTravelSample), presentation.status != .waiting
+    {
+      return
+    }
+    if let bearing = state.bearing {
       if let lastUsableWrite, date.timeIntervalSince(lastUsableWrite) < Self.changedReadingInterval
       {
         return
       }
-      if let scheduledReading, Self.sameReading(scheduledReading.bearing, bearing),
-        scheduledReading.expiry.timeIntervalSince(date) > Self.staleDateRefreshMargin
-      {
+      if let scheduledReading, Self.sameReading(scheduledReading.bearing, bearing) {
         return
       }
       lastUsableWrite = date
-      scheduledReading = ScheduledReading(bearing: bearing, expiry: expiry)
+      scheduledReading = ScheduledReading(bearing: bearing)
     } else {
       validity = UUID()
       scheduledReading = nil
     }
     let validityToken = validity
+    let readingToken = scheduledReading?.token
     let token = generation
     let previous = operation
     let task = Task { @MainActor [weak self] in
@@ -129,6 +142,13 @@ final class CompassActivityController: CompassActivityPresenting {
       else { return }
       // Revalidate after waiting so an expired sample never becomes a new bearing.
       var content = Self.content(presentation, now: self.now())
+      if state.bearing != nil, content.bearing == nil {
+        // Do not replace the last accepted reading with a sample that expired in the queue.
+        if self.scheduledReading?.token == readingToken {
+          self.scheduledReading = self.lastContent?.bearing.map { ScheduledReading(bearing: $0) }
+        }
+        return
+      }
       content.appearance = self.appearance
       self.lastContent = content
       await handle.update(content)
@@ -151,17 +171,7 @@ final class CompassActivityController: CompassActivityPresenting {
         var content = self.lastContent
       else { return }
       content.appearance = self.appearance
-      // A cosmetic update must not turn a stale ActivityKit payload into a fresh one.
-      if content.bearing != nil {
-        let date = self.now()
-        if content.expiry.map({ $0 > date }) != true
-          || content.sampleTime.map({ (0...5).contains(date.timeIntervalSince($0)) }) != true
-        {
-          content.bearing = nil
-          content.status = .unavailable
-          self.scheduledReading = nil
-        }
-      }
+      // Retained content keeps its original sample time; a cosmetic update is not a new sample.
       self.lastContent = content
       await handle.update(content)
     }
@@ -216,7 +226,7 @@ final class CompassActivityController: CompassActivityPresenting {
     else { return .init(bearing: nil, status: status == .usable ? .unavailable : status) }
     return .init(
       bearing: sample.angle.degrees, status: .usable, sampleTime: sample.timestamp,
-      expiry: sample.timestamp.addingTimeInterval(5))
+      expiry: nil)
   }
 }
 

@@ -68,14 +68,23 @@ controls on iPhone or CarPlay. Switching to Maps keeps the drive running with th
 location indicator. A CarPlay template scene disconnect, lost permission, Location
 Services being turned off, or an eight-hour limit stops acquisition. Dismissing the Live Activity on iPhone, or iOS
 ending it, only removes the compact display for the rest of that drive. Reopen the
-CarPlay app after leaving it to start a new drive. An ordinary phone launch never resumes a drive. Slow movement,
-poor measurements, and data older than five seconds remove the bearing.
+CarPlay app after leaving it to start a new drive. An ordinary phone launch never resumes a drive. On the full-screen template, slow
+movement, poor measurements, and data older than five seconds remove the bearing.
 
-The compact Dashboard surface uses a Live Activity. iOS and user settings control
-its appearance and refresh timing; an unavailable compact display does not disable
-an eligible full-screen session. Only bearing/status/freshness reaches ActivityKit.
-No coordinates, route history, sensor logs, analytics, or backend are stored by the
-app. iOS manages the minimal Live Activity state while the app is suspended.
+The compact Dashboard surface uses a Live Activity showing **Last travel** and the
+original sample time. A stopped car, missing newer course or temporary poor course
+quality keeps the last accepted direction within the same active drive. It is a
+recorded travel direction, not a measurement of where a stationary car points.
+New course samples must still pass the five-second input check. Unchanged displayed
+readings need no heartbeat updates; changed readings are limited to once a second.
+An explicit location interruption clears the activity reading; drive teardown,
+permission/service loss and the eight-hour limit clear and end the activity.
+Dismissing the activity does not stop the CarPlay drive. iOS controls activity
+lifecycle and rendering. No prior-drive reading is restored.
+Only bearing/status/sample time reaches ActivityKit. No route history or backend
+is added. Physical-device checks must verify the retained sample label, stop and
+recovery behavior, and clearing on teardown. This activity policy does not change
+the phone compass, full-screen CarPlay or regular widget retention rules.
 
 The checked-in driving-task entitlement is a declaration only. Full-screen
 CarPlay on a physical device requires Apple’s approval and matching signing and
@@ -88,11 +97,10 @@ locked, Maps visible, actual disconnect, stopping/reversing, poor GPS, denied an
 reduced-precision permission, Live Activities disabled/dismissed, accessibility,
 and thermal/battery behavior. CarPlay-only ActivityKit startup with a locked phone
 and foreground eligibility for starting background acquisition are physical gates.
-Validate that stale/suspended compact content promptly hides its numeric bearing;
-failure to do so blocks release of the compact numeric readout. A usable bearing is
-pushed when its displayed direction changes, at most once per second, and otherwise
-only when its five-second stale date is within two seconds of lapsing; invalidation is
-immediate in the producer. iOS does not guarantee rendering cadence.
+Validate that retained compact readings keep their sample time, recover on a new
+valid course, and clear on explicit acquisition failure or teardown. A changed
+reading is pushed at most once per second; unchanged readings need no heartbeat.
+iOS does not guarantee rendering cadence.
 
 ## Travel widget
 

@@ -25,6 +25,8 @@ final class DriveSessionControllerTests: XCTestCase {
   final class Activity: CompassActivityPresenting {
     var onDismiss: (() -> Void)?
     var starts = 0
+    var invalidations = 0
+    func invalidateReading() async { invalidations += 1 }
     var ends = 0
     var updates: [TravelPresentation] = []
     var fails = false
@@ -62,6 +64,21 @@ final class DriveSessionControllerTests: XCTestCase {
   func make(_ sensor: Sensor, _ activity: Activity) -> DriveSessionController {
     DriveSessionController(
       sensor: sensor, activity: activity, now: { self.time }, automaticTick: false)
+  }
+
+  func testOnlyExplicitSensorInterruptionInvalidatesTheRetainedActivityReading() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    await controller.carPlayActivated()
+    sensor.receive?(reading())
+    await controller.waitForPendingOperations()
+    time += 60
+    controller.tick()
+    await controller.waitForPendingOperations()
+    XCTAssertEqual(activity.invalidations, 0)
+    sensor.receive?(.interrupted)
+    await controller.waitForPendingOperations()
+    XCTAssertEqual(activity.invalidations, 1)
+    await controller.endDrive()
   }
 
   func testPhoneLaunchDoesNotAcquireAndPhoneRequestIsOnce() async {

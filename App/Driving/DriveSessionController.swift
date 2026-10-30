@@ -38,6 +38,7 @@ final class DriveSessionController: ObservableObject {
   private var preparation: Task<Void, Never>?
   private var activityOperation: Task<Void, Never>?
   private var ticker: Task<Void, Never>?
+  private var pendingActivityInvalidation = false
   private var pendingPresentation: TravelPresentation?
   private var drainGeneration: UUID?
 
@@ -144,6 +145,13 @@ final class DriveSessionController: ObservableObject {
           return
         }
         self.compactStatus = .active
+        if self.pendingActivityInvalidation {
+          self.pendingActivityInvalidation = false
+          await activity.invalidateReading()
+        }
+        guard self.isDriving, self.generation == token, !self.pendingActivityInvalidation else {
+          return
+        }
         await activity.update(self.presentation)
       } catch {
         guard self.isDriving, self.generation == token else { return }
@@ -225,6 +233,7 @@ final class DriveSessionController: ObservableObject {
       setupStatus = .denied
       _ = stopDrive(reason: .permission)
     case .interrupted:
+      pendingActivityInvalidation = true
       lastReading = nil
       publish(filter.update(nil, now: now()))
     case .reading(let reading):
@@ -263,6 +272,13 @@ final class DriveSessionController: ObservableObject {
         let latest = self.pendingPresentation
       {
         self.pendingPresentation = nil
+        if self.pendingActivityInvalidation {
+          self.pendingActivityInvalidation = false
+          await activity.invalidateReading()
+        }
+        guard self.isDriving, self.generation == token else { break }
+        // A newer interruption invalidates the captured recovery sample as well.
+        if self.pendingActivityInvalidation { continue }
         await activity.update(latest)
       }
       if self.drainGeneration == token {
@@ -338,6 +354,7 @@ final class DriveSessionController: ObservableObject {
   >? {
     guard isDriving else { return nil }
     generation = UUID()
+    pendingActivityInvalidation = false
     pendingPresentation = nil
     drainGeneration = nil
     isDriving = false
