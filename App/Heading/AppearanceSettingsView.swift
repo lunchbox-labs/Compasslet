@@ -54,9 +54,11 @@ private struct AppearanceDetailView: View {
         AppearancePreview(surface: surface, appearance: value)
           .frame(maxWidth: .infinity)
           .listRowBackground(Color.clear)
+          .listRowSeparator(.hidden)
         if followsGlobal {
           Text("Following Global Appearance")
             .foregroundStyle(.secondary).frame(maxWidth: .infinity)
+            .listRowSeparator(.hidden)
         }
       }
       if !followsGlobal {
