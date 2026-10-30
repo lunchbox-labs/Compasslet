@@ -27,6 +27,7 @@ final class DriveSessionController: ObservableObject {
   private var pendingWidgetWrite = false
   private var lastWidgetReload: Date?
   private var pendingWidgetReload = false
+  private var pendingWidgetClear = false
   private var filter = TravelCourseFilter()
   private var lastReading: TravelReading?
   private var startedAt: Date?
@@ -120,6 +121,7 @@ final class DriveSessionController: ObservableObject {
     pendingWidgetWrite = false
     lastWidgetReload = nil
     pendingWidgetReload = false
+    pendingWidgetClear = false
     filter.reset()
     lastReading = nil
     presentation = TravelPresentation(sample: nil, status: .waiting)
@@ -247,7 +249,8 @@ final class DriveSessionController: ObservableObject {
     }
     pendingWidgetReload = true
     // Removing a recorded reading is the only change worth spending a reload on early.
-    flushWidget(clearing: cleared)
+    pendingWidgetClear = widgetValue.bearing == nil && (pendingWidgetClear || cleared)
+    flushWidget()
     pendingPresentation = value
     let token = generation
     guard drainGeneration != token else { return }
@@ -267,16 +270,17 @@ final class DriveSessionController: ObservableObject {
     }
   }
 
-  /// WidgetKit budgets a background app roughly 40 to 70 reloads a day. The shared file is
-  /// refreshed about once a second so whichever reload is delivered reads a current sample.
+  /// Reduce reload requests independently of snapshot writes; WidgetKit adapts its budget
+  /// and delivery, with exemptions for some app sessions. The shared file is refreshed
+  /// about once a second so whichever reload is delivered reads a current sample.
   /// Clearing a recorded reading reloads sooner, but flapping accuracy cannot reload every second.
   static let widgetWriteInterval: TimeInterval = 1
   static let widgetReloadInterval: TimeInterval = 60
   static let widgetClearInterval: TimeInterval = 10
 
-  private func flushWidget(clearing: Bool = false) {
+  private func flushWidget() {
     let date = now()
-    let interval = clearing ? Self.widgetClearInterval : Self.widgetReloadInterval
+    let interval = pendingWidgetClear ? Self.widgetClearInterval : Self.widgetReloadInterval
     let reload =
       pendingWidgetReload
       && lastWidgetReload.map({ date.timeIntervalSince($0) >= interval }) ?? true
@@ -291,6 +295,7 @@ final class DriveSessionController: ObservableObject {
     writeWidget(widgetValue.validated(at: date))
     guard reload else { return }
     pendingWidgetReload = false
+    pendingWidgetClear = false
     lastWidgetReload = date
     reloadWidget("latest presentation")
   }
@@ -349,6 +354,7 @@ final class DriveSessionController: ObservableObject {
     pendingWidgetWrite = false
     lastWidgetReload = nil
     pendingWidgetReload = false
+    pendingWidgetClear = false
     widgetValue = .unavailable(at: now())
     writeWidget(widgetValue)
     reloadWidget("session ended")

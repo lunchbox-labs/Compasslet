@@ -260,6 +260,62 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertEqual(reloaded.last?.status, .unavailable)
   }
 
+  func testWidgetClearInsideTheFloorKeepsPriorityUntilTheNextEligibleTick() async {
+    let sensor = Sensor(), activity = Activity()
+    var snapshot = LatestCourseSnapshot.unavailable(at: time)
+    var reloaded: [LatestCourseSnapshot] = []
+    let controller = DriveSessionController(
+      sensor: sensor, activity: activity, now: { self.time }, automaticTick: false,
+      reloadWidget: { _ in reloaded.append(snapshot) }, writeWidget: { snapshot = $0 })
+    await controller.carPlayActivated()
+    sensor.receive?(reading())
+    XCTAssertEqual(reloaded.count, 2)
+    time += 2
+    sensor.receive?(reading(-1))
+    XCTAssertNil(snapshot.bearing)
+    XCTAssertEqual(reloaded.count, 2)
+    // Repeated invalid samples must not erase the pending clear's priority.
+    time += 7
+    sensor.receive?(reading(-1))
+    time += 0.75
+    controller.tick()
+    XCTAssertEqual(reloaded.count, 2)
+    time += 0.25
+    controller.tick()
+    XCTAssertEqual(reloaded.count, 3)
+    XCTAssertNil(reloaded.last?.bearing)
+    XCTAssertEqual(reloaded.last?.status, .unreliable)
+    // Once serviced, the clear must not keep spending reloads on the short cadence.
+    time += 10
+    controller.tick()
+    XCTAssertEqual(reloaded.count, 3)
+    await controller.endDrive()
+  }
+
+  func testUsableReadingSupersedesPendingWidgetClearPriority() async {
+    let sensor = Sensor(), activity = Activity()
+    var snapshot = LatestCourseSnapshot.unavailable(at: time)
+    var reloads = 0
+    let controller = DriveSessionController(
+      sensor: sensor, activity: activity, now: { self.time }, automaticTick: false,
+      reloadWidget: { _ in reloads += 1 }, writeWidget: { snapshot = $0 })
+    await controller.carPlayActivated()
+    sensor.receive?(reading())
+    time += 2
+    sensor.receive?(reading(-1))
+    time += 1
+    sensor.receive?(reading(180))
+    XCTAssertEqual(snapshot.bearing, 180)
+    time += 7
+    controller.tick()
+    XCTAssertEqual(reloads, 2)
+    time += 50
+    controller.tick()
+    XCTAssertEqual(reloads, 3)
+    XCTAssertEqual(snapshot.bearing, 180)
+    await controller.endDrive()
+  }
+
   func testWidgetInvalidationPrecedesReloadAndHistoryWaitsForTheNextSlot() async {
     let sensor = Sensor(), activity = Activity()
     var snapshot = LatestCourseSnapshot.unavailable(at: time)
