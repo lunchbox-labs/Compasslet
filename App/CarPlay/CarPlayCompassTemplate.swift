@@ -137,8 +137,10 @@ enum CarPlayDisplayInfo {
       case .light: "light"
       default: "unspecified"
       }
-    let scale = traits.displayScale.formatted(.number.locale(Locale(identifier: "en_US_POSIX")))
-    return "\(scale)× display · "
+    let scale = traits.displayScale
+    // Whole scales read as "2"; fractional ones keep their digits, independent of locale.
+    let scaleText = scale == scale.rounded() ? String(Int(scale)) : String(Double(scale))
+    return "\(scaleText)× display · "
       + "\(Int(maximum.width))×\(Int(maximum.height)) pt thumbnail · \(style) style"
   }
 
