@@ -209,40 +209,58 @@ final class DriveSessionControllerTests: XCTestCase {
     }
   }
 
-  func testWidgetReloadsCoalesceReadingsAndStatusAtMostOncePerSecond() async {
+  func testWidgetReloadsWaitAMinuteExceptWhenARecordedReadingIsCleared() async {
     let sensor = Sensor(), activity = Activity()
-    var reloads = 0
+    var snapshot = LatestCourseSnapshot.unavailable(at: time)
+    var reloaded: [LatestCourseSnapshot] = []
     let controller = DriveSessionController(
       sensor: sensor, activity: activity, now: { self.time }, automaticTick: false,
-      reloadWidget: { _ in reloads += 1 })
+      reloadWidget: { _ in reloaded.append(snapshot) }, writeWidget: { snapshot = $0 })
     await controller.carPlayActivated()
-    XCTAssertEqual(reloads, 1)
+    XCTAssertEqual(reloaded.count, 1)
     sensor.receive?(reading())
-    XCTAssertEqual(reloads, 2)
-    time += 0.5
+    XCTAssertEqual(reloaded.count, 2)
+    XCTAssertEqual(reloaded.last?.bearing, 90)
+    // Fresh readings keep the shared file current without spending budgeted reloads.
+    for _ in 1...59 {
+      time += 1
+      sensor.receive?(reading())
+      controller.tick()
+      XCTAssertEqual(reloaded.count, 2)
+      XCTAssertEqual(snapshot.sampleTime, time)
+    }
+    time += 1
     sensor.receive?(reading())
-    XCTAssertEqual(reloads, 2)
-    time += 0.5
+    XCTAssertEqual(reloaded.count, 3)
+    XCTAssertEqual(reloaded.last?.bearing, 90)
+    XCTAssertEqual(reloaded.last?.sampleTime, time)
+    // Clearing a recorded reading reloads after ten seconds rather than waiting a minute.
+    time += 10
+    sensor.receive?(reading(-1))
+    XCTAssertEqual(reloaded.count, 4)
+    XCTAssertNil(reloaded.last?.bearing)
+    XCTAssertEqual(reloaded.last?.status, .unreliable)
+    time += 1
     sensor.receive?(reading())
-    XCTAssertEqual(reloads, 3)
+    XCTAssertEqual(reloaded.count, 4)
+    // Flapping accuracy writes the cleared file but cannot spend another reload yet.
     time += 1
     sensor.receive?(reading(-1))
-    XCTAssertEqual(reloads, 4)
-    let staleReading = reading()
-    time += 6
-    sensor.receive?(staleReading)
-    XCTAssertEqual(reloads, 5)
-    controller.tick()
-    XCTAssertEqual(reloads, 5)
-    sensor.receive?(reading())
-    XCTAssertEqual(reloads, 5)
+    XCTAssertNil(snapshot.bearing)
+    XCTAssertEqual(reloaded.count, 4)
     time += 1
-    controller.tick()
-    XCTAssertEqual(reloads, 6)
+    sensor.receive?(reading())
+    XCTAssertEqual(reloaded.count, 4)
+    time += 57
+    sensor.receive?(reading())
+    XCTAssertEqual(reloaded.count, 5)
+    XCTAssertEqual(reloaded.last?.bearing, 90)
     await controller.endDrive()
+    XCTAssertEqual(reloaded.count, 6)
+    XCTAssertEqual(reloaded.last?.status, .unavailable)
   }
 
-  func testWidgetInvalidationPrecedesReloadAndCoalescesInsideTheCadence() async {
+  func testWidgetInvalidationPrecedesReloadAndHistoryWaitsForTheNextSlot() async {
     let sensor = Sensor(), activity = Activity()
     var snapshot = LatestCourseSnapshot.unavailable(at: time)
     var displayed: [LatestCourseSnapshot] = []
@@ -252,26 +270,28 @@ final class DriveSessionControllerTests: XCTestCase {
     await controller.carPlayActivated()
     sensor.receive?(reading())
     XCTAssertEqual(displayed.last?.bearing, 90)
-    time += 0.5
+    XCTAssertEqual(displayed.count, 2)
+    time += 10.5
     sensor.receive?(reading(-1))
     XCTAssertNil(snapshot.bearing)
     XCTAssertEqual(snapshot.status, .unreliable)
-    XCTAssertEqual(displayed.count, 2)
-    time += 0.5
-    controller.tick()
-    XCTAssertEqual(displayed.last?.status, .unreliable)
     XCTAssertEqual(displayed.count, 3)
-    time += 0.1
+    XCTAssertNil(displayed.last?.bearing)
+    XCTAssertEqual(displayed.last?.status, .unreliable)
+    time += 0.5
     sensor.receive?(reading(180))
     XCTAssertEqual(displayed.count, 3)
-    time += 0.9
-    controller.tick()
-    XCTAssertEqual(displayed.last?.bearing, 180)
     time += 6
     controller.tick()
     XCTAssertEqual(snapshot.status, .historical)
-    XCTAssertEqual(displayed.last?.bearing, 180)
+    XCTAssertEqual(snapshot.bearing, 180)
     XCTAssertNil(controller.presentation.sample)
+    XCTAssertEqual(displayed.count, 3)
+    time += 54
+    controller.tick()
+    XCTAssertEqual(displayed.count, 4)
+    XCTAssertEqual(displayed.last?.bearing, 180)
+    XCTAssertEqual(displayed.last?.status, .historical)
     await controller.endDrive()
     XCTAssertEqual(displayed.last?.status, .unavailable)
     XCTAssertNil(displayed.last?.bearing)
