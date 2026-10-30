@@ -1,4 +1,4 @@
-# CarPlay Compass
+# Compasslet
 
 A native SwiftUI **iOS 27+ iPhone compass** showing the direction the top of your
 phone points relative to magnetic north. The phone compass works while stationary;
@@ -44,10 +44,10 @@ separate from simulator state tests.
 
 ## Set up CarPlay
 
-While parked, open Compass on iPhone and allow the initial When In Use request
+While parked, open Compasslet on iPhone and allow the initial When In Use request
 with Precise Location. The app’s **Settings** menu shows location status and an
 **Open Settings** action where permission needs repair. Granting access does not
-start travel collection. Then open Compass from the CarPlay launcher to start a
+start travel collection. Then open Compasslet from the CarPlay launcher to start a
 drive automatically; no phone Start Drive action is needed. Connecting a cable
 alone does not guarantee app launch. Setup and permission repair happen on iPhone
 while parked. Never grant Always authorization for this feature.
