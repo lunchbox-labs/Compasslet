@@ -13,6 +13,32 @@ final class CompassDiagnosticsTests: XCTestCase {
     return try CompassDiagnostics(url: url)
   }
 
+  func testWidgetMetadataIsBoundedOptInAndClearableWithoutAnActiveClock() throws {
+    let store = try makeStore()
+    try store.recordWidget(.providerInvoked, outcome: .success, sampleAge: 60, wall: 100)
+    XCTAssertTrue(try store.snapshot().widgetEvents.isEmpty)
+    try store.setEnabled(true)
+    for second in 0..<300 {
+      try store.recordWidget(
+        .snapshotRead, outcome: .success, sampleAge: 60,
+        status: .historical, wall: Double(100 + second))
+    }
+    let events = try store.snapshot().widgetEvents
+    XCTAssertEqual(events.count, 256)
+    XCTAssertEqual(events.last?.sampleAgeSeconds, 60)
+    XCTAssertEqual(events.last?.status, .historical)
+    try store.recordWidget(.acquisitionStopped, outcome: .permission, wall: 2500)
+    XCTAssertEqual(try store.snapshot().widgetEvents.count, 1)
+    try store.setEnabled(false)
+    try store.recordWidget(.snapshotWrite, outcome: .failure, wall: 2501)
+    XCTAssertEqual(try store.snapshot().widgetEvents.count, 1)
+    let json = String(decoding: try store.exportJSON(), as: UTF8.self)
+    XCTAssertFalse(json.contains("bearing"))
+    XCTAssertFalse(json.contains("coordinate"))
+    try store.clear()
+    XCTAssertTrue(try store.snapshot().widgetEvents.isEmpty)
+  }
+
   func testRetentionUsesSeparateActiveClocksAndDoesNotCountIdleGaps() throws {
     let store = try makeStore()
     try store.setEnabled(true)
