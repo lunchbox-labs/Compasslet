@@ -5,8 +5,9 @@ import WidgetKit
 struct DiagnosticsSettingsSection: View {
   @State private var enabled = false
   @State private var error: String?
+  // Keep the file until onDismiss, after SwiftUI clears the presentation item.
   @State private var exportURL: URL?
-  @State private var showingExport = false
+  @State private var exportItem: ExportItem?
   @State private var confirmingClear = false
 
   var body: some View {
@@ -17,6 +18,9 @@ struct DiagnosticsSettingsSection: View {
       )
       .font(.footnote).foregroundStyle(.secondary)
       Button("Export Diagnostics", action: export)
+        .sheet(item: $exportItem, onDismiss: removeExport) { item in
+          DiagnosticsShareSheet(url: item.url)
+        }
       Button("Clear Logs", role: .destructive) { confirmingClear = true }
       if let error { Text(error).font(.footnote).foregroundStyle(.secondary) }
     }
@@ -28,9 +32,11 @@ struct DiagnosticsSettingsSection: View {
         do { try store().clear(); error = nil } catch { self.error = error.localizedDescription }
       }
     }
-    .sheet(isPresented: $showingExport, onDismiss: removeExport) {
-      if let exportURL { DiagnosticsShareSheet(url: exportURL) }
-    }
+  }
+
+  private struct ExportItem: Identifiable {
+    let url: URL
+    var id: URL { url }
   }
 
   private func store() throws -> CompassDiagnostics {
@@ -60,7 +66,7 @@ struct DiagnosticsSettingsSection: View {
       let url = directory.appendingPathComponent("compass-diagnostics.json")
       try data.write(to: url, options: .atomic)
       exportURL = url
-      showingExport = true
+      exportItem = ExportItem(url: url)
       error = nil
     } catch { self.error = error.localizedDescription }
   }
