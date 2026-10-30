@@ -13,7 +13,13 @@ struct AccessibilitySettingsView: View {
           "The iPhone compass shows the magnetic heading of the top of your phone while the app is open. Readings older than five seconds are removed rather than kept."
         )
         Text(
-          "CarPlay and the Live Activity show the vehicle’s direction of travel relative to true north: where the car moved, not where the phone or the car points. CarPlay shows the most recent sampled course with its sample time and removes it when input stops; it is a snapshot updated at most every ten seconds, drawn by Apple’s list template with the system’s layout and text sizes and no controls. The Live Activity keeps the last accepted reading, and its card shows the sample time. Dismissing the Live Activity does not stop the drive."
+          "CarPlay and the Live Activity show the vehicle’s direction of travel relative to true north: where the car moved, not where the phone or the car points."
+        )
+        Text(
+          "CarPlay shows the most recent sampled course with its sample time and removes it when input stops. It is a snapshot updated at most every ten seconds, drawn by Apple’s list template with the system’s layout and text sizes and no controls."
+        )
+        Text(
+          "The Live Activity keeps the last accepted reading, and its card shows the sample time. Dismissing the Live Activity does not stop the drive."
         )
       } header: {
         Text("Two kinds of reading")
@@ -23,7 +29,7 @@ struct AccessibilitySettingsView: View {
           "The heading is spoken with its degrees, direction name and accuracy. Status text explains paused, waiting, stale, calibration, unavailable, denied and interrupted states, and the denied state offers Open Settings."
         )
         Text(
-          "Settings opens as its own screen. Done, on any Settings page, or the Escape gesture from the main Settings screen returns to the compass with focus on the Settings button; Back returns to the previous page."
+          "Settings opens as its own screen. Done, where shown, or the Escape gesture from the main Settings screen returns to the compass with focus on the Settings button; Back returns to the previous page."
         )
         Text(
           "Live Activity readings are spoken as a last recorded travel direction, with the sample time where it is shown, or as the current status."
@@ -32,7 +38,7 @@ struct AccessibilitySettingsView: View {
         Text("VoiceOver and Voice Control")
       } footer: {
         Text(
-          "Buttons, toggles, pickers and the text size slider have spoken names matching their labels; the menu button is named Settings. VoiceOver and Voice Control are turned on in iPhone Settings under Accessibility."
+          "Controls have spoken names; the menu button is named Settings. VoiceOver and Voice Control are turned on in iPhone Settings under Accessibility."
         )
       }
       Section {
