@@ -4,10 +4,9 @@ import SwiftUI
 import WidgetKit
 
 @main
-struct CompassWidgets: WidgetBundle {
+struct CompassLiveActivityBundle: WidgetBundle {
   var body: some Widget {
     CompassActivityWidget()
-    CompassCourseWidget()
   }
 }
 

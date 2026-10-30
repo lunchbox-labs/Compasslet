@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import WidgetKit
 
 struct DiagnosticsSettingsSection: View {
   @State private var enabled = false
@@ -51,8 +50,6 @@ struct DiagnosticsSettingsSection: View {
       try store().setEnabled(value)
       enabled = value
       error = nil
-      // A configuration change may request a redraw, but WidgetKit chooses when to deliver it.
-      WidgetCenter.shared.reloadTimelines(ofKind: "CompassRefreshProbe")
     } catch { self.error = error.localizedDescription }
   }
 

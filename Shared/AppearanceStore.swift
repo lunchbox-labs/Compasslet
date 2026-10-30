@@ -1,7 +1,6 @@
 import Combine
 import CompassCore
 import Foundation
-import WidgetKit
 
 @MainActor
 final class AppearanceStore: ObservableObject {
@@ -10,22 +9,17 @@ final class AppearanceStore: ObservableObject {
   nonisolated private static let key = "compassAppearance"
   @Published private(set) var preferences: AppearancePreferences
   private let defaults: UserDefaults?
-  private let reloadWidget: () -> Void
 
   init(
     defaults: UserDefaults? = UserDefaults(suiteName: suiteName),
-    legacyDefaults: UserDefaults = .standard,
-    reloadWidget: @escaping () -> Void = {
-      WidgetCenter.shared.reloadTimelines(ofKind: "CompassRefreshProbe")
-    }
+    legacyDefaults: UserDefaults = .standard
   ) {
     self.defaults = defaults
-    self.reloadWidget = reloadWidget
     var initial = Self.read(from: defaults)
     if defaults?.data(forKey: Self.key) == nil,
       let rotates = legacyDefaults.object(forKey: "rotatesCompassDial") as? Bool, !rotates
     {
-      // Preserve the existing phone-only choice without changing widget rotation.
+      // Preserve the existing phone-only choice without changing the other surfaces.
       var phone = initial.effective(for: .phone)
       phone.rotation = .arrow
       initial.setOverride(phone, for: .phone)
@@ -48,7 +42,6 @@ final class AppearanceStore: ObservableObject {
     guard updated != preferences, let data = try? JSONEncoder().encode(updated) else { return }
     defaults?.set(data, forKey: Self.key)
     preferences = updated
-    // Preferences do not touch the latest-course file or any sensor timestamp.
-    reloadWidget()
+    // Preferences do not change any sensor timestamp.
   }
 }

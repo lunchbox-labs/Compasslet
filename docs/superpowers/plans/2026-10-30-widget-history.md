@@ -1,3 +1,5 @@
+> Historical: the ordinary timeline widget described here was removed. The ActivityKit Live Activity remains supported.
+
 # Historical travel widget implementation plan
 
 > **For agentic workers:** Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox syntax for tracking.
