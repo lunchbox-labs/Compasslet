@@ -45,6 +45,13 @@ jobs:
           -derivedDataPath .build/xcode CODE_SIGNING_ALLOWED=NO build
       - name: Test on an available iPhone simulator
         run: bash scripts/test-ios
+  watch:
+    runs-on: xcode-27
+    timeout-minutes: 15
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Build unsigned Watch app
         run: >-
           xcodebuild -project Compass.xcodeproj -scheme CompassWatch
