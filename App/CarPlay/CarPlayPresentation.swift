@@ -33,7 +33,7 @@ struct CarPlayPresentation: Equatable {
         case .ready: "Waiting for travel direction"
         }
     } else if !driving {
-      status = "Drive ended. Reopen Compass on CarPlay to start."
+      status = "Drive ended. Reopen Compasslet on CarPlay to start."
     } else {
       switch presentation.status {
       case .waiting: status = "Waiting for travel direction"
