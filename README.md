@@ -162,9 +162,12 @@ sentinels are rejected. Use `.deviceHeading` for device orientation and
 
 Call `isFresh(now:maximumAge:)` with an injected clock and finite nonnegative age
 limit. The age boundary is inclusive; future readings are rejected.
-`CompassSmoother(fraction:)` accepts a fraction in `(0, 1]`. Pass validated samples
+`CompassSmoother(fraction:fullTrackingDelta:)` accepts a fraction in `(0, 1]` and an
+optional positive rotation size in degrees at which a new reading is adopted outright;
+smaller rotations interpolate by at least the fraction. Pass validated samples
 to `update(_:now:maximumAge:)`; pass nil when a sensor reading is invalid. The
 smoother crosses north by the shortest rotation and preserves the latest sample's
-metadata. Missing/stale input clears its state. Changes in source or north
+metadata. `TravelCourseFilter` uses a 0.25 fraction with full tracking at 20
+degrees. Missing/stale input clears its state. Changes in source or north
 reference, stale gaps, and reversed timestamps start a new sequence. Use `reset()`
 when ending a sensor session.
