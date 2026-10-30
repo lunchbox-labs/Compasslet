@@ -87,9 +87,10 @@ reduced-precision permission, Live Activities disabled/dismissed, accessibility,
 and thermal/battery behavior. CarPlay-only ActivityKit startup with a locked phone
 and foreground eligibility for starting background acquisition are physical gates.
 Validate that stale/suspended compact content promptly hides its numeric bearing;
-failure to do so blocks release of the compact numeric readout. Updates are bounded
-to at most once per second for usable bearings, with immediate invalidation in the
-producer; iOS does not guarantee rendering cadence.
+failure to do so blocks release of the compact numeric readout. A usable bearing is
+pushed when its displayed direction changes, at most once per second, and otherwise
+only when its five-second stale date is within two seconds of lapsing; invalidation is
+immediate in the producer. iOS does not guarantee rendering cadence.
 
 ## Travel widget
 

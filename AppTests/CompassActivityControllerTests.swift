@@ -112,6 +112,76 @@ struct CompassActivityControllerTests {
     #expect(system.handle.finalState == .init(bearing: nil, status: .unavailable))
   }
 
+  @Test func laggedTimestampsRefreshBeforeTheStaleDateLapses() async throws {
+    let system = TestActivitySystem()
+    var time = Date(timeIntervalSince1970: 100)
+    let controller = CompassActivityController(system: system, now: { time })
+    try await controller.start()
+    // Location timestamps precede delivery; an unchanged reading must still refresh in time.
+    for delivery in 0..<6 {
+      time = Date(timeIntervalSince1970: 100 + Double(delivery))
+      let sample = try #require(
+        CompassSample(
+          degrees: 270, source: .vehicleCourse, reference: .trueNorth,
+          accuracy: 1, timestamp: time.addingTimeInterval(-1.5)))
+      await controller.update(.init(sample: sample, status: .usable))
+      let expiry = try #require(system.handle.updates.last?.expiry)
+      #expect(expiry > time)
+    }
+    #expect(system.handle.updates.count == 3)
+    #expect(CompassActivityController.sameReading(22.4, 22.4))
+    #expect(!CompassActivityController.sameReading(22.4, 22.5))
+    #expect(CompassActivityController.sameReading(359.6, 0.2))
+    await controller.end()
+  }
+
+  @Test func queuedReadingsCompareWithTheLastScheduledDirection() async throws {
+    let system = TestActivitySystem()
+    var time = Date(timeIntervalSince1970: 100)
+    var evaluations = 0
+    let controller = CompassActivityController(
+      system: system,
+      now: {
+        evaluations += 1
+        return time
+      })
+    try await controller.start()
+    func reading(_ degrees: Double) -> TravelPresentation {
+      .init(
+        sample: CompassSample(
+          degrees: degrees, source: .vehicleCourse, reference: .trueNorth,
+          accuracy: 1, timestamp: time), status: .usable)
+    }
+
+    system.handle.suspendNextUpdate = true
+    let first = reading(300)
+    let slow = Task { await controller.update(first) }
+    while system.handle.resumeUpdate == nil { await Task.yield() }
+
+    time = time.addingTimeInterval(1)
+    let second = reading(270)
+    let beforeSecond = evaluations
+    let queued = Task { await controller.update(second) }
+    // now() runs before the first suspension in update(), on this same main actor.
+    // Observing its call proves the second reading has joined the queue.
+    while evaluations == beforeSecond { await Task.yield() }
+
+    time = time.addingTimeInterval(1)
+    let third = reading(300)
+    let beforeThird = evaluations
+    let returned = Task { await controller.update(third) }
+    while evaluations == beforeThird { await Task.yield() }
+    // The first write is still suspended: comparing against its content would
+    // incorrectly suppress the return to 300 after the queued 270-degree reading.
+    #expect(system.handle.updates.map(\.bearing) == [300])
+    system.handle.resumeUpdate?.resume()
+    await slow.value
+    await queued.value
+    await returned.value
+    #expect(system.handle.updates.map(\.bearing) == [300, 270, 300])
+    await controller.end()
+  }
+
   @Test func rejectsWrongSourceReferenceAndFuturePayload() {
     let now = Date(timeIntervalSince1970: 100)
     for (source, reference, timestamp) in [
@@ -145,15 +215,44 @@ struct CompassActivityControllerTests {
     let decoded = try JSONDecoder().decode(
       CompassActivityAttributes.ContentState.self, from: encoded)
     #expect(decoded == system.handle.updates[0])
+    func usable(_ degrees: Double) -> TravelPresentation {
+      let sample = CompassSample(
+        degrees: degrees, source: .vehicleCourse, reference: .trueNorth,
+        accuracy: 1, timestamp: time)
+      return .init(sample: sample, status: .usable)
+    }
+    // The same displayed reading is not pushed again while its stale date has time left.
     time = time.addingTimeInterval(1)
-    let heartbeat = CompassSample(
-      degrees: 42, source: .vehicleCourse, reference: .trueNorth,
-      accuracy: 1, timestamp: time)
-    await controller.update(.init(sample: heartbeat, status: .usable))
+    await controller.update(usable(42.4))
+    #expect(system.handle.updates.count == 1)
+    time = time.addingTimeInterval(1)
+    await controller.update(usable(43))
     #expect(system.handle.updates.count == 2)
+    #expect(system.handle.updates.last?.bearing == 43)
+    #expect(system.handle.updates.last?.expiry == time.addingTimeInterval(5))
+    time = time.addingTimeInterval(0.5)
+    await controller.update(usable(44))
+    #expect(system.handle.updates.count == 2)
+    time = time.addingTimeInterval(1.5)
+    await controller.update(usable(43.2))
+    #expect(system.handle.updates.count == 2)
+    // Two seconds before the pushed stale date lapses, the same reading refreshes it.
+    time = time.addingTimeInterval(1)
+    await controller.update(usable(43.2))
+    #expect(system.handle.updates.count == 3)
+    #expect(system.handle.updates.last?.bearing == 43.2)
     #expect(system.handle.updates.last?.expiry == time.addingTimeInterval(5))
     await controller.update(.init(sample: nil, status: .slow))
     #expect(system.handle.updates.last?.bearing == nil)
+    #expect(system.handle.updates.count == 4)
+    // Recovery after invalidation is a changed reading, not a repeat.
+    time = time.addingTimeInterval(0.5)
+    await controller.update(usable(43))
+    #expect(system.handle.updates.count == 4)
+    time = time.addingTimeInterval(0.5)
+    await controller.update(usable(43))
+    #expect(system.handle.updates.count == 5)
+    #expect(system.handle.updates.last?.bearing == 43)
     time = time.addingTimeInterval(6)
     await controller.update(.init(sample: sample, status: .usable))
     #expect(system.handle.updates.last?.bearing == nil)
