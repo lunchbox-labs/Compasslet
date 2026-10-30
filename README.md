@@ -38,8 +38,10 @@ in Settings, calibration away from metal and
 magnets, leaving and returning to the foreground, and recovery after an
 interruption. Check actual denied/restricted service behavior if system settings
 produce it; an undetermined location authorization alone does not block magnetic
-heading. Also check VoiceOver, larger Dynamic Type, light/dark appearance, and
-Reduce Motion. Device sensor accuracy and these physical-device checks remain
+heading. Also check VoiceOver, larger Dynamic Type (including the AX3 and AX5
+accessibility sizes with Bold Text on the smallest supported iPhone, where the
+compass screen keeps one whole reading and leaves details to Settings), light/dark
+appearance, and Reduce Motion. Device sensor accuracy and these physical-device checks remain
 separate from simulator state tests.
 
 ## Set up CarPlay

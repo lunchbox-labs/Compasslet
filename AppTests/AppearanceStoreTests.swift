@@ -1,5 +1,6 @@
 import CompassCore
 import Foundation
+import SwiftUI
 import Testing
 @testable import Compass
 
@@ -30,8 +31,10 @@ struct AppearanceStoreTests {
     #expect(ReadoutTextSize.xxxLarge.dynamicTypeSize == .xxxLarge)
     #expect(ReadoutTextSize.accessibility1.dynamicTypeSize == .accessibility1)
     #expect(ReadoutTextSize.accessibility5.dynamicTypeSize == .accessibility5)
-    #expect(ReadoutTextSize.accessibility5.dynamicTypeSize.isAccessibilitySize)
-    #expect(!ReadoutTextSize.xxxLarge.dynamicTypeSize.isAccessibilitySize)
+    #expect(
+      ReadoutTextSize.allCases.allSatisfy {
+        $0.isAccessibilitySize == $0.dynamicTypeSize.isAccessibilitySize
+      })
     #expect(Set(ReadoutTextSize.allCases.map(\.title)).count == ReadoutTextSize.allCases.count)
   }
 

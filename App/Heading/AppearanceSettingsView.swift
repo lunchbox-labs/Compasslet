@@ -115,6 +115,11 @@ private struct AppearanceDetailView: View {
                 ? "The compass readout follows the system text size for each surface. Other interface text continues to follow Dynamic Type."
                 : "Choose a size for the compass readout, up to the largest accessibility size. Other interface text continues to follow Dynamic Type.")
               : "Text size is kept while both center readouts are hidden.")
+          if surface != .phone {
+            Text(
+              "In the Dynamic Island the readout stops at Extra Extra Extra Large; the Lock Screen uses the full range."
+            )
+          }
         }
         .disabled(!value.hasReadout)
         if surface != .activity {

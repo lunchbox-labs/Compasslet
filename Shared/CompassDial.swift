@@ -65,6 +65,8 @@ struct CompassReadout: View {
   let appearance: AppearanceValues
   var degreesFirst = false
   var compact = false
+  /// Presentations with fixed bounds, such as the Dynamic Island, pass a lower limit.
+  var maximumTextSize: DynamicTypeSize = .accessibility5
   @Environment(\.dynamicTypeSize) private var systemTextSize
 
   private var cardinal: String {
@@ -86,7 +88,7 @@ struct CompassReadout: View {
     .lineLimit(1)
     .minimumScaleFactor(0.85)
     .contentTransition(.identity)
-    .dynamicTypeSize(appearance.readoutTextSize(system: systemTextSize))
+    .dynamicTypeSize(min(appearance.readoutTextSize(system: systemTextSize), maximumTextSize))
   }
 
   @ViewBuilder private var direction: some View {
