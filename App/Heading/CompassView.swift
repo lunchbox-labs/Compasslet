@@ -13,6 +13,7 @@ struct CompassView: View {
   @State private var showingSettings = false
   @State private var showingLocationDetails = false
   @State private var debugEnabled = false
+  @ScaledMetric(relativeTo: .body) private var compactStatusSize = 17
   @AccessibilityFocusState private var menuFocused: Bool
 
   private var appearance: AppearanceValues { appearanceStore.preferences.effective(for: .phone) }
@@ -35,7 +36,7 @@ struct CompassView: View {
         VStack(spacing: 0) {
           header
           GeometryReader { content in
-            ViewThatFits(in: .vertical) {
+            ViewThatFits(in: [.horizontal, .vertical]) {
               if content.size.width > content.size.height {
                 HStack(spacing: 24) {
                   dial(size: min(content.size.height - 24, content.size.width * 0.42))
@@ -57,8 +58,7 @@ struct CompassView: View {
                 .fixedSize(horizontal: false, vertical: true)
               // At extreme text sizes, keep the reading or critical status readable.
               // All supporting details remain available in the scrollable drawer.
-              essentialReading
-                .fixedSize(horizontal: false, vertical: true)
+              essentialReading(height: content.size.height)
             }
             .padding(.horizontal, 24)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -186,15 +186,65 @@ struct CompassView: View {
     .frame(maxWidth: .infinity)
   }
 
-  @ViewBuilder private var essentialReading: some View {
-    if compass.sample != nil {
-      phoneReadout
-    } else {
-      Button(action: { openSettings(locationDetails: true) }) {
-        Text(compass.status.title).font(.headline).multilineTextAlignment(.center)
+  private func essentialReading(height: CGFloat) -> some View {
+    VStack(spacing: 8) {
+      if compass.sample != nil {
+        GeometryReader { available in
+          PhoneCompassReadout(
+            bearing: compass.sample?.angle.degrees ?? 0, appearance: appearance,
+            maximumTextSize: max(17, min(available.size.height / 2.5, available.size.width / 2.8))
+          )
+          .dynamicTypeSize(appearance.readoutTextSize(system: dynamicTypeSize))
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .accessibilityElement(children: .ignore)
+          .accessibilityLabel(accessibilitySummary)
+        }
+      } else {
+        Button(action: { openSettings(locationDetails: true) }) {
+          Text(compactHeadingStatus).multilineTextAlignment(.center)
+        }
+        .frame(minHeight: 44)
+        .accessibilityLabel(compass.status.title)
+        .accessibilityHint("Opens details and available recovery actions")
       }
-      .frame(minHeight: 44)
-      .accessibilityHint("Opens details and available recovery actions")
+      if let notice = locationNotice {
+        Button(action: { openSettings() }) {
+          Text(compactLocationStatus).multilineTextAlignment(.center)
+        }
+        .frame(minHeight: 44)
+        .fixedSize(horizontal: false, vertical: true)
+        .layoutPriority(1)
+        .accessibilityLabel(notice)
+      }
+    }
+    // A readable compact status is the last resort, rather than clipping a
+    // full explanation. The drawer retains unrestricted Dynamic Type details.
+    .font(.system(size: min(compactStatusSize, max(17, height / 6))))
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+  }
+
+  private var compactHeadingStatus: String {
+    switch compass.status {
+    case .inactive: "Compass paused"
+    case .waiting: "Finding north…"
+    case .live: "Magnetic north"
+    case .stale: "Heading stale"
+    case .calibration: "Calibrate compass"
+    case .unavailable: "Compass unavailable"
+    case .denied: "Heading access denied"
+    case .interrupted: "Heading interrupted"
+    }
+  }
+
+  private var compactLocationStatus: String {
+    switch drive.setupStatus {
+    case .ready: "Location details"
+    case .permissionRequired: "Enable location"
+    case .denied: "Location denied"
+    case .restricted: "Location restricted"
+    case .servicesDisabled: "Location Services off"
+    case .preciseLocationRequired: "Approximate location"
+    case .unavailable: "CarPlay unavailable"
     }
   }
 
@@ -238,6 +288,7 @@ struct CompassView: View {
 struct PhoneCompassReadout: View {
   let bearing: Double
   let appearance: AppearanceValues
+  var maximumTextSize: CGFloat = .infinity
   @ScaledMetric(relativeTo: .largeTitle) private var textSize = 60
 
   var body: some View {
@@ -250,6 +301,8 @@ struct PhoneCompassReadout: View {
         Text("\(Int(bearing.rounded()) % 360)°").monospacedDigit()
       }
     }
-    .font(.system(size: textSize, weight: .light))
+    .font(.system(size: min(textSize, maximumTextSize), weight: .light))
+    .lineLimit(1)
+    .fixedSize(horizontal: true, vertical: true)
   }
 }

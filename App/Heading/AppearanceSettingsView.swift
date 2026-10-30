@@ -191,10 +191,17 @@ private struct AppearancePreview: View {
           Text(surface == .phone ? "Phone · Magnetic north" : "Travel · True north")
             .font(.caption2).foregroundStyle(.secondary)
           CompassDial(
-            bearing: 45, appearance: appearance, showsReadout: !dynamicTypeSize.isAccessibilitySize
+            bearing: 45, appearance: appearance,
+            showsReadout: surface != .phone && !dynamicTypeSize.isAccessibilitySize
           )
           .frame(height: 180)
-          if (appearance.rotation == .arrow || dynamicTypeSize.isAccessibilitySize)
+          if surface == .phone, appearance.hasReadout {
+            ViewThatFits(in: .horizontal) {
+              PhoneCompassReadout(bearing: 45, appearance: appearance)
+              PhoneCompassReadout(bearing: 45, appearance: appearance, maximumTextSize: 40)
+            }
+            .dynamicTypeSize(appearance.readoutTextSize(system: dynamicTypeSize))
+          } else if (appearance.rotation == .arrow || dynamicTypeSize.isAccessibilitySize)
             && appearance.hasReadout
           {
             CompassReadout(bearing: 45, appearance: appearance, compact: true)

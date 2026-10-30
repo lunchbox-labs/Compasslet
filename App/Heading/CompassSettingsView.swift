@@ -104,6 +104,7 @@ struct PhoneLocationReadout: View {
             Text(coordinate(fix.coordinate.latitude, latitude: true))
             Text(coordinate(fix.coordinate.longitude, latitude: false))
           }
+          .fixedSize(horizontal: true, vertical: true)
           VStack(spacing: 4) {
             Text(coordinate(fix.coordinate.latitude, latitude: true))
             Text(coordinate(fix.coordinate.longitude, latitude: false))
