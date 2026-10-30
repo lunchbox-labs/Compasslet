@@ -78,7 +78,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
       driving: drive.isDriving, compact: drive.compactStatus, now: now)
     guard value != latest else { return }
     // Bearing-free invalidation bypasses the usable-bearing rate ceiling.
-    if value.bearing != "—", now.timeIntervalSince(lastBearingUpdate) < 1 {
+    if value.bearing != "—", now.timeIntervalSince(lastBearingUpdate) < 10 {
       return
     }
     latest = value
