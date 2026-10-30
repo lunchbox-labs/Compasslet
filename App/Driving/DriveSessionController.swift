@@ -23,8 +23,11 @@ final class DriveSessionController: ObservableObject {
     @MainActor (CompassDiagnostics.WidgetKind, CompassDiagnostics.WidgetOutcome) -> Void
   private let writeWidget: @MainActor (LatestCourseSnapshot) -> Void
   private var widgetValue = LatestCourseSnapshot.unavailable(at: .distantPast)
+  private var lastWidgetWrite: Date?
+  private var pendingWidgetWrite = false
   private var lastWidgetReload: Date?
   private var pendingWidgetReload = false
+  private var pendingWidgetClear = false
   private var filter = TravelCourseFilter()
   private var lastReading: TravelReading?
   private var startedAt: Date?
@@ -114,8 +117,11 @@ final class DriveSessionController: ObservableObject {
     diagnose(.acquisitionStarted, .success)
     try? CompassDiagnostics.shared?.observe(.widget, active: true)
     startedAt = now()
+    lastWidgetWrite = nil
+    pendingWidgetWrite = false
     lastWidgetReload = nil
     pendingWidgetReload = false
+    pendingWidgetClear = false
     filter.reset()
     lastReading = nil
     presentation = TravelPresentation(sample: nil, status: .waiting)
@@ -178,7 +184,7 @@ final class DriveSessionController: ObservableObject {
       publish(filter.update(nil, now: now()), preserveWidgetHistory: true)
       self.lastReading = nil
     }
-    flushWidgetReload()
+    flushWidget()
   }
 
   func waitForPendingOperations() async { await activityOperation?.value }
@@ -228,14 +234,23 @@ final class DriveSessionController: ObservableObject {
   private func publish(_ value: TravelPresentation, preserveWidgetHistory: Bool = false) {
     let invalidation = value.status != .usable && value.status != presentation.status
     presentation = value
-    let hadWidgetBearing = widgetValue.bearing != nil
+    let hadWidgetBearing = widgetValue.validated(at: now()).bearing != nil
     widgetValue =
       preserveWidgetHistory
       ? widgetValue.validated(at: now())
       : Self.widgetSnapshot(value, now: now(), observedAt: lastReading?.timestamp)
-    if invalidation || (hadWidgetBearing && widgetValue.bearing == nil) { writeWidget(widgetValue) }
+    let cleared = hadWidgetBearing && widgetValue.bearing == nil
+    if invalidation || cleared {
+      writeWidget(widgetValue)
+      lastWidgetWrite = now()
+      pendingWidgetWrite = false
+    } else {
+      pendingWidgetWrite = true
+    }
     pendingWidgetReload = true
-    flushWidgetReload()
+    // Removing a recorded reading is the only change worth spending a reload on early.
+    pendingWidgetClear = widgetValue.bearing == nil && (pendingWidgetClear || cleared)
+    flushWidget()
     pendingPresentation = value
     let token = generation
     guard drainGeneration != token else { return }
@@ -255,14 +270,33 @@ final class DriveSessionController: ObservableObject {
     }
   }
 
-  private func flushWidgetReload() {
+  /// Reduce reload requests independently of snapshot writes; WidgetKit adapts its budget
+  /// and delivery, with exemptions for some app sessions. The shared file is refreshed
+  /// about once a second so whichever reload is delivered reads a current sample.
+  /// Clearing a recorded reading reloads sooner, but flapping accuracy cannot reload every second.
+  static let widgetWriteInterval: TimeInterval = 1
+  static let widgetReloadInterval: TimeInterval = 60
+  static let widgetClearInterval: TimeInterval = 10
+
+  private func flushWidget() {
     let date = now()
-    guard pendingWidgetReload,
-      lastWidgetReload.map({ date.timeIntervalSince($0) >= 1 }) ?? true
-    else { return }
-    pendingWidgetReload = false
-    lastWidgetReload = date
+    let interval = pendingWidgetClear ? Self.widgetClearInterval : Self.widgetReloadInterval
+    let reload =
+      pendingWidgetReload
+      && lastWidgetReload.map({ date.timeIntervalSince($0) >= interval }) ?? true
+    let write =
+      reload
+      || (pendingWidgetWrite
+        && lastWidgetWrite.map({ date.timeIntervalSince($0) >= Self.widgetWriteInterval })
+          ?? true)
+    guard write else { return }
+    pendingWidgetWrite = false
+    lastWidgetWrite = date
     writeWidget(widgetValue.validated(at: date))
+    guard reload else { return }
+    pendingWidgetReload = false
+    pendingWidgetClear = false
+    lastWidgetReload = date
     reloadWidget("latest presentation")
   }
 
@@ -316,8 +350,11 @@ final class DriveSessionController: ObservableObject {
     filter.reset()
     presentation = TravelPresentation(sample: nil, status: .unavailable)
     compactStatus = .inactive
+    lastWidgetWrite = nil
+    pendingWidgetWrite = false
     lastWidgetReload = nil
     pendingWidgetReload = false
+    pendingWidgetClear = false
     widgetValue = .unavailable(at: now())
     writeWidget(widgetValue)
     reloadWidget("session ended")

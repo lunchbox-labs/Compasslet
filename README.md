@@ -96,7 +96,12 @@ The small Travel Compass widget shows one **last recorded** vehicle travel direc
 and its update age. It becomes **Stale** after five seconds and is retained for at
 most two minutes when no fresh sample arrives. It is not a live heading indicator.
 Invalid measurements, stopping acquisition or losing permission clear the shared
-reading. WidgetKit controls delivery, so clearing and expiry can appear late; the
+reading. WidgetKit adapts its refresh budget and delivery to usage, with exemptions
+for foreground apps and certain active sessions. To reduce reload requests, the app
+requests one when a drive starts or stops and when its first reading arrives, at most
+every ten seconds when a recorded reading is cleared, and otherwise at most once a
+minute; the shared file is rewritten about once a second so a delivered refresh reads
+the latest sample. WidgetKit controls delivery, so clearing and expiry can appear late; the
 recorded age remains visible. The widget does not start location collection or
 read the phone's magnetic compass. Open Compasslet on CarPlay to start the travel
 feed; simply displaying a widget does not start it.
