@@ -75,6 +75,7 @@ final class CompassActivityController: CompassActivityPresenting {
         self.lastContent = nil
         try? CompassDiagnostics.shared?.observe(.activity, active: false)
         self.lastUsableWrite = nil
+        self.scheduledReading = nil
         self.onDismiss?()
       }
       if initial.appearance != appearance { await updateAppearance(appearance)?.value }
@@ -84,14 +85,40 @@ final class CompassActivityController: CompassActivityPresenting {
     }
   }
 
+  /// Usable readings push when their displayed direction changes, at most once a second, and
+  /// otherwise only when the pushed stale date is within this margin of lapsing. Samples are
+  /// timestamped before delivery, so the margin is measured from the stale date, not the push.
+  static let changedReadingInterval: TimeInterval = 1
+  static let staleDateRefreshMargin: TimeInterval = 2
+
+  /// The reading most recently scheduled for the card, tracked synchronously so each sample is
+  /// compared with what the card is about to show rather than what an in-flight push replaced.
+  private struct ScheduledReading {
+    let bearing: Double
+    let expiry: Date
+  }
+  private var scheduledReading: ScheduledReading?
+
   func update(_ presentation: TravelPresentation) async {
     guard let handle else { return }
     let date = now()
     let state = Self.content(presentation, now: date)
-    if state.bearing != nil, let lastUsableWrite, date.timeIntervalSince(lastUsableWrite) < 1 {
-      return
+    if let bearing = state.bearing, let expiry = state.expiry {
+      if let lastUsableWrite, date.timeIntervalSince(lastUsableWrite) < Self.changedReadingInterval
+      {
+        return
+      }
+      if let scheduledReading, Self.sameReading(scheduledReading.bearing, bearing),
+        scheduledReading.expiry.timeIntervalSince(date) > Self.staleDateRefreshMargin
+      {
+        return
+      }
+      lastUsableWrite = date
+      scheduledReading = ScheduledReading(bearing: bearing, expiry: expiry)
+    } else {
+      validity = UUID()
+      scheduledReading = nil
     }
-    if state.bearing != nil { lastUsableWrite = date } else { validity = UUID() }
     let validityToken = validity
     let token = generation
     let previous = operation
@@ -132,6 +159,7 @@ final class CompassActivityController: CompassActivityPresenting {
         {
           content.bearing = nil
           content.status = .unavailable
+          self.scheduledReading = nil
         }
       }
       self.lastContent = content
@@ -145,6 +173,7 @@ final class CompassActivityController: CompassActivityPresenting {
     generation = UUID()
     starting = false
     lastUsableWrite = nil
+    scheduledReading = nil
     let owned = handle
     handle = nil
     lastContent = nil
@@ -160,6 +189,12 @@ final class CompassActivityController: CompassActivityPresenting {
     }
     operation = task
     await task.value
+  }
+
+  /// Whether two bearings render the same rounded degrees and the same cardinal direction.
+  static func sameReading(_ first: Double, _ second: Double) -> Bool {
+    Int(first.rounded()) % 360 == Int(second.rounded()) % 360
+      && Int((first + 22.5) / 45) % 8 == Int((second + 22.5) / 45) % 8
   }
 
   static func content(_ presentation: TravelPresentation, now: Date)
