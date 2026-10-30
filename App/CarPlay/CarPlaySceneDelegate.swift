@@ -12,6 +12,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
   private var lastBearingUpdate = Date.distantPast
   private var bridge: CarPlayLifecycleBridge?
   private var drive: DriveSessionController?
+  private var sceneActive = false
 
   func templateApplicationScene(
     _ templateApplicationScene: CPTemplateApplicationScene,
@@ -37,8 +38,16 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     // Connection itself is not activation; use UISceneDelegate's foreground callback.
   }
 
-  func sceneDidBecomeActive(_ scene: UIScene) { bridge?.activate() }
-  func sceneWillResignActive(_ scene: UIScene) { bridge?.resign() }
+  func sceneDidBecomeActive(_ scene: UIScene) {
+    sceneActive = true
+    try? CompassDiagnostics.shared?.observe(.fullscreen, active: drive?.isDriving == true)
+    bridge?.activate()
+  }
+  func sceneWillResignActive(_ scene: UIScene) {
+    sceneActive = false
+    try? CompassDiagnostics.shared?.observe(.fullscreen, active: false)
+    bridge?.resign()
+  }
   func sceneDidDisconnect(_ scene: UIScene) { disconnect() }
 
   func templateApplicationScene(
@@ -47,6 +56,8 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
   ) { disconnect() }
 
   private func disconnect() {
+    sceneActive = false
+    try? CompassDiagnostics.shared?.observe(.fullscreen, active: false)
     bridge?.disconnect()
     bridge = nil
     ticker?.cancel()
@@ -60,6 +71,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
   private func render() {
     guard let drive, let information else { return }
+    try? CompassDiagnostics.shared?.observe(.fullscreen, active: sceneActive && drive.isDriving)
     let now = Date()
     let value = CarPlayPresentation(
       presentation: drive.presentation, setup: drive.setupStatus,
@@ -76,6 +88,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
       CPInformationItem(title: "Status", detail: value.status),
       CPInformationItem(title: "Dashboard", detail: value.compact),
     ]
+    _ = try? CompassDiagnostics.shared?.record(.fullscreen, kind: .templateUpdated)
     information.actions =
       value.canEndDrive
       ? [

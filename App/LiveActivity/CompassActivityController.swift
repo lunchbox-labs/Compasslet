@@ -52,11 +52,13 @@ final class CompassActivityController: CompassActivityPresenting {
         throw Failure.cancelled
       }
       handle = created
+      try? CompassDiagnostics.shared?.observe(.activity, active: true)
       starting = false
       created.onDismiss = { [weak self] in
         guard let self, self.generation == token else { return }
         self.generation = UUID()
         self.handle = nil
+        try? CompassDiagnostics.shared?.observe(.activity, active: false)
         self.lastUsableWrite = nil
         self.onDismiss?()
       }
@@ -95,6 +97,7 @@ final class CompassActivityController: CompassActivityPresenting {
     lastUsableWrite = nil
     let owned = handle
     handle = nil
+    try? CompassDiagnostics.shared?.observe(.activity, active: false)
     owned?.onDismiss = nil
     let previous = operation
     let system = system
@@ -184,7 +187,13 @@ private final class LocalCompassActivityHandle: CompassActivityHandle {
         $0.id == activityID
       })
     else { return }
-    await activity.update(ActivityContent(state: state, staleDate: state.expiry))
+    var content = state
+    if (try? CompassDiagnostics.shared?.isEnabled()) == true {
+      content.debugUpdateTime = Date()
+    }
+    _ = try? CompassDiagnostics.shared?.record(.activity, kind: .updateRequested)
+    await activity.update(ActivityContent(state: content, staleDate: content.expiry))
+    _ = try? CompassDiagnostics.shared?.record(.activity, kind: .updateCompleted)
   }
 
   nonisolated private static func end(

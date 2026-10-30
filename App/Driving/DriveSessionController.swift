@@ -93,6 +93,7 @@ final class DriveSessionController: ObservableObject {
       return
     }
     isDriving = true
+    try? CompassDiagnostics.shared?.observe(.widget, active: true)
     startedAt = now()
     lastWidgetReload = nil
     filter.reset()
@@ -146,6 +147,8 @@ final class DriveSessionController: ObservableObject {
       _ = stopDrive()
       return
     }
+    try? CompassDiagnostics.shared?.observe(.widget, active: true)
+    try? CompassDiagnostics.shared?.observe(.activity, active: compactStatus == .active)
     if let lastReading,
       !(0...5).contains(now().timeIntervalSince(lastReading.timestamp))
     {
@@ -235,6 +238,7 @@ final class DriveSessionController: ObservableObject {
     pendingPresentation = nil
     drainGeneration = nil
     isDriving = false
+    try? CompassDiagnostics.shared?.observe(.activity, active: false)
     ticker?.cancel()
     ticker = nil
     sensor.stop()
@@ -246,6 +250,7 @@ final class DriveSessionController: ObservableObject {
     compactStatus = .inactive
     lastWidgetReload = nil
     reloadWidget("session ended")
+    try? CompassDiagnostics.shared?.observe(.widget, active: false)
     return enqueue { [activity] in
       activity.onDismiss = nil
       await activity.end()

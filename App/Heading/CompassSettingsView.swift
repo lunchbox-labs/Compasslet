@@ -21,6 +21,7 @@ struct CompassSettingsView: View {
             Link("Open Settings", destination: url)
           }
         }
+        DiagnosticsSettingsSection()
       }
       .navigationTitle("Settings")
       .navigationBarTitleDisplayMode(.inline)

@@ -1,7 +1,6 @@
 import CarPlay
 import UIKit
 import WidgetKit
-import OSLog
 
 @MainActor
 final class CompassAppDelegate: NSObject, UIApplicationDelegate {
@@ -10,15 +9,8 @@ final class CompassAppDelegate: NSObject, UIApplicationDelegate {
     sensor: DeviceTravelLocationSensor(), activity: CompassActivityController(),
     reloadWidget: requestWidgetReload)
 
-  private static let widgetLog = Logger(
-    subsystem: "dev.lunchbox-labs.carplay-compass", category: "WidgetRefreshProbe")
-  private static var widgetRequests = 0
-
   private static func requestWidgetReload(reason: String) {
-    widgetRequests += 1
-    widgetLog.info(
-      "request #\(widgetRequests) at \(Date().timeIntervalSince1970) reason=\(reason, privacy: .public)"
-    )
+    _ = try? CompassDiagnostics.shared?.record(.widget, kind: .reloadRequested)
     WidgetCenter.shared.reloadTimelines(ofKind: "CompassRefreshProbe")
   }
 
