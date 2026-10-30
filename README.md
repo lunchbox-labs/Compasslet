@@ -63,9 +63,10 @@ five-second input freshness limit bound the displayed sample’s age to fifteen
 seconds; the app does not retain the last reading after acquisition fails.
 There are no manual drive
 controls on iPhone or CarPlay. Switching to Maps keeps the drive running with the background
-location indicator. A CarPlay template scene disconnect, lost permission, Live
-Activity dismissal, or an eight-hour limit stops acquisition. Reopen the CarPlay
-app after leaving it to start a new drive. An ordinary phone launch never resumes a drive. Slow movement,
+location indicator. A CarPlay template scene disconnect, lost permission, Location
+Services being turned off, or an eight-hour limit stops acquisition. Dismissing the Live Activity on iPhone, or iOS
+ending it, only removes the compact display for the rest of that drive. Reopen the
+CarPlay app after leaving it to start a new drive. An ordinary phone launch never resumes a drive. Slow movement,
 poor measurements, and data older than five seconds remove the bearing.
 
 The compact Dashboard surface uses a Live Activity. iOS and user settings control

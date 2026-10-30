@@ -134,13 +134,15 @@ final class DriveSessionController: ObservableObject {
       guard let self, self.isDriving, self.generation == token else { return }
       activity.onDismiss = { [weak self] in
         guard let self, self.isDriving, self.generation == token else { return }
-        self.suppressed = self.active
-        _ = self.stopDrive(reason: .dismissed)
+        // The drive belongs to the CarPlay scene. ActivityKit ends activities on its own, so
+        // losing the compact card only ends its updates for the rest of this drive.
         self.compactStatus = .dismissed
       }
       do {
         try await activity.start()
-        guard self.isDriving, self.generation == token else { return }
+        guard self.isDriving, self.generation == token, self.compactStatus == .starting else {
+          return
+        }
         self.compactStatus = .active
         await activity.update(self.presentation)
       } catch {
