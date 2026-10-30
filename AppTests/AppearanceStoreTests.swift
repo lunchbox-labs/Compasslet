@@ -23,6 +23,18 @@ struct AppearanceStoreTests {
     #expect(reopened.preferences == saved)
   }
 
+  @Test func everyReadoutSizeMapsToItsDynamicTypeCategoryInOrder() {
+    let mapped = ReadoutTextSize.allCases.map(\.dynamicTypeSize)
+    #expect(mapped == mapped.sorted())
+    #expect(Set(mapped).count == mapped.count)
+    #expect(ReadoutTextSize.xxxLarge.dynamicTypeSize == .xxxLarge)
+    #expect(ReadoutTextSize.accessibility1.dynamicTypeSize == .accessibility1)
+    #expect(ReadoutTextSize.accessibility5.dynamicTypeSize == .accessibility5)
+    #expect(ReadoutTextSize.accessibility5.dynamicTypeSize.isAccessibilitySize)
+    #expect(!ReadoutTextSize.xxxLarge.dynamicTypeSize.isAccessibilitySize)
+    #expect(Set(ReadoutTextSize.allCases.map(\.title)).count == ReadoutTextSize.allCases.count)
+  }
+
   @Test func migratesOnlyExistingPhoneArrowChoiceOnce() throws {
     let name = "appearance-tests-\(UUID())"
     let defaults = try #require(UserDefaults(suiteName: name))

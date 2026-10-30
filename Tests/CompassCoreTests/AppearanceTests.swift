@@ -72,6 +72,35 @@ import Testing
   }
 }
 
+@Test func readoutSizesExtendToAccessibilityCategoriesWithStableStorage() throws {
+  let sizes = ReadoutTextSize.allCases
+  #expect(sizes.count == 12)
+  #expect(sizes.map(\.rawValue) == Array(0..<12))
+  #expect(ReadoutTextSize(rawValue: 6) == .xxxLarge)
+  #expect(ReadoutTextSize(rawValue: 7) == .accessibility1)
+  #expect(ReadoutTextSize(rawValue: 11) == .accessibility5)
+  #expect(ReadoutTextSize(rawValue: 12) == nil)
+  #expect(!ReadoutTextSize.xxxLarge.isAccessibilitySize)
+  #expect(ReadoutTextSize.accessibility1.isAccessibilitySize)
+  #expect(sizes.filter(\.isAccessibilitySize).count == 5)
+  // A choice saved before the accessibility categories existed keeps its meaning.
+  let saved = Data(
+    """
+    {"global":{"showDirection":true,"showDegrees":true,"useSystemTextSize":false,
+    "customTextSize":6,"minorTicks":17,"labels":"inside","rotation":"dial"}}
+    """.utf8)
+  let decoded = AppearancePreferences.decode(saved)
+  #expect(!decoded.global.useSystemTextSize)
+  #expect(decoded.global.customTextSize == .xxxLarge)
+  var preferences = AppearancePreferences()
+  var global = preferences.global
+  global.useSystemTextSize = false
+  global.customTextSize = .accessibility5
+  preferences.setGlobal(global)
+  let restored = AppearancePreferences.decode(try JSONEncoder().encode(preferences))
+  #expect(restored.global.customTextSize == .accessibility5)
+}
+
 @Test func readoutSizeChoiceFollowsGlobalsUntilSurfaceOverrides() throws {
   var preferences = AppearancePreferences()
   var global = preferences.global

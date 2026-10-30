@@ -62,18 +62,31 @@ private struct CompassActivityCard: View {
     }
   }
 
+  /// At large text sizes the reading drops to its shorter form before any text is scaled
+  /// down, so an enlarged size stays enlarged; the accessibility label keeps every detail.
   private var readout: some View {
-    Text(
-      CompassActivityView.reading(context) == nil ? status : CompassActivityView.bearing(context)
-    )
-    .font(.title2.weight(.semibold)).monospacedDigit()
+    ViewThatFits(in: .horizontal) {
+      if CompassActivityView.reading(context) == nil {
+        readoutText(status, lines: 2)
+      } else {
+        readoutText(CompassActivityView.bearing(context), lines: 1)
+        if let short = CompassActivityView.shortBearing(context) {
+          readoutText(short, lines: 1)
+        }
+      }
+    }
     .dynamicTypeSize(
       (context.state.appearance ?? AppearanceValues()).readoutTextSize(system: systemTextSize)
     )
-    .lineLimit(1).minimumScaleFactor(0.5)
-    .multilineTextAlignment(.center)
     .frame(maxWidth: .infinity)
     .contentTransition(.identity)
+  }
+
+  private func readoutText(_ text: String, lines: Int) -> some View {
+    Text(text)
+      .font(.title2.weight(.semibold)).monospacedDigit()
+      .lineLimit(lines).minimumScaleFactor(0.8)
+      .multilineTextAlignment(.center)
   }
 
   private var status: String {
@@ -121,6 +134,13 @@ private struct CompassActivityView: View {
       appearance.showDirection ? reading.cardinal : nil,
       appearance.showDegrees ? reading.degrees : nil,
     ].compactMap { $0 }.joined(separator: " ")
+  }
+
+  /// The direction alone when both direction and degrees are shown; nil when nothing is shorter.
+  static func shortBearing(_ context: ActivityViewContext<CompassActivityAttributes>) -> String? {
+    guard let reading = reading(context) else { return nil }
+    let appearance = (context.state.appearance ?? AppearanceValues()).requiringReadout()
+    return appearance.showDirection && appearance.showDegrees ? reading.cardinal : nil
   }
 
   static func reading(_ context: ActivityViewContext<CompassActivityAttributes>)

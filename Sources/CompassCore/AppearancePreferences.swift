@@ -25,9 +25,19 @@ public enum MinorTicks: Int, CaseIterable, Codable, Sendable {
   }
 }
 
-/// The seven standard Dynamic Type categories available for a custom readout size.
+/// The twelve Dynamic Type categories available for a custom readout size, in ascending order.
+///
+/// Raw values are stable storage identifiers; the five accessibility categories extend the
+/// original seven standard categories so saved choices keep their meaning.
 public enum ReadoutTextSize: Int, CaseIterable, Codable, Sendable {
   case xSmall, small, medium, large, xLarge, xxLarge, xxxLarge
+  case accessibility1, accessibility2, accessibility3, accessibility4, accessibility5
+
+  /// The largest standard category; every later case is an accessibility category.
+  public static let largestStandard: Self = .xxxLarge
+
+  /// Whether this is one of the system's accessibility text size categories.
+  public var isAccessibilitySize: Bool { rawValue > Self.largestStandard.rawValue }
 }
 
 /// Display-only choices; never contains sensor samples or validity timestamps.
