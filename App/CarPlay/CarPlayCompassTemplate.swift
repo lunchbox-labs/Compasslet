@@ -15,9 +15,18 @@ final class CarPlayCompassTemplate {
   }
 
   func update(_ value: CarPlayPresentation) {
+    let title: String
+    let subtitle: String
+    if let timestamp = value.sampleTimestamp {
+      title = "Sampled \(value.bearing)"
+      subtitle = "\(value.reference) · \(timestamp.formatted(date: .omitted, time: .standard))"
+    } else {
+      title = value.bearing
+      subtitle = value.reference
+    }
     template.listHeader = CPListTemplateDetailsHeader(
       thumbnail: CPThumbnailImage(image: Self.dialImage(course: value.courseDegrees)),
-      title: value.bearing, subtitle: value.reference,
+      title: title, subtitle: subtitle,
       bodyVariants: [
         NSAttributedString(string: "\(value.status)\n\(value.compact)"),
         NSAttributedString(string: value.status),

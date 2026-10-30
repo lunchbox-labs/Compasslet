@@ -53,11 +53,15 @@ alone does not guarantee app launch. Setup and permission repair happen on iPhon
 while parked. Never grant Always authorization for this feature.
 
 The full-screen readout uses Apple’s native list details header with a compass
-thumbnail, **Travel · True north**, bearing, and freshness/status. New course
-snapshots appear at most once every ten seconds;
-invalid readings and displayed snapshots older than five seconds immediately
-lose their numeric bearing and arrow. A waiting state can therefore appear
-between snapshots even while location readings continue. There are no manual drive
+thumbnail, an explicitly **Sampled** course, **Travel · True north**, the original
+sample time, and status. It is a snapshot rather than a continuously live compass.
+New snapshots appear at most once every ten seconds. Fresh sensor input keeps the
+previous snapshot visible between updates without changing its timestamp. Missing,
+unreliable or older-than-five-second sensor input immediately removes the numeric
+bearing and arrow. While the app is rendering, the ten-second update interval and
+five-second input freshness limit bound the displayed sample’s age to fifteen
+seconds; the app does not retain the last reading after acquisition fails.
+There are no manual drive
 controls on iPhone or CarPlay. Switching to Maps keeps the drive running with the background
 location indicator. A CarPlay template scene disconnect, lost permission, Live
 Activity dismissal, or an eight-hour limit stops acquisition. Reopen the CarPlay

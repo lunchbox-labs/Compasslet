@@ -23,21 +23,68 @@ final class CarPlayPresentationTests: XCTestCase {
     XCTAssertNil(wrongSource.courseDegrees)
   }
 
-  func testDisplayedDialExpiresWhileNewCourseWaitsForRateSlot() {
+  func testFreshChangingAndUnchangedStreamsKeepTimestampedSnapshotsBetweenSlots() {
+    let start = Date(timeIntervalSince1970: 100)
+    for changing in [false, true] {
+      var gate = CarPlayUpdateGate()
+      var displayed: CarPlayPresentation?
+      var updateTimes: [Double] = []
+      for tick in 0...120 {
+        let elapsed = Double(tick) / 4
+        let now = start.addingTimeInterval(elapsed)
+        let course = changing ? Double(tick) : 59
+        if let next = gate.update(dialValue(course, at: now), now: now) {
+          displayed = next
+          updateTimes.append(elapsed)
+        }
+        XCTAssertNotNil(displayed?.courseDegrees)
+        // The visible timestamp belongs to the sampled slot, never to intervening input.
+        let slot = floor(elapsed / 10) * 10
+        XCTAssertEqual(displayed?.sampleTimestamp, start.addingTimeInterval(slot))
+        XCTAssertEqual(displayed?.courseDegrees, changing ? slot * 4 : 59)
+      }
+      XCTAssertEqual(updateTimes, [0, 10, 20, 30])
+    }
+  }
+
+  func testDelayedFreshInputDoesNotExtendDisplayedTimestampAndLossClearsIt() {
     let start = Date(timeIntervalSince1970: 100)
     var gate = CarPlayUpdateGate()
-    XCTAssertEqual(gate.update(dialValue(0, at: start), now: start)?.courseDegrees, 0)
-    let boundary = start.addingTimeInterval(5)
-    XCTAssertNil(gate.update(dialValue(90, at: boundary), now: boundary))
-    let expired = start.addingTimeInterval(5.01)
-    let cleared = gate.update(dialValue(90, at: expired), now: expired)
+    let original = start.addingTimeInterval(-4.5)
+    let first = gate.update(dialValue(59, at: original, now: start), now: start)
+    XCTAssertEqual(first?.sampleTimestamp, original)
+    for elapsed in [1.0, 5.0, 9.75] {
+      let now = start.addingTimeInterval(elapsed)
+      XCTAssertNil(
+        gate.update(
+          dialValue(90, at: now.addingTimeInterval(-4.5), now: now), now: now))
+    }
+    // Genuine input loss: the most recent sensor sample is now older than five seconds.
+    let failure = start.addingTimeInterval(10.5)
+    let lastSensorTime = start.addingTimeInterval(5.25)
+    let cleared = gate.update(dialValue(90, at: lastSensorTime, now: failure), now: failure)
     XCTAssertNotNil(cleared)
     XCTAssertNil(cleared?.courseDegrees)
-    XCTAssertEqual(cleared?.bearing, "—")
-    let early = start.addingTimeInterval(9.99)
-    XCTAssertNil(gate.update(dialValue(90, at: early), now: early))
-    let due = start.addingTimeInterval(10)
-    XCTAssertEqual(gate.update(dialValue(90, at: due), now: due)?.courseDegrees, 90)
+    XCTAssertNil(cleared?.sampleTimestamp)
+  }
+
+  func testInputLossOrPermissionLossClearsSnapshotBeforeNextSlot() {
+    let start = Date(timeIntervalSince1970: 100)
+    for permissionLost in [false, true] {
+      var gate = CarPlayUpdateGate()
+      _ = gate.update(dialValue(59, at: start), now: start)
+      let now = start.addingTimeInterval(permissionLost ? 1 : 5.25)
+      let input =
+        permissionLost
+        ? CarPlayPresentation(
+          presentation: .init(sample: nil, status: .unavailable), setup: .denied,
+          driving: false, compact: .inactive, now: now)
+        : dialValue(59, at: start, now: now)
+      let cleared = gate.update(input, now: now)
+      XCTAssertNotNil(cleared)
+      XCTAssertNil(cleared?.courseDegrees)
+      XCTAssertNil(cleared?.sampleTimestamp)
+    }
   }
 
   func testInvalidationBypassesRateLimitButRecoveryDoesNot() {
@@ -57,7 +104,9 @@ final class CarPlayPresentationTests: XCTestCase {
     let now = Date(timeIntervalSince1970: 100)
     screen.update(dialValue(59, at: now))
     let header = try XCTUnwrap(screen.template.listHeader)
-    XCTAssertEqual(header.title, "59° NE")
+    XCTAssertEqual(header.title, "Sampled 59° NE")
+    XCTAssertEqual(
+      header.subtitle, "Travel · True north · \(now.formatted(date: .omitted, time: .standard))")
     XCTAssertTrue(header.actionButtons.isEmpty)
     XCTAssertTrue(screen.template.sections.isEmpty)
     XCTAssertFalse(screen.template.showsSpinnerWhileEmpty)

@@ -2,10 +2,10 @@ import CompassCore
 import Foundation
 
 struct CarPlayPresentation: Equatable {
-  private(set) var bearing: String
+  let bearing: String
   private(set) var courseDegrees: Double?
   private(set) var sampleTimestamp: Date?
-  private(set) var status: String
+  let status: String
   let compact: String
   let reference = "Travel · True north"
 
@@ -61,35 +61,26 @@ struct CarPlayPresentation: Equatable {
     self.bearing = bearing
   }
 
-  func removingExpiredCourse() -> Self {
-    var result = self
-    result.bearing = "—"
-    result.courseDegrees = nil
-    result.sampleTimestamp = nil
-    result.status = "Waiting for next direction update"
-    return result
-  }
 }
 
-/// Bounds new course snapshots without retaining a stale displayed course.
+/// Publishes explicitly sampled course while checking current input on every render.
 struct CarPlayUpdateGate {
   private var latest: CarPlayPresentation?
   private var lastBearingUpdate: Date?
 
   mutating func update(_ value: CarPlayPresentation, now: Date) -> CarPlayPresentation? {
-    var next = value
+    // A fresh input sample is required even while retaining the previous snapshot.
+    // Its original timestamp stays visible. Ten-second slots plus the five-second
+    // input freshness limit bound snapshot age to fifteen seconds while rendering.
     if value.courseDegrees != nil, let lastBearingUpdate,
       now.timeIntervalSince(lastBearingUpdate) < 10
     {
-      guard let latest, let timestamp = latest.sampleTimestamp,
-        !(0...5).contains(now.timeIntervalSince(timestamp))
-      else { return nil }
-      next = latest.removingExpiredCourse()
+      return nil
     }
-    guard next != latest else { return nil }
-    latest = next
-    if next.courseDegrees != nil { lastBearingUpdate = now }
-    return next
+    guard value != latest else { return nil }
+    latest = value
+    if value.courseDegrees != nil { lastBearingUpdate = now }
+    return value
   }
 }
 
