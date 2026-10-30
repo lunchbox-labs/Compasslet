@@ -15,6 +15,7 @@ struct CompassSettingsView: View {
       Form {
         Section("Display") {
           NavigationLink("Appearance") { AppearanceSettingsView() }
+          NavigationLink("Accessibility") { AccessibilitySettingsView() }
         }
         Section("Location") {
           NavigationLink("Location details") { locationDetails }
