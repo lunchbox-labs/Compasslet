@@ -52,6 +52,8 @@ jobs:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Wait for simulator runtime mounts
+        run: python3 scripts/prepare-watch-runtime
       - name: Build unsigned Watch app
         run: >-
           xcodebuild -project Compass.xcodeproj -scheme CompassWatch
@@ -59,3 +61,6 @@ jobs:
           -derivedDataPath .build/watch CODE_SIGNING_ALLOWED=NO build
       - name: Test on an available Watch simulator
         run: bash scripts/test-watch
+      - name: Diagnose Watch runtime failure
+        if: failure()
+        run: python3 scripts/watch-runtime-diagnostics
