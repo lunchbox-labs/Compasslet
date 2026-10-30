@@ -32,10 +32,13 @@
 		F97CCAF85C23D34073466081 /* CompassActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 381DFC8C59216D52B9C5D31F /* CompassActivityWidget.swift */; };
 		FED695C7626372E86C39FF85 /* CarPlayPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41FAB8F8EC4A00F7250C1BC0 /* CarPlayPresentation.swift */; };
 		90090CB56FF0934B45B2BA5B /* CompassView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82EE439CAC4B29FCB2B2652C /* CompassView.swift */; };
-		983B0768852B43DBA2893954 /* CompassRefreshProbeWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2FA1E22F31F4AE7B2C1B510 /* CompassRefreshProbeWidget.swift */; };
+		983B0768852B43DBA2893954 /* CompassCourseWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2FA1E22F31F4AE7B2C1B510 /* CompassCourseWidget.swift */; };
 		2ADCF5F1540DE262C8F3A1E5 /* CompassDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 220B49D5093197C84DE6C5D3 /* CompassDiagnostics.swift */; };
+		CF0000000000000000000001 /* LatestCourseSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF0000000000000000000003 /* LatestCourseSnapshot.swift */; };
 		391F7E6A591CFB7AB7F572CF /* CompassDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 220B49D5093197C84DE6C5D3 /* CompassDiagnostics.swift */; };
+		CF0000000000000000000002 /* LatestCourseSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF0000000000000000000003 /* LatestCourseSnapshot.swift */; };
 		774742633DD35133F9D14ED8 /* CompassDiagnosticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 275D9183B5D424FCC7810822 /* CompassDiagnosticsTests.swift */; };
+		CF0000000000000000000004 /* LatestCourseSnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF0000000000000000000005 /* LatestCourseSnapshotTests.swift */; };
 		A58C4FDC4EB85A91FBF6ED09 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = F493B01490C49678449E1B72 /* libsqlite3.tbd */; };
 		D204473737DF36F5712B0D3E /* DiagnosticsSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E4EE64525C86691D6CBD629 /* DiagnosticsSettingsSection.swift */; };
 		D39558B867B4613C01C73F04 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = F493B01490C49678449E1B72 /* libsqlite3.tbd */; };
@@ -100,10 +103,12 @@
 		F3323475E7B406064067E6C2 /* DriveSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveSessionController.swift; sourceTree = "<group>"; };
 		FD697ECCB09B35EE9223BFF1 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		82EE439CAC4B29FCB2B2652C /* CompassView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompassView.swift; sourceTree = "<group>"; };
-		E2FA1E22F31F4AE7B2C1B510 /* CompassRefreshProbeWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompassRefreshProbeWidget.swift; sourceTree = "<group>"; };
+		E2FA1E22F31F4AE7B2C1B510 /* CompassCourseWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompassCourseWidget.swift; sourceTree = "<group>"; };
 		00F237C285337B5CFA6907E4 /* CompassActivity.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = CompassActivity.entitlements; sourceTree = "<group>"; };
 		220B49D5093197C84DE6C5D3 /* CompassDiagnostics.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompassDiagnostics.swift; sourceTree = "<group>"; };
+		CF0000000000000000000003 /* LatestCourseSnapshot.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LatestCourseSnapshot.swift; sourceTree = "<group>"; };
 		275D9183B5D424FCC7810822 /* CompassDiagnosticsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompassDiagnosticsTests.swift; sourceTree = "<group>"; };
+		CF0000000000000000000005 /* LatestCourseSnapshotTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LatestCourseSnapshotTests.swift; sourceTree = "<group>"; };
 		2E4EE64525C86691D6CBD629 /* DiagnosticsSettingsSection.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DiagnosticsSettingsSection.swift; sourceTree = "<group>"; };
 		F493B01490C49678449E1B72 /* libsqlite3.tbd */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libsqlite3.tbd; path = usr/lib/libsqlite3.tbd; sourceTree = SDKROOT; };
 		DB938C90D20A4B90A9A33001 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -147,6 +152,7 @@
 			children = (
 				DE2F63BB5C501FDD96214F95 /* CompassActivityAttributes.swift */,
 				220B49D5093197C84DE6C5D3 /* CompassDiagnostics.swift */,
+				CF0000000000000000000003 /* LatestCourseSnapshot.swift */,
 			);
 			name = Shared;
 			path = Shared;
@@ -157,7 +163,7 @@
 			children = (
 				DB938C90D20A4B90A9A33003 /* PrivacyInfo.xcprivacy */,
 				381DFC8C59216D52B9C5D31F /* CompassActivityWidget.swift */,
-				E2FA1E22F31F4AE7B2C1B510 /* CompassRefreshProbeWidget.swift */,
+				E2FA1E22F31F4AE7B2C1B510 /* CompassCourseWidget.swift */,
 				B1164CC266C944D46C5EAD7D /* Info.plist */,
 				00F237C285337B5CFA6907E4 /* CompassActivity.entitlements */,
 			);
@@ -229,6 +235,7 @@
 				13F96CE477553A99C1F0F39D /* CompassActivityControllerTests.swift */,
 				7BF0680E9674EB8E22601374 /* CarPlayPresentationTests.swift */,
 				275D9183B5D424FCC7810822 /* CompassDiagnosticsTests.swift */,
+				CF0000000000000000000005 /* LatestCourseSnapshotTests.swift */,
 			);
 			name = AppTests;
 			path = AppTests;
@@ -415,6 +422,7 @@
 				29D6B7B8A0067DFD42EA7CB5 /* CompassActivityControllerTests.swift in Sources */,
 				7D2734D738F62A57FBC0C728 /* CarPlayPresentationTests.swift in Sources */,
 				774742633DD35133F9D14ED8 /* CompassDiagnosticsTests.swift in Sources */,
+				CF0000000000000000000004 /* LatestCourseSnapshotTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -423,9 +431,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				F97CCAF85C23D34073466081 /* CompassActivityWidget.swift in Sources */,
-				983B0768852B43DBA2893954 /* CompassRefreshProbeWidget.swift in Sources */,
+				983B0768852B43DBA2893954 /* CompassCourseWidget.swift in Sources */,
 				7AA75085FC60695A12D26713 /* CompassActivityAttributes.swift in Sources */,
 				391F7E6A591CFB7AB7F572CF /* CompassDiagnostics.swift in Sources */,
+				CF0000000000000000000002 /* LatestCourseSnapshot.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -446,6 +455,7 @@
 				7AE82164CFC284EB48F0ECB8 /* CarPlaySceneDelegate.swift in Sources */,
 				4C4C18A842B6F0419CBD4102 /* CompassAppDelegate.swift in Sources */,
 				2ADCF5F1540DE262C8F3A1E5 /* CompassDiagnostics.swift in Sources */,
+				CF0000000000000000000001 /* LatestCourseSnapshot.swift in Sources */,
 				D204473737DF36F5712B0D3E /* DiagnosticsSettingsSection.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

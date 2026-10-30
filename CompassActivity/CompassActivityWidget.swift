@@ -6,7 +6,7 @@ import WidgetKit
 struct CompassWidgets: WidgetBundle {
   var body: some Widget {
     CompassActivityWidget()
-    CompassRefreshProbeWidget()
+    CompassCourseWidget()
   }
 }
 
