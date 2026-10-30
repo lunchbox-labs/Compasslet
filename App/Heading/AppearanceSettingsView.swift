@@ -109,16 +109,18 @@ private struct AppearanceDetailView: View {
         } header: {
           Text("Text Size")
         } footer: {
-          Text(
-            value.hasReadout
-              ? (value.useSystemTextSize
-                ? "The compass readout follows the system text size for each surface. Other interface text continues to follow Dynamic Type."
-                : "Choose a size for the compass readout, up to the largest accessibility size. Other interface text continues to follow Dynamic Type.")
-              : "Text size is kept while both center readouts are hidden.")
-          if surface != .phone {
+          VStack(alignment: .leading, spacing: 4) {
             Text(
-              "In the Dynamic Island the readout stops at Extra Extra Extra Large; the Lock Screen uses the full range."
-            )
+              value.hasReadout
+                ? (value.useSystemTextSize
+                  ? "The compass readout follows the system text size for each surface. Other interface text continues to follow Dynamic Type."
+                  : "Choose a size for the compass readout, up to the largest accessibility size. Other interface text continues to follow Dynamic Type.")
+                : "Text size is kept while both center readouts are hidden.")
+            if surface != .phone {
+              Text(
+                "In the Dynamic Island the readout stops at Extra Extra Extra Large; the Lock Screen uses the full range."
+              )
+            }
           }
         }
         .disabled(!value.hasReadout)
