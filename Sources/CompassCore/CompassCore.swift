@@ -96,12 +96,21 @@ public struct CompassSample: Sendable, Equatable {
 /// A circular exponential smoother that retains metadata and resets across incompatible input.
 public struct CompassSmoother: Sendable {
   private let fraction: Double
+  private let fullTrackingDelta: Double?
   private var previous: CompassSample?
 
   /// Creates a smoother with a finite interpolation fraction in (0, 1].
-  public init?(fraction: Double) {
+  ///
+  /// With a positive finite `fullTrackingDelta`, the interpolation fraction grows with the
+  /// size of the shortest rotation to the new reading and reaches 1 at that many degrees, so
+  /// turns are followed promptly while small changes are still damped by at least `fraction`.
+  public init?(fraction: Double, fullTrackingDelta: Double? = nil) {
     guard fraction.isFinite, fraction > 0, fraction <= 1 else { return nil }
+    if let fullTrackingDelta, !(fullTrackingDelta.isFinite && fullTrackingDelta > 0) {
+      return nil
+    }
     self.fraction = fraction
+    self.fullTrackingDelta = fullTrackingDelta
   }
 
   /// Discards accumulated smoothing state.
@@ -124,12 +133,13 @@ public struct CompassSmoother: Sendable {
     var result = sample
     if let previous, previous.source == sample.source, previous.reference == sample.reference,
       previous.isFresh(now: now, maximumAge: maximumAge),
-      sample.timestamp >= previous.timestamp,
-      let angle = CompassAngle(
-        degrees: previous.angle.degrees
-          + previous.angle.shortestDelta(to: sample.angle) * fraction)
+      sample.timestamp >= previous.timestamp
     {
-      result = sample.replacingAngle(angle)
+      let delta = previous.angle.shortestDelta(to: sample.angle)
+      let weight = fullTrackingDelta.map { max(fraction, min(1, abs(delta) / $0)) } ?? fraction
+      if let angle = CompassAngle(degrees: previous.angle.degrees + delta * weight) {
+        result = sample.replacingAngle(angle)
+      }
     }
     previous = result
     return result
