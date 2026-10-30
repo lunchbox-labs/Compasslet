@@ -16,7 +16,7 @@ struct WatchCompassView: View {
   var body: some View {
     GeometryReader { geometry in
       VStack(spacing: 4) {
-        if textSize.isAccessibilitySize {
+        if textSize >= .xxxLarge {
           readout
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -25,7 +25,8 @@ struct WatchCompassView: View {
               bearing: compass.sample?.angle.degrees, appearance: appearance,
               showsReadout: false, unavailableSymbol: "minus")
             if compass.sample != nil {
-              readout.frame(width: min(geometry.size.width, geometry.size.height - 44) * 0.50)
+              readout.frame(
+                width: max(0, min(geometry.size.width, geometry.size.height - 44)) * 0.50)
             }
           }
           .aspectRatio(1, contentMode: .fit)
@@ -57,7 +58,8 @@ struct WatchCompassView: View {
   private var readout: some View {
     Group {
       if let sample = compass.sample {
-        CompassReadout(bearing: sample.angle.degrees, appearance: appearance, degreesFirst: true)
+        CompassReadout(
+          bearing: sample.angle.degrees, appearance: appearance, degreesFirst: true, compact: true)
       } else {
         Text("—").font(.largeTitle)
       }
