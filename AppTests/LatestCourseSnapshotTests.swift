@@ -51,9 +51,12 @@ final class LatestCourseSnapshotTests: XCTestCase {
     XCTAssertEqual(store.read(now: time + 5.001).status, .historical)
     XCTAssertEqual(store.read(now: time + 120).status, .historical)
     XCTAssertEqual(store.read(now: time + 120.001).status, .unavailable)
-    XCTAssertEqual(legacy.transitionDates(after: time), [time + 5.001, time + 120.001])
+    // Age moves live in the widget, so only retention expiry needs a scheduled entry.
+    XCTAssertEqual(legacy.transitionDates(after: time), [time + 120.001])
     XCTAssertEqual(legacy.transitionDates(after: time + 60), [time + 120.001])
     XCTAssertTrue(legacy.transitionDates(after: time + 121).isEmpty)
+    let slow = LatestCourseSnapshot(bearing: nil, status: .slow, sampleTime: time)
+    XCTAssertEqual(slow.transitionDates(after: time), [time + 5.001])
     let historical = store.read(now: time + 60)
     try store.write(historical, now: time + 90)
     XCTAssertEqual(store.read(now: time + 100).sampleTime, time)

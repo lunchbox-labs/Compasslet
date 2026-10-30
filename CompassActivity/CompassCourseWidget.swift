@@ -83,7 +83,7 @@ struct CompassCourseWidget: Widget {
     }
     .configurationDisplayName("Travel Compass (Experimental)")
     .description(
-      "Last recorded travel direction, with its age. Stale after 5 seconds; kept for up to 2 minutes. Delivery may be delayed."
+      "Last recorded travel direction, with its age. Kept for up to 2 minutes. Delivery may be delayed."
     )
     .supportedFamilies([.systemSmall])
   }
@@ -165,7 +165,7 @@ private struct CourseWidgetView: View {
 
   private var sampleAge: some View {
     VStack(spacing: 1) {
-      Text(snapshot.status == .historical ? "Last recorded · Stale" : "Last recorded")
+      Text("Last recorded")
       Text("Updated \(snapshot.sampleTime, style: .relative) ago")
     }
     .font(.caption2).foregroundStyle(.secondary)
@@ -196,7 +196,7 @@ private struct CourseWidgetView: View {
       snapshot.bearing == nil
       ? reading
       : Text(
-        "\(reading) \(snapshot.status == .historical ? "Stale." : "") Recorded \(snapshot.sampleTime, style: .relative) ago."
+        "\(reading) Recorded \(snapshot.sampleTime, style: .relative) ago."
       )
     if let delivery = entry.delivery {
       if snapshot.bearing == nil {

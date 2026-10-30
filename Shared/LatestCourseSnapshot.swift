@@ -33,15 +33,11 @@ struct LatestCourseSnapshot: Codable, Equatable, Sendable {
   private var maximumAge: TimeInterval { status == .usable || status == .historical ? 120 : 5 }
   var retentionExpiry: Date { sampleTime.addingTimeInterval(maximumAge) }
 
-  /// Boundaries are inclusive, so transition immediately after the final valid instant.
+  /// The widget shows a retained reading with its live age, so its only scheduled change is
+  /// retention expiry. The boundary is inclusive, so transition just after the final instant.
   func transitionDates(after date: Date) -> [Date] {
-    [expiry.addingTimeInterval(0.001), retentionExpiry.addingTimeInterval(0.001)]
-      .filter { $0 > date }.reduce(into: []) { result, value in
-        if !result.contains(value) { result.append(value) }
-      }
+    [retentionExpiry.addingTimeInterval(0.001)].filter { $0 > date }
   }
-
-  var expiry: Date { sampleTime.addingTimeInterval(5) }
 }
 
 struct LatestCourseStore: Sendable {
