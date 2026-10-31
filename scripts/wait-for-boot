@@ -35,8 +35,8 @@ def wait_for_boot(udid, stall_seconds, deadline_seconds, command=None):
                 remaining = deadline_seconds - (now - started)
                 idle = stall_seconds - (now - last_progress)
                 if remaining <= 0:
-                    raise RuntimeError(f"Simulator boot did not finish within "
-                                       f"{deadline_seconds:g} seconds: {udid}")
+                    raise RuntimeError(f"Simulator boot did not finish within the "
+                                       f"{deadline_seconds:g} seconds left of the shared budget: {udid}")
                 if idle <= 0:
                     raise RuntimeError(f"Simulator boot made no progress for "
                                        f"{stall_seconds:g} seconds: {udid}")

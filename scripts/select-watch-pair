@@ -32,15 +32,15 @@ def select_pair(payload, runtimes):
 
 def summarize(payload, runtimes):
     """Describe the Watch-related runtime and device state for a failure report."""
-    lines = ["Watch runtimes: " + ", ".join(sorted(
-        runtime.get("state", "?") + " at " + str(runtime.get("mountPath"))
-        for runtime in runtimes.values()
-        if "watchOS" in str(runtime.get("runtimeIdentifier"))) or "none")]
+    watch_runtimes = sorted(runtime.get("state", "?") + " at " + str(runtime.get("mountPath"))
+                            for runtime in runtimes.values()
+                            if "watchOS" in str(runtime.get("runtimeIdentifier")))
+    lines = ["Watch runtimes: " + (", ".join(watch_runtimes) or "none")]
     for runtime, devices in sorted(payload.get("devices", {}).items()):
         if ".watchOS-" in runtime or ".iOS-" in runtime:
-            lines.append(runtime.rsplit(".", 1)[-1] + ": " + ", ".join(
-                device["name"] + (" available" if device.get("isAvailable") else " unavailable")
-                for device in devices) or "no devices")
+            states = [device["name"] + (" available" if device.get("isAvailable") else " unavailable")
+                      for device in devices]
+            lines.append(runtime.rsplit(".", 1)[-1] + ": " + (", ".join(states) or "no devices"))
     lines.append("Pairs: " + str(len(payload.get("pairs", {}))))
     return "\n".join(lines)
 

@@ -60,7 +60,7 @@ class WaitForBootTests(unittest.TestCase):
 
     def test_fails_at_the_overall_deadline_despite_progress(self):
         steps = [(0.2, PHASE.format(index)[:-1] + " phase " + str(index)) for index in range(20)]
-        with self.assertRaisesRegex(RuntimeError, "did not finish within 1 seconds"):
+        with self.assertRaisesRegex(RuntimeError, "did not finish within the 1 seconds left"):
             self.wait(scripted(*steps, 0), stall_seconds=5, deadline_seconds=1)
 
     def test_repeated_multiline_phase_does_not_reset_stall_deadline(self):

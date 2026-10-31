@@ -80,6 +80,10 @@ elif sys.argv[1:4] == ["simctl", "runtime", "list"]:
         self.assertIn("watchOS-27-0: Apple Watch unavailable", summary)
         self.assertIn("iOS-27-0: iPhone available", summary)
         self.assertIn("Pairs: 1", summary)
+        empty = summarize({"devices": {"com.apple.CoreSimulator.SimRuntime.watchOS-27-0": []}}, {})
+        self.assertIn("Watch runtimes: none", empty)
+        self.assertIn("watchOS-27-0: no devices", empty)
+        self.assertIn("Pairs: 0", empty)
 
     def test_preserves_native_test_failure(self):
         result, calls = self.run_watch([self.snapshot()], test_status=7)
