@@ -16,7 +16,11 @@ struct CompassActivityWidget: Widget {
       CompassActivityCard(context: context)
     } dynamicIsland: { context in
       DynamicIsland {
-        DynamicIslandExpandedRegion(.center) { CompassActivityView(context: context) }
+        // The island's regions have fixed bounds, so the readout stops at the largest
+        // standard size there; the Lock Screen and small presentations use the full range.
+        DynamicIslandExpandedRegion(.center) {
+          CompassActivityView(context: context, maximumTextSize: .xxxLarge)
+        }
       } compactLeading: {
         Image(systemName: "location.north")
       } compactTrailing: {
@@ -62,18 +66,32 @@ private struct CompassActivityCard: View {
     }
   }
 
+  /// At large text sizes the reading drops to a shorter form (degrees, then direction) before
+  /// any text is scaled down, so an enlarged size stays enlarged; the accessibility label keeps
+  /// every detail. Status text keeps its single shrinking line.
   private var readout: some View {
-    Text(
-      CompassActivityView.reading(context) == nil ? status : CompassActivityView.bearing(context)
-    )
-    .font(.title2.weight(.semibold)).monospacedDigit()
+    Group {
+      if CompassActivityView.reading(context) == nil {
+        readoutText(status).lineLimit(1).minimumScaleFactor(0.5)
+      } else {
+        ViewThatFits(in: .horizontal) {
+          ForEach(CompassActivityView.bearingCandidates(context), id: \.self) { candidate in
+            readoutText(candidate).lineLimit(1).minimumScaleFactor(0.8)
+          }
+        }
+      }
+    }
     .dynamicTypeSize(
       (context.state.appearance ?? AppearanceValues()).readoutTextSize(system: systemTextSize)
     )
-    .lineLimit(1).minimumScaleFactor(0.5)
-    .multilineTextAlignment(.center)
     .frame(maxWidth: .infinity)
     .contentTransition(.identity)
+  }
+
+  private func readoutText(_ text: String) -> some View {
+    Text(text)
+      .font(.title2.weight(.semibold)).monospacedDigit()
+      .multilineTextAlignment(.center)
   }
 
   private var status: String {
@@ -112,6 +130,7 @@ private struct CompassActivityCard: View {
 
 private struct CompassActivityView: View {
   let context: ActivityViewContext<CompassActivityAttributes>
+  var maximumTextSize: DynamicTypeSize = .accessibility5
   @Environment(\.activityFamily) private var family
 
   static func bearing(_ context: ActivityViewContext<CompassActivityAttributes>) -> String {
@@ -121,6 +140,17 @@ private struct CompassActivityView: View {
       appearance.showDirection ? reading.cardinal : nil,
       appearance.showDegrees ? reading.degrees : nil,
     ].compactMap { $0 }.joined(separator: " ")
+  }
+
+  /// The full reading followed by its shorter forms, degrees then direction, when both fields
+  /// are shown; a single-field reading has nothing shorter.
+  static func bearingCandidates(_ context: ActivityViewContext<CompassActivityAttributes>)
+    -> [String]
+  {
+    guard let reading = reading(context) else { return [] }
+    let appearance = (context.state.appearance ?? AppearanceValues()).requiringReadout()
+    guard appearance.showDirection && appearance.showDegrees else { return [bearing(context)] }
+    return [bearing(context), reading.degrees, reading.cardinal]
   }
 
   static func reading(_ context: ActivityViewContext<CompassActivityAttributes>)
@@ -139,7 +169,8 @@ private struct CompassActivityView: View {
       if Self.reading(context) != nil {
         CompassReadout(
           bearing: context.state.bearing ?? 0,
-          appearance: (context.state.appearance ?? AppearanceValues()).requiringReadout()
+          appearance: (context.state.appearance ?? AppearanceValues()).requiringReadout(),
+          maximumTextSize: maximumTextSize
         )
       } else {
         Text("—").font(.largeTitle.bold())
@@ -188,8 +219,11 @@ private struct ActivityCompactReadout: View {
         ? "—" : "Last \(CompassActivityView.bearing(context))"
     )
     .font(.caption).lineLimit(1).minimumScaleFactor(0.85)
+    // The compact island has fixed bounds, so the readout stops at the largest standard size.
     .dynamicTypeSize(
-      (context.state.appearance ?? AppearanceValues()).readoutTextSize(system: systemTextSize)
+      min(
+        (context.state.appearance ?? AppearanceValues()).readoutTextSize(system: systemTextSize),
+        .xxxLarge)
     )
     .accessibilityLabel(
       Text("\(CompassActivityView.bearing(context)), last recorded travel direction, true north.")

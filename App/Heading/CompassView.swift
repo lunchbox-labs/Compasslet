@@ -58,6 +58,9 @@ struct CompassView: View {
                 .fixedSize(horizontal: false, vertical: true)
               // At extreme text sizes, keep the reading or critical status readable.
               // All supporting details remain available in the scrollable Settings.
+              // This last layout is the one place the main screen limits the user's size: the
+              // reading is capped to the screen so it stays whole rather than clipped, which
+              // is a deliberate non-scrolling design choice rather than a Dynamic Type gap.
               essentialReading(height: content.size.height)
             }
             .padding(.horizontal, 24)

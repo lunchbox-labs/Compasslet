@@ -1,5 +1,6 @@
 import CompassCore
 import Foundation
+import SwiftUI
 import Testing
 @testable import Compass
 
@@ -21,6 +22,23 @@ struct AppearanceStoreTests {
     #expect(store.preferences == saved)
     let reopened = AppearanceStore(defaults: defaults, legacyDefaults: defaults)
     #expect(reopened.preferences == saved)
+  }
+
+  @Test func everyReadoutSizeMapsToItsDynamicTypeCategoryInOrder() {
+    // Choosing a larger custom size must render larger, and the accessibility boundary the
+    // slider shows must be the one the system applies.
+    let mapped = ReadoutTextSize.allCases.map(\.dynamicTypeSize)
+    #expect(mapped == mapped.sorted())
+    #expect(Set(mapped).count == mapped.count)
+    #expect(ReadoutTextSize.xxxLarge.dynamicTypeSize == .xxxLarge)
+    #expect(ReadoutTextSize.accessibility5.dynamicTypeSize == .accessibility5)
+    #expect(
+      ReadoutTextSize.allCases.allSatisfy {
+        $0.isAccessibilitySize == $0.dynamicTypeSize.isAccessibilitySize
+      })
+    // Every slider step announces a distinct value.
+    let titles = ReadoutTextSize.allCases.map(\.title)
+    #expect(Set(titles).count == titles.count)
   }
 
   @Test func migratesOnlyExistingPhoneArrowChoiceOnce() throws {

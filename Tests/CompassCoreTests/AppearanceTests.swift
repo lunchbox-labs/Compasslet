@@ -72,6 +72,43 @@ import Testing
   }
 }
 
+@Test func readoutSizesExtendToAccessibilityCategoriesWithStableStorage() throws {
+  // The accessibility categories follow the standard ones in order, and the boundary between
+  // them is the largest standard category.
+  let sizes = ReadoutTextSize.allCases
+  #expect(sizes.map(\.rawValue) == sizes.map(\.rawValue).sorted())
+  #expect(sizes.first == .xSmall)
+  #expect(sizes.last == .accessibility5)
+  let accessibilitySizes = sizes.drop(while: { !$0.isAccessibilitySize })
+  #expect(accessibilitySizes.allSatisfy { $0.isAccessibilitySize })
+  #expect(accessibilitySizes.first == .accessibility1)
+  #expect(!ReadoutTextSize.xxxLarge.isAccessibilitySize)
+  #expect(ReadoutTextSize.accessibility1.isAccessibilitySize)
+  // A size saved before the accessibility categories existed keeps its meaning. The stored
+  // value 6 is the historical wire value for Extra Extra Extra Large, written here
+  // independently of the current encoder so a shift in raw values would be caught.
+  var preferences = AppearancePreferences()
+  var global = preferences.global
+  global.useSystemTextSize = false
+  preferences.setGlobal(global)
+  var stored = try #require(
+    JSONSerialization.jsonObject(with: JSONEncoder().encode(preferences)) as? [String: Any])
+  var earlier = try #require(stored["global"] as? [String: Any])
+  earlier["customTextSize"] = 6
+  stored["global"] = earlier
+  let legacy = AppearancePreferences.decode(try JSONSerialization.data(withJSONObject: stored))
+  #expect(legacy.global.customTextSize == .xxxLarge)
+  #expect(!legacy.global.useSystemTextSize)
+  // The largest accessibility size has its own stable stored value.
+  earlier["customTextSize"] = 11
+  stored["global"] = earlier
+  let largest = AppearancePreferences.decode(try JSONSerialization.data(withJSONObject: stored))
+  #expect(largest.global.customTextSize == .accessibility5)
+  global.customTextSize = .accessibility5
+  preferences.setGlobal(global)
+  #expect(AppearancePreferences.decode(try JSONEncoder().encode(preferences)) == preferences)
+}
+
 @Test func readoutSizeChoiceFollowsGlobalsUntilSurfaceOverrides() throws {
   var preferences = AppearancePreferences()
   var global = preferences.global

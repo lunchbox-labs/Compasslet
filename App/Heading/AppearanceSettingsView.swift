@@ -89,7 +89,7 @@ private struct AppearanceDetailView: View {
                     binding(\.customTextSize).wrappedValue =
                       ReadoutTextSize(rawValue: Int(selection.rounded())) ?? .large
                   }),
-                in: 0...6, step: 1
+                in: 0...Double(ReadoutTextSize.allCases.count - 1), step: 1
               ) {
                 Text("Custom text size")
               } minimumValueLabel: {
@@ -99,18 +99,29 @@ private struct AppearanceDetailView: View {
               }
               .accessibilityValue(value.customTextSize.title)
               Text(value.customTextSize.title).font(.caption).foregroundStyle(.secondary)
+              if value.customTextSize.isAccessibilitySize {
+                Text("Accessibility size")
+                  .font(.caption2).foregroundStyle(.secondary).accessibilityHidden(true)
+              }
             }
             .frame(maxWidth: .infinity)
           }
         } header: {
           Text("Text Size")
         } footer: {
-          Text(
-            value.hasReadout
-              ? (value.useSystemTextSize
-                ? "The compass readout follows the system text size for each surface. Other interface text continues to follow Dynamic Type."
-                : "Choose a size for the compass readout. Other interface text continues to follow Dynamic Type.")
-              : "Text size is kept while both center readouts are hidden.")
+          VStack(alignment: .leading, spacing: 4) {
+            Text(
+              value.hasReadout
+                ? (value.useSystemTextSize
+                  ? "The compass readout follows the system text size for each surface. Other interface text continues to follow Dynamic Type."
+                  : "Choose a size for the compass readout, up to the largest accessibility size. Other interface text continues to follow Dynamic Type.")
+                : "Text size is kept while both center readouts are hidden.")
+            if surface != .phone {
+              Text(
+                "In the Dynamic Island the readout stops at Extra Extra Extra Large; the Lock Screen uses the full range."
+              )
+            }
+          }
         }
         .disabled(!value.hasReadout)
         if surface != .activity {
