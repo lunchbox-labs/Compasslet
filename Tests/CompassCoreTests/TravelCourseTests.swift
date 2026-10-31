@@ -97,6 +97,28 @@ struct TravelCourseTests {
     #expect(result.sample?.timestamp == time.addingTimeInterval(1))
   }
 
+  @Test func turnsAreFollowedPromptlyWhileSmallChangesAreDamped() {
+    var filter = TravelCourseFilter()
+    _ = filter.update(reading(course: 90), now: time)
+    // Ten degrees is half a turn-sized change, so half of it is adopted.
+    #expect(
+      filter.update(reading(course: 100, offset: 1), now: time.addingTimeInterval(1))
+        .sample?.angle.degrees == 95)
+    // A 20-degree or larger change is adopted outright.
+    #expect(
+      filter.update(reading(course: 180, offset: 2), now: time.addingTimeInterval(2))
+        .sample?.angle.degrees == 180)
+    // Jitter of a couple of degrees keeps the quarter fraction.
+    #expect(
+      filter.update(reading(course: 182, offset: 3), now: time.addingTimeInterval(3))
+        .sample?.angle.degrees == 180.5)
+    var northward = TravelCourseFilter()
+    _ = northward.update(reading(course: 5), now: time)
+    #expect(
+      northward.update(reading(course: 350, offset: 1), now: time.addingTimeInterval(1))
+        .sample?.angle.degrees == 353.75)
+  }
+
   @Test func invalidDataAndExplicitResetClearSmoothing() {
     let invalid: [TravelReading?] = [
       nil, reading(speed: 0), reading(course: -1),

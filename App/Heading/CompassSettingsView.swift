@@ -15,6 +15,7 @@ struct CompassSettingsView: View {
       Form {
         Section("Display") {
           NavigationLink("Appearance") { AppearanceSettingsView() }
+          NavigationLink("Accessibility") { AccessibilitySettingsView(close: close) }
         }
         Section("Location") {
           NavigationLink("Location details") { locationDetails }
@@ -23,6 +24,13 @@ struct CompassSettingsView: View {
           if canOpenSettings, let url = URL(string: UIApplication.openSettingsURLString) {
             Link("Open Settings", destination: url)
           }
+        }
+        Section("Apple Watch") {
+          Label("Experimental Support", systemImage: "applewatch")
+          Text(
+            "Apple Watch runtime and device validation are incomplete. Support is experimental and may not work as expected."
+          )
+          .foregroundStyle(.secondary)
         }
         DiagnosticsSettingsSection()
       }
@@ -45,7 +53,7 @@ struct CompassSettingsView: View {
 
   private var locationDetails: some View {
     Form {
-      Section("Current location") {
+      Section("Current Location") {
         PhoneLocationReadout(location: location)
       }
       if headingStatus != .live {
@@ -99,15 +107,17 @@ struct PhoneLocationReadout: View {
   var body: some View {
     VStack(spacing: 8) {
       if let fix = location.location {
+        let latitude = Self.coordinate(fix.coordinate.latitude, latitude: true)
+        let longitude = Self.coordinate(fix.coordinate.longitude, latitude: false)
         ViewThatFits(in: .horizontal) {
           HStack(spacing: 12) {
-            Text(coordinate(fix.coordinate.latitude, latitude: true))
-            Text(coordinate(fix.coordinate.longitude, latitude: false))
+            coordinateText(latitude)
+            coordinateText(longitude)
           }
           .fixedSize(horizontal: true, vertical: true)
           VStack(spacing: 4) {
-            Text(coordinate(fix.coordinate.latitude, latitude: true))
-            Text(coordinate(fix.coordinate.longitude, latitude: false))
+            coordinateText(latitude)
+            coordinateText(longitude)
           }
         }
         .font(.subheadline).monospacedDigit()
@@ -115,7 +125,8 @@ struct PhoneLocationReadout: View {
           Text(city)
         }
         if let elevation = location.elevation {
-          Text("\(formattedElevation(elevation)) Elevation")
+          Text("\(Self.formattedElevation(elevation)) Elevation")
+            .accessibilityLabel("Elevation \(Self.formattedElevation(elevation, spoken: true))")
         } else {
           Text("Elevation unavailable").foregroundStyle(.secondary)
         }
@@ -126,25 +137,50 @@ struct PhoneLocationReadout: View {
     }
   }
 
-  private func coordinate(_ degrees: Double, latitude: Bool) -> String {
+  /// A coordinate component in its visual notation and in words for assistive technologies.
+  struct Coordinate {
+    let visual: String
+    let spoken: String
+  }
+
+  private func coordinateText(_ coordinate: Coordinate) -> some View {
+    Text(coordinate.visual).accessibilityLabel(coordinate.spoken)
+  }
+
+  /// Degrees, minutes and seconds with a hemisphere letter, plus the same value spoken in full.
+  static func coordinate(_ degrees: Double, latitude: Bool) -> Coordinate {
     let totalSeconds = Int((abs(degrees) * 3600).rounded())
     let style = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0)).grouping(
       .never)
-    let d = Double(totalSeconds / 3600).formatted(style)
-    let m = Double(totalSeconds / 60 % 60).formatted(style)
-    let s = Double(totalSeconds % 60).formatted(style)
+    let d = totalSeconds / 3600
+    let m = totalSeconds / 60 % 60
+    let s = totalSeconds % 60
     let hemisphere =
       latitude
       ? (degrees < 0 ? String(localized: "S") : String(localized: "N"))
       : (degrees < 0 ? String(localized: "W") : String(localized: "E"))
-    return "\(d)°\(m)′\(s)″ \(hemisphere)"
+    let hemisphereName =
+      latitude ? (degrees < 0 ? "south" : "north") : (degrees < 0 ? "west" : "east")
+    let spokenParts = [
+      latitude ? "Latitude" : "Longitude",
+      "\(d) \(d == 1 ? "degree" : "degrees")",
+      "\(m) \(m == 1 ? "minute" : "minutes")",
+      "\(s) \(s == 1 ? "second" : "seconds")",
+      hemisphereName,
+    ]
+    return Coordinate(
+      visual:
+        "\(Double(d).formatted(style))°\(Double(m).formatted(style))′\(Double(s).formatted(style))″ \(hemisphere)",
+      spoken: spokenParts.joined(separator: " "))
   }
 
-  private func formattedElevation(_ meters: Double) -> String {
+  /// Rounded elevation in the locale's unit; the spoken form names the unit in full.
+  static func formattedElevation(_ meters: Double, spoken: Bool = false) -> String {
     let unit: UnitLength = Locale.current.measurementSystem == .us ? .feet : .meters
     let value = Measurement(value: meters, unit: UnitLength.meters).converted(to: unit)
     let formatter = MeasurementFormatter()
     formatter.unitOptions = .providedUnit
+    formatter.unitStyle = spoken ? .long : .medium
     formatter.numberFormatter.maximumFractionDigits = 0
     return formatter.string(from: value)
   }

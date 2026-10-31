@@ -24,6 +24,24 @@ final class PhoneLocationControllerTests: XCTestCase {
     func cancel() { cancellations += 1 }
   }
 
+  func testCoordinateTextSpeaksAxisUnitsAndHemisphere() {
+    let latitude = PhoneLocationReadout.coordinate(37.7749, latitude: true)
+    XCTAssertEqual(latitude.visual, "37°46′30″ N")
+    XCTAssertEqual(latitude.spoken, "Latitude 37 degrees 46 minutes 30 seconds north")
+    let longitude = PhoneLocationReadout.coordinate(-122.4194, latitude: false)
+    XCTAssertEqual(longitude.visual, "122°25′10″ W")
+    XCTAssertEqual(longitude.spoken, "Longitude 122 degrees 25 minutes 10 seconds west")
+    let south = PhoneLocationReadout.coordinate(-33.8688, latitude: true)
+    XCTAssertTrue(south.visual.hasSuffix(" S"))
+    XCTAssertTrue(south.spoken.hasSuffix(" south"))
+    let equator = PhoneLocationReadout.coordinate(0, latitude: true)
+    XCTAssertEqual(equator.visual, "0°0′0″ N")
+    XCTAssertEqual(equator.spoken, "Latitude 0 degrees 0 minutes 0 seconds north")
+    let singular = PhoneLocationReadout.coordinate(1 + 1.0 / 60 + 1.0 / 3600, latitude: false)
+    XCTAssertEqual(singular.visual, "1°1′1″ E")
+    XCTAssertEqual(singular.spoken, "Longitude 1 degree 1 minute 1 second east")
+  }
+
   func testCityRequestsAreThrottledAndFailuresKeepCoordinates() {
     let sensor = Sensor()
     let lookup = CityLookup()

@@ -1,27 +1,44 @@
 import CompassCore
 import Foundation
+import SwiftUI
 import Testing
 @testable import Compass
 
 @Suite @MainActor
 struct AppearanceStoreTests {
-  @Test func savesOverridesAndRequestsReloadOnlyForChanges() throws {
+  @Test func savesOverridesAndPreservesUnchangedPreferences() throws {
     let name = "appearance-tests-\(UUID())"
     let defaults = try #require(UserDefaults(suiteName: name))
     defer { defaults.removePersistentDomain(forName: name) }
-    var reloads = 0
-    let store = AppearanceStore(defaults: defaults, legacyDefaults: defaults) { reloads += 1 }
+    let store = AppearanceStore(defaults: defaults, legacyDefaults: defaults)
     store.update { preferences in
-      var widget = preferences.effective(for: .widget)
-      widget.showDegrees = false
-      preferences.setOverride(widget, for: .widget)
+      var activity = preferences.effective(for: .activity)
+      activity.showDegrees = false
+      preferences.setOverride(activity, for: .activity)
     }
-    #expect(reloads == 1)
-    #expect(!AppearanceStore.read(from: defaults).effective(for: .widget).showDegrees)
+    #expect(!AppearanceStore.read(from: defaults).effective(for: .activity).showDegrees)
+    let saved = store.preferences
     store.update { _ in }
-    #expect(reloads == 1)
-    let reopened = AppearanceStore(defaults: defaults, legacyDefaults: defaults) {}
-    #expect(reopened.preferences == store.preferences)
+    #expect(store.preferences == saved)
+    let reopened = AppearanceStore(defaults: defaults, legacyDefaults: defaults)
+    #expect(reopened.preferences == saved)
+  }
+
+  @Test func everyReadoutSizeMapsToItsDynamicTypeCategoryInOrder() {
+    // Choosing a larger custom size must render larger, and the accessibility boundary the
+    // slider shows must be the one the system applies.
+    let mapped = ReadoutTextSize.allCases.map(\.dynamicTypeSize)
+    #expect(mapped == mapped.sorted())
+    #expect(Set(mapped).count == mapped.count)
+    #expect(ReadoutTextSize.xxxLarge.dynamicTypeSize == .xxxLarge)
+    #expect(ReadoutTextSize.accessibility5.dynamicTypeSize == .accessibility5)
+    #expect(
+      ReadoutTextSize.allCases.allSatisfy {
+        $0.isAccessibilitySize == $0.dynamicTypeSize.isAccessibilitySize
+      })
+    // Every slider step announces a distinct value.
+    let titles = ReadoutTextSize.allCases.map(\.title)
+    #expect(Set(titles).count == titles.count)
   }
 
   @Test func migratesOnlyExistingPhoneArrowChoiceOnce() throws {
@@ -29,11 +46,11 @@ struct AppearanceStoreTests {
     let defaults = try #require(UserDefaults(suiteName: name))
     defer { defaults.removePersistentDomain(forName: name) }
     defaults.set(false, forKey: "rotatesCompassDial")
-    let store = AppearanceStore(defaults: defaults, legacyDefaults: defaults) {}
+    let store = AppearanceStore(defaults: defaults, legacyDefaults: defaults)
     #expect(store.preferences.effective(for: .phone).rotation == .arrow)
-    #expect(store.preferences.usesGlobal(for: .widget))
+    #expect(store.preferences.usesGlobal(for: .activity))
     store.update { $0.setUsesGlobal(true, for: .phone) }
-    let reopened = AppearanceStore(defaults: defaults, legacyDefaults: defaults) {}
+    let reopened = AppearanceStore(defaults: defaults, legacyDefaults: defaults)
     #expect(reopened.preferences.usesGlobal(for: .phone))
   }
 }

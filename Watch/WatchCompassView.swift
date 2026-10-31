@@ -5,6 +5,7 @@ struct WatchCompassView: View {
   @Environment(\.scenePhase) private var scenePhase
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.dynamicTypeSize) private var textSize
+  @State private var showsExperimentalNotice = false
   @StateObject private var compass = HeadingController(sensor: DeviceHeadingSensor())
 
   private var appearance: AppearanceValues {
@@ -12,6 +13,8 @@ struct WatchCompassView: View {
     value.minorTicks = .eight
     return value
   }
+
+  private var usesSteppedHeading: Bool { reduceMotion && textSize < .xxxLarge }
 
   var body: some View {
     GeometryReader { geometry in
@@ -25,7 +28,7 @@ struct WatchCompassView: View {
               bearing: compass.sample?.angle.degrees, appearance: appearance,
               showsReadout: false, unavailableSymbol: "minus")
             readout.frame(
-              width: max(0, min(geometry.size.width, geometry.size.height - 44)) * 0.50)
+              width: max(0, min(geometry.size.width, geometry.size.height - 88)) * 0.50)
           }
           .aspectRatio(1, contentMode: .fit)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -37,20 +40,35 @@ struct WatchCompassView: View {
           .foregroundStyle(compass.sample == nil ? .primary : .secondary)
           .multilineTextAlignment(.center)
           .fixedSize(horizontal: false, vertical: true)
+        Button("Experimental") { showsExperimentalNotice = true }
+          .font(.caption2)
+          .accessibilityHint("Explains the limitations of Apple Watch support")
       }
       .padding(.horizontal, 8)
       .padding(.bottom, 4)
       .frame(width: geometry.size.width, height: geometry.size.height)
+    }
+    .sheet(isPresented: $showsExperimentalNotice) {
+      ScrollView {
+        VStack(alignment: .leading, spacing: 12) {
+          Text("Experimental Support").font(.headline)
+          Text(
+            "Apple Watch runtime and device validation are incomplete. Support is experimental and may not work as expected."
+          )
+          Button("Done") { showsExperimentalNotice = false }
+        }
+        .padding()
+      }
     }
     .task(id: scenePhase) {
       guard scenePhase == .active else {
         compass.stop()
         return
       }
-      compass.setReducedMotion(reduceMotion)
+      compass.setReducedMotion(usesSteppedHeading)
       await compass.run()
     }
-    .onChange(of: reduceMotion) { _, value in compass.setReducedMotion(value) }
+    .onChange(of: usesSteppedHeading) { _, value in compass.setReducedMotion(value) }
   }
 
   private var readout: some View {

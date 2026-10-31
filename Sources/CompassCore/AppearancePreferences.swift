@@ -2,7 +2,7 @@ import Foundation
 
 /// Presentations that can follow global appearance or store a whole-surface override.
 public enum AppearanceSurface: String, CaseIterable, Codable, Sendable {
-  case phone, widget, activity
+  case phone, activity
 }
 
 /// Position of the four cardinal rim labels, independent of center text.
@@ -15,6 +15,15 @@ public enum DialRotation: String, CaseIterable, Codable, Sendable {
   case dial, arrow
 }
 
+/// How a rotating dial behaves while the system Reduce Motion setting is on.
+public enum ReducedMotionDial: String, CaseIterable, Codable, Sendable {
+  /// Replace the dial with a steady text reading that keeps direction and degrees current.
+  case steadyReadout
+  /// Keep the dial; the phone then moves it in steps of a few degrees instead of continuously,
+  /// so a settled reading can differ from the sensor by up to one step.
+  case rotatingDial
+}
+
 /// Number of interior marks between adjacent cardinal major ticks.
 public enum MinorTicks: Int, CaseIterable, Codable, Sendable {
   case none = 0, five = 5, eight = 8, seventeen = 17
@@ -25,9 +34,16 @@ public enum MinorTicks: Int, CaseIterable, Codable, Sendable {
   }
 }
 
-/// The seven standard Dynamic Type categories available for a custom readout size.
+/// The twelve Dynamic Type categories available for a custom readout size, in ascending order.
+///
+/// Raw values are stable storage identifiers; the five accessibility categories extend the
+/// original seven standard categories so saved choices keep their meaning.
 public enum ReadoutTextSize: Int, CaseIterable, Codable, Sendable {
   case xSmall, small, medium, large, xLarge, xxLarge, xxxLarge
+  case accessibility1, accessibility2, accessibility3, accessibility4, accessibility5
+
+  /// Whether this is one of the system's accessibility text size categories.
+  public var isAccessibilitySize: Bool { rawValue > Self.xxxLarge.rawValue }
 }
 
 /// Display-only choices; never contains sensor samples or validity timestamps.
@@ -46,9 +62,39 @@ public struct AppearanceValues: Codable, Hashable, Sendable {
   public var labels: CardinalLabels = .inside
   /// Rotating dial or rotating arrow.
   public var rotation: DialRotation = .dial
+  /// Presentation used while the system Reduce Motion setting is on.
+  public var reducedMotionDial: ReducedMotionDial = .steadyReadout
 
   /// Creates the standard appearance.
   public init() {}
+
+  private enum CodingKeys: String, CodingKey {
+    case showDirection, showDegrees, useSystemTextSize, customTextSize, minorTicks, labels
+    case rotation, reducedMotionDial
+  }
+
+  /// Decodes saved values, keeping the standard choice for keys an earlier version did not store.
+  public init(from decoder: any Decoder) throws {
+    let values = try decoder.container(keyedBy: CodingKeys.self)
+    let standard = Self()
+    showDirection =
+      try values.decodeIfPresent(Bool.self, forKey: .showDirection) ?? standard.showDirection
+    showDegrees =
+      try values.decodeIfPresent(Bool.self, forKey: .showDegrees) ?? standard.showDegrees
+    useSystemTextSize =
+      try values.decodeIfPresent(Bool.self, forKey: .useSystemTextSize)
+      ?? standard.useSystemTextSize
+    customTextSize =
+      try values.decodeIfPresent(ReadoutTextSize.self, forKey: .customTextSize)
+      ?? standard.customTextSize
+    minorTicks =
+      try values.decodeIfPresent(MinorTicks.self, forKey: .minorTicks) ?? standard.minorTicks
+    labels = try values.decodeIfPresent(CardinalLabels.self, forKey: .labels) ?? standard.labels
+    rotation = try values.decodeIfPresent(DialRotation.self, forKey: .rotation) ?? standard.rotation
+    reducedMotionDial =
+      try values.decodeIfPresent(ReducedMotionDial.self, forKey: .reducedMotionDial)
+      ?? standard.reducedMotionDial
+  }
 
   /// Whether any central reading is visible.
   public var hasReadout: Bool { showDirection || showDegrees }
@@ -66,7 +112,6 @@ public struct AppearancePreferences: Codable, Hashable, Sendable {
   /// Shared values used by surfaces without an override.
   public private(set) var global = AppearanceValues()
   private var phone: AppearanceValues?
-  private var widget: AppearanceValues?
   private var activity: AppearanceValues?
 
   /// Creates the standard appearance.
@@ -112,7 +157,6 @@ public struct AppearancePreferences: Codable, Hashable, Sendable {
   private func override(for surface: AppearanceSurface) -> AppearanceValues? {
     switch surface {
     case .phone: phone
-    case .widget: widget
     case .activity: activity
     }
   }
@@ -120,7 +164,6 @@ public struct AppearancePreferences: Codable, Hashable, Sendable {
   private mutating func set(_ value: AppearanceValues?, for surface: AppearanceSurface) {
     switch surface {
     case .phone: phone = value
-    case .widget: widget = value
     case .activity: activity = value
     }
   }

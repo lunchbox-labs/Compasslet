@@ -16,16 +16,24 @@ struct CompassView: View {
   @ScaledMetric(relativeTo: .body) private var compactStatusSize = 17
   @AccessibilityFocusState private var menuFocused: Bool
 
-  private var appearance: AppearanceValues { appearanceStore.preferences.effective(for: .phone) }
+  private var storedAppearance: AppearanceValues {
+    appearanceStore.preferences.effective(for: .phone)
+  }
+  /// Reduce Motion replaces the rotating dial with steady text unless Appearance keeps the dial.
+  private var steadyReading: Bool {
+    reduceMotion && storedAppearance.reducedMotionDial == .steadyReadout
+  }
+  private var appearance: AppearanceValues {
+    steadyReading ? storedAppearance.requiringReadout() : storedAppearance
+  }
+  /// Only a rotating dial shown under Reduce Motion steps; steady text keeps smoothed headings.
+  private var stepsHeading: Bool { reduceMotion && !steadyReading }
   private var roundedDegrees: Int? {
     compass.sample.map { Int($0.angle.degrees.rounded()) % 360 }
   }
   private var accessibilitySummary: String {
     guard let sample = compass.sample, let roundedDegrees else { return compass.status.title }
-    let names = [
-      "north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest",
-    ]
-    let direction = names[Int((sample.angle.degrees + 22.5) / 45) % 8]
+    let direction = CompassPoint(angle: sample.angle).name
     return
       "\(roundedDegrees) degrees, \(direction), magnetic heading. Accuracy plus or minus \(Int(min(sample.accuracy, 360).rounded())) degrees."
   }
@@ -57,7 +65,10 @@ struct CompassView: View {
               information(details: false)
                 .fixedSize(horizontal: false, vertical: true)
               // At extreme text sizes, keep the reading or critical status readable.
-              // All supporting details remain available in the scrollable drawer.
+              // All supporting details remain available in the scrollable Settings.
+              // This last layout is the one place the main screen limits the user's size: the
+              // reading is capped to the screen so it stays whole rather than clipped, which
+              // is a deliberate non-scrolling design choice rather than a Dynamic Type gap.
               essentialReading(height: content.size.height)
             }
             .padding(.horizontal, 24)
@@ -77,30 +88,11 @@ struct CompassView: View {
             }
         )
         if showingSettings {
-          Color.black.opacity(0.55)
-            .ignoresSafeArea()
-            .onTapGesture { closeSettings() }
-            .accessibilityHidden(true)
           CompassSettingsView(
             drive: drive, location: location, headingStatus: compass.status,
             showLocationDetails: showingLocationDetails, close: closeSettings
           )
-          .frame(width: min(420, max(0, geometry.size.width - 44)))
-          .overlay(alignment: .trailing) {
-            Capsule().fill(.secondary).frame(width: 4, height: 52)
-              .frame(width: 44, height: 100)
-              .contentShape(Rectangle())
-              .gesture(
-                DragGesture(minimumDistance: 24).onEnded { value in
-                  if value.translation.width < -40,
-                    abs(value.translation.height) < -value.translation.width / 2
-                  {
-                    closeSettings()
-                  }
-                }
-              )
-              .accessibilityHidden(true)
-          }
+          .frame(width: geometry.size.width, height: geometry.size.height)
           .accessibilityAddTraits(.isModal)
           .accessibilityAction(.escape, closeSettings)
           .transition(reduceMotion ? .opacity : .move(edge: .leading))
@@ -117,7 +109,7 @@ struct CompassView: View {
       }
       await drive.phoneBecameActive()
       guard !Task.isCancelled else { return }
-      compass.setReducedMotion(reduceMotion)
+      compass.setReducedMotion(stepsHeading)
       async let heading: Void = compass.run()
       async let phoneLocation: Void = location.run()
       while !Task.isCancelled {
@@ -127,7 +119,7 @@ struct CompassView: View {
       _ = await heading
       _ = await phoneLocation
     }
-    .onChange(of: reduceMotion) { _, value in compass.setReducedMotion(value) }
+    .onChange(of: stepsHeading) { _, value in compass.setReducedMotion(value) }
   }
 
   private var header: some View {
@@ -149,9 +141,17 @@ struct CompassView: View {
   private func information(details: Bool) -> some View {
     VStack(spacing: details ? 16 : 8) {
       if let sample = compass.sample {
-        phoneReadout
+        if appearance.hasReadout { phoneReadout }
+        // The readout already speaks its accuracy. With both center readouts hidden,
+        // this line becomes the single VoiceOver stop for the heading instead.
         Text("Accuracy ±\(Int(min(sample.accuracy, 360).rounded()))°")
           .font(.subheadline).foregroundStyle(.secondary)
+          .accessibilityHidden(appearance.hasReadout)
+          .accessibilityLabel(accessibilitySummary)
+        if steadyReading {
+          Text("Dial hidden while Reduce Motion is on")
+            .font(.caption2).foregroundStyle(.secondary)
+        }
       } else {
         Text(compass.status.title).font(.headline)
         if details {
@@ -213,7 +213,7 @@ struct CompassView: View {
       }
     }
     // A readable compact status is the last resort, rather than clipping a
-    // full explanation. The drawer retains unrestricted Dynamic Type details.
+    // full explanation. Settings retains unrestricted Dynamic Type details.
     .font(.system(size: min(compactStatusSize, max(17, height / 6))))
     .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
@@ -234,7 +234,7 @@ struct CompassView: View {
   private var compactLocationStatus: String {
     switch drive.setupStatus {
     case .ready: "Location details"
-    case .permissionRequired: "Enable location"
+    case .permissionRequired: "Enable Location"
     case .denied: "Location denied"
     case .restricted: "Location restricted"
     case .servicesDisabled: "Location Services off"
@@ -250,17 +250,21 @@ struct CompassView: View {
       .accessibilityLabel(accessibilitySummary)
   }
 
-  private func dial(size: CGFloat) -> some View {
-    CompassDial(bearing: compass.sample?.angle.degrees, appearance: appearance, showsReadout: false)
+  // The dial repeats the readout visually; VoiceOver gets one heading stop from the text.
+  @ViewBuilder private func dial(size: CGFloat) -> some View {
+    if !steadyReading {
+      CompassDial(
+        bearing: compass.sample?.angle.degrees, appearance: appearance, showsReadout: false
+      )
       .frame(width: max(0, size), height: max(0, size))
-      .accessibilityElement(children: .ignore)
-      .accessibilityLabel(accessibilitySummary)
+      .accessibilityHidden(true)
+    }
   }
 
   private var locationNotice: String? {
     switch drive.setupStatus {
     case .ready: nil
-    case .permissionRequired: "Enable location"
+    case .permissionRequired: "Enable Location"
     case .denied: "Location access denied"
     case .restricted: "Location access is restricted"
     case .servicesDisabled: "Location Services is off"
@@ -289,8 +293,7 @@ struct PhoneCompassReadout: View {
   var body: some View {
     VStack(spacing: 0) {
       if appearance.showDirection {
-        let names = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
-        Text(names[Int((bearing + 22.5) / 45) % 8])
+        Text(CompassPoint(degrees: bearing)?.abbreviation ?? "—")
       }
       if appearance.showDegrees {
         Text("\(Int(bearing.rounded()) % 360)°").monospacedDigit()

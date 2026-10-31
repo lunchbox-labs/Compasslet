@@ -39,7 +39,7 @@ private struct AppearanceDetailView: View {
       if let surface {
         Section {
           Toggle(
-            "Use global settings",
+            "Use Global Settings",
             isOn: Binding(
               get: { followsGlobal },
               set: { follow in store.update { $0.setUsesGlobal(follow, for: surface) } }
@@ -63,9 +63,9 @@ private struct AppearanceDetailView: View {
       }
       if !followsGlobal {
         Section {
-          Toggle("Show direction", isOn: binding(\.showDirection))
+          Toggle("Show Direction", isOn: binding(\.showDirection))
             .disabled(requiresReadout && value.showDirection && !value.showDegrees)
-          Toggle("Show degrees", isOn: binding(\.showDegrees))
+          Toggle("Show Degrees", isOn: binding(\.showDegrees))
             .disabled(requiresReadout && value.showDegrees && !value.showDirection)
         } header: {
           Text("Readout")
@@ -81,7 +81,7 @@ private struct AppearanceDetailView: View {
           Toggle("Use System Text Size", isOn: binding(\.useSystemTextSize))
           if !value.useSystemTextSize {
             VStack(spacing: 8) {
-              Text("Custom text size")
+              Text("Custom Text Size")
               Slider(
                 value: Binding(
                   get: { Double(value.customTextSize.rawValue) },
@@ -89,9 +89,9 @@ private struct AppearanceDetailView: View {
                     binding(\.customTextSize).wrappedValue =
                       ReadoutTextSize(rawValue: Int(selection.rounded())) ?? .large
                   }),
-                in: 0...6, step: 1
+                in: 0...Double(ReadoutTextSize.allCases.count - 1), step: 1
               ) {
-                Text("Custom text size")
+                Text("Custom Text Size")
               } minimumValueLabel: {
                 Text("A").font(.caption).accessibilityHidden(true)
               } maximumValueLabel: {
@@ -99,41 +99,65 @@ private struct AppearanceDetailView: View {
               }
               .accessibilityValue(value.customTextSize.title)
               Text(value.customTextSize.title).font(.caption).foregroundStyle(.secondary)
+              if value.customTextSize.isAccessibilitySize {
+                Text("Accessibility Size")
+                  .font(.caption2).foregroundStyle(.secondary).accessibilityHidden(true)
+              }
             }
             .frame(maxWidth: .infinity)
           }
         } header: {
           Text("Text Size")
         } footer: {
-          Text(
-            value.hasReadout
-              ? (value.useSystemTextSize
-                ? "The compass readout follows the system text size for each surface. Other interface text continues to follow Dynamic Type."
-                : "Choose a size for the compass readout. Other interface text continues to follow Dynamic Type.")
-              : "Text size is kept while both center readouts are hidden.")
+          VStack(alignment: .leading, spacing: 4) {
+            Text(
+              value.hasReadout
+                ? (value.useSystemTextSize
+                  ? "The compass readout follows the system text size for each surface. Other interface text continues to follow Dynamic Type."
+                  : "Choose a size for the compass readout, up to the largest accessibility size. Other interface text continues to follow Dynamic Type.")
+                : "Text size is kept while both center readouts are hidden.")
+            if surface != .phone {
+              Text(
+                "In the Dynamic Island the readout stops at Extra Extra Extra Large; the Lock Screen uses the full range."
+              )
+            }
+          }
         }
         .disabled(!value.hasReadout)
         if surface != .activity {
           Section {
-            Picker("Minor ticks per quarter", selection: binding(\.minorTicks)) {
+            Picker("Minor Ticks per Quarter", selection: binding(\.minorTicks)) {
               ForEach(MinorTicks.allCases, id: \.self) { count in
                 Text("\(count.rawValue)").tag(count)
               }
             }
-            Picker("Cardinal labels", selection: binding(\.labels)) {
+            Picker("Cardinal Labels", selection: binding(\.labels)) {
               Text("Inside").tag(CardinalLabels.inside)
               Text("Outside").tag(CardinalLabels.outside)
               Text("Hidden").tag(CardinalLabels.hidden)
             }
             Picker("Rotation", selection: binding(\.rotation)) {
-              Text("Rotate dial").tag(DialRotation.dial)
-              Text("Rotate arrow").tag(DialRotation.arrow)
+              Text("Rotate Dial").tag(DialRotation.dial)
+              Text("Rotate Arrow").tag(DialRotation.arrow)
             }
           } header: {
             Text("Dial")
           } footer: {
             Text(
-              "Minor ticks are the small marks between cardinal directions. Four major ticks remain. Cardinal labels are N, E, S, and W."
+              "Minor ticks are the small marks between cardinal directions. Four major ticks remain, and north's tick is a pointed red marker so it stays identifiable when labels are hidden. Cardinal labels are N, E, S, and W."
+            )
+          }
+          .pickerStyle(.navigationLink)
+          Section {
+            Picker("With Reduce Motion", selection: binding(\.reducedMotionDial)) {
+              Text("Steady Reading").tag(ReducedMotionDial.steadyReadout)
+              Text("Keep the Dial").tag(ReducedMotionDial.rotatingDial)
+            }
+          } header: {
+            Text("Reduce Motion")
+          } footer: {
+            Text(
+              "Applies while the system Reduce Motion setting is on. Steady Reading hides the dial and shows direction and degrees text that follows the sensor; if both are hidden above, direction is shown. Keep the Dial moves the dial in steps of about four degrees, so a settled reading can differ from the sensor by up to four degrees."
             )
           }
           .pickerStyle(.navigationLink)
@@ -148,12 +172,6 @@ private struct AppearanceDetailView: View {
               }
             }
           }
-        }
-      }
-      if surface == .widget {
-        Section {
-          Text("Widget changes appear when iOS refreshes the widget.")
-            .foregroundStyle(.secondary)
         }
       }
     }
@@ -188,26 +206,19 @@ private struct AppearancePreview: View {
     VStack(spacing: 16) {
       if surface != .activity {
         VStack(spacing: 4) {
-          Text(surface == .phone ? "Phone · Magnetic north" : "Travel · True north")
+          Text("Phone · Magnetic North")
             .font(.caption2).foregroundStyle(.secondary)
           CompassDial(
             bearing: 45, appearance: appearance,
-            showsReadout: surface != .phone && !dynamicTypeSize.isAccessibilitySize
+            showsReadout: false
           )
           .frame(height: 180)
-          if surface == .phone, appearance.hasReadout {
+          if appearance.hasReadout {
             ViewThatFits(in: .horizontal) {
               PhoneCompassReadout(bearing: 45, appearance: appearance)
               PhoneCompassReadout(bearing: 45, appearance: appearance, maximumTextSize: 40)
             }
             .dynamicTypeSize(appearance.readoutTextSize(system: dynamicTypeSize))
-          } else if (appearance.rotation == .arrow || dynamicTypeSize.isAccessibilitySize)
-            && appearance.hasReadout
-          {
-            CompassReadout(bearing: 45, appearance: appearance, compact: true)
-          }
-          if surface != .phone {
-            Text("Last known").font(.caption2).foregroundStyle(.secondary)
           }
         }
         .padding().frame(maxWidth: 260)
@@ -216,7 +227,7 @@ private struct AppearancePreview: View {
       if surface == nil || surface == .activity {
         VStack(spacing: 8) {
           CompassReadout(bearing: 45, appearance: appearance.requiringReadout())
-          Text("Travel · True north").font(.caption2).foregroundStyle(.secondary)
+          Text("Travel · True North").font(.caption2).foregroundStyle(.secondary)
         }
         .padding(24).frame(maxWidth: 300)
         .background(.background, in: RoundedRectangle(cornerRadius: 20))
@@ -231,7 +242,6 @@ extension AppearanceSurface {
   fileprivate var title: String {
     switch self {
     case .phone: "iPhone Compass"
-    case .widget: "Compass Widget"
     case .activity: "Live Activity"
     }
   }

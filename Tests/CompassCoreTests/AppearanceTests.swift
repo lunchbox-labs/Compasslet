@@ -7,20 +7,20 @@ import Testing
   var global = preferences.global
   global.showDegrees = false
   preferences.setGlobal(global)
-  #expect(preferences.effective(for: .widget).showDegrees == false)
-  preferences.setUsesGlobal(false, for: .widget)
-  var widget = preferences.effective(for: .widget)
-  widget.rotation = .arrow
-  preferences.setOverride(widget, for: .widget)
+  #expect(preferences.effective(for: .phone).showDegrees == false)
+  preferences.setUsesGlobal(false, for: .phone)
+  var phone = preferences.effective(for: .phone)
+  phone.rotation = .arrow
+  preferences.setOverride(phone, for: .phone)
   global.showDegrees = true
   global.labels = .outside
   preferences.setGlobal(global)
-  #expect(preferences.effective(for: .widget).labels != .outside)
-  #expect(preferences.effective(for: .phone).labels == .outside)
-  preferences.setUsesGlobal(true, for: .widget)
-  #expect(preferences.effective(for: .widget) == preferences.global)
-  preferences.setUsesGlobal(false, for: .widget)
-  #expect(preferences.effective(for: .widget) == preferences.global)
+  #expect(preferences.effective(for: .phone).labels != .outside)
+  #expect(preferences.effective(for: .activity).labels == .outside)
+  preferences.setUsesGlobal(true, for: .phone)
+  #expect(preferences.effective(for: .phone) == preferences.global)
+  preferences.setUsesGlobal(false, for: .phone)
+  #expect(preferences.effective(for: .phone) == preferences.global)
 }
 
 @Test func dialOverridesCanHideBothButGlobalAndActivityKeepAReading() {
@@ -30,10 +30,8 @@ import Testing
   hidden.showDegrees = false
   preferences.setGlobal(hidden)
   #expect(preferences.global.showDirection)
-  for surface in [AppearanceSurface.phone, .widget] {
-    preferences.setOverride(hidden, for: surface)
-    #expect(!preferences.effective(for: surface).hasReadout)
-  }
+  preferences.setOverride(hidden, for: .phone)
+  #expect(!preferences.effective(for: .phone).hasReadout)
   preferences.setOverride(hidden, for: .activity)
   #expect(preferences.effective(for: .activity).showDirection)
   #expect(!preferences.effective(for: .activity).showDegrees)
@@ -48,8 +46,20 @@ import Testing
   let data = try JSONEncoder().encode(preferences)
   #expect(AppearancePreferences.decode(data) == preferences)
   #expect(AppearancePreferences.decode(Data("bad json".utf8)).effective(for: .activity).hasReadout)
-  let invalid = Data("{\"global\":{\"showDirection\":false,\"showDegrees\":false}}".utf8)
-  #expect(AppearancePreferences.decode(invalid).effective(for: .activity).hasReadout)
+  // Keep a structurally valid stored document so normalization, not decoder fallback, is tested.
+  var stored = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+  var hidden = try #require(stored["global"] as? [String: Any])
+  hidden["showDirection"] = false
+  hidden["showDegrees"] = false
+  hidden["minorTicks"] = MinorTicks.eight.rawValue
+  stored["global"] = hidden
+  stored["activity"] = hidden
+  let normalized = AppearancePreferences.decode(try JSONSerialization.data(withJSONObject: stored))
+  #expect(normalized.global.hasReadout)
+  #expect(normalized.effective(for: .activity).hasReadout)
+  #expect(normalized.global.minorTicks == .eight)
+  #expect(normalized.effective(for: .activity).minorTicks == .eight)
+  #expect(normalized.effective(for: .phone) == custom)
 }
 
 @Test func tickChoicesDivideEveryQuadrantWithoutDuplicatedEndpoints() {
@@ -62,6 +72,72 @@ import Testing
   }
 }
 
+@Test func readoutSizesExtendToAccessibilityCategoriesWithStableStorage() throws {
+  // The accessibility categories follow the standard ones in order, and the boundary between
+  // them is the largest standard category.
+  let sizes = ReadoutTextSize.allCases
+  #expect(sizes.map(\.rawValue) == sizes.map(\.rawValue).sorted())
+  #expect(sizes.first == .xSmall)
+  #expect(sizes.last == .accessibility5)
+  let accessibilitySizes = sizes.drop(while: { !$0.isAccessibilitySize })
+  #expect(accessibilitySizes.allSatisfy { $0.isAccessibilitySize })
+  #expect(accessibilitySizes.first == .accessibility1)
+  #expect(!ReadoutTextSize.xxxLarge.isAccessibilitySize)
+  #expect(ReadoutTextSize.accessibility1.isAccessibilitySize)
+  // A size saved before the accessibility categories existed keeps its meaning. The stored
+  // value 6 is the historical wire value for Extra Extra Extra Large, written here
+  // independently of the current encoder so a shift in raw values would be caught.
+  var preferences = AppearancePreferences()
+  var global = preferences.global
+  global.useSystemTextSize = false
+  preferences.setGlobal(global)
+  var stored = try #require(
+    JSONSerialization.jsonObject(with: JSONEncoder().encode(preferences)) as? [String: Any])
+  var earlier = try #require(stored["global"] as? [String: Any])
+  earlier["customTextSize"] = 6
+  stored["global"] = earlier
+  let legacy = AppearancePreferences.decode(try JSONSerialization.data(withJSONObject: stored))
+  #expect(legacy.global.customTextSize == .xxxLarge)
+  #expect(!legacy.global.useSystemTextSize)
+  // The largest accessibility size has its own stable stored value.
+  earlier["customTextSize"] = 11
+  stored["global"] = earlier
+  let largest = AppearancePreferences.decode(try JSONSerialization.data(withJSONObject: stored))
+  #expect(largest.global.customTextSize == .accessibility5)
+  global.customTextSize = .accessibility5
+  preferences.setGlobal(global)
+  #expect(AppearancePreferences.decode(try JSONEncoder().encode(preferences)) == preferences)
+}
+
+@Test func reducedMotionChoiceDefaultsForAppearancesSavedWithoutIt() throws {
+  // A document saved before the field existed decodes with the standard choice and keeps
+  // every other stored value.
+  var preferences = AppearancePreferences()
+  var global = preferences.global
+  global.showDegrees = false
+  global.minorTicks = .eight
+  global.labels = .outside
+  global.rotation = .arrow
+  preferences.setGlobal(global)
+  var stored = try #require(
+    JSONSerialization.jsonObject(with: JSONEncoder().encode(preferences)) as? [String: Any])
+  var earlier = try #require(stored["global"] as? [String: Any])
+  #expect(earlier.removeValue(forKey: "reducedMotionDial") != nil)
+  stored["global"] = earlier
+  let decoded = AppearancePreferences.decode(try JSONSerialization.data(withJSONObject: stored))
+  #expect(decoded.global.reducedMotionDial == .steadyReadout)
+  #expect(decoded == preferences)
+  // Any key an earlier version did not store falls back to the standard choice.
+  stored["global"] = [String: Any]()
+  let sparse = AppearancePreferences.decode(try JSONSerialization.data(withJSONObject: stored))
+  #expect(sparse == AppearancePreferences())
+  global.reducedMotionDial = .rotatingDial
+  preferences.setGlobal(global)
+  let restored = AppearancePreferences.decode(try JSONEncoder().encode(preferences))
+  #expect(restored.global.reducedMotionDial == .rotatingDial)
+  #expect(restored == preferences)
+}
+
 @Test func readoutSizeChoiceFollowsGlobalsUntilSurfaceOverrides() throws {
   var preferences = AppearancePreferences()
   var global = preferences.global
@@ -71,11 +147,31 @@ import Testing
   preferences.setUsesGlobal(false, for: .phone)
   global.useSystemTextSize = true
   preferences.setGlobal(global)
-  #expect(preferences.effective(for: .widget).useSystemTextSize)
+  #expect(preferences.effective(for: .activity).useSystemTextSize)
   #expect(!preferences.effective(for: .phone).useSystemTextSize)
   #expect(preferences.effective(for: .phone).customTextSize == .xxxLarge)
   preferences.setUsesGlobal(true, for: .phone)
   #expect(preferences.effective(for: .phone).useSystemTextSize)
   let restored = AppearancePreferences.decode(try JSONEncoder().encode(preferences))
   #expect(restored == preferences)
+}
+
+@Test func retiredWidgetPreferencesDoNotResetOtherSurfacesOrRemainInSettings() throws {
+  var preferences = AppearancePreferences()
+  var phone = preferences.global
+  phone.rotation = .arrow
+  preferences.setOverride(phone, for: .phone)
+  var activity = preferences.global
+  activity.showDegrees = false
+  preferences.setOverride(activity, for: .activity)
+  let encoded = try JSONEncoder().encode(preferences)
+  var legacy = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+  legacy["widget"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(phone))
+  let decoded = AppearancePreferences.decode(try JSONSerialization.data(withJSONObject: legacy))
+  #expect(decoded.effective(for: .phone) == phone)
+  #expect(decoded.effective(for: .activity) == activity)
+  #expect(!AppearanceSurface.allCases.contains { $0.rawValue == "widget" })
+  let saved = try #require(
+    JSONSerialization.jsonObject(with: JSONEncoder().encode(decoded)) as? [String: Any])
+  #expect(saved["widget"] == nil)
 }

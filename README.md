@@ -38,9 +38,14 @@ in Settings, calibration away from metal and
 magnets, leaving and returning to the foreground, and recovery after an
 interruption. Check actual denied/restricted service behavior if system settings
 produce it; an undetermined location authorization alone does not block magnetic
-heading. Also check VoiceOver, larger Dynamic Type, light/dark appearance, and
-Reduce Motion. Device sensor accuracy and these physical-device checks remain
-separate from simulator state tests.
+heading. Also check VoiceOver, larger Dynamic Type (including the AX3 and AX5
+accessibility sizes with Bold Text on the smallest supported iPhone, where the
+compass screen keeps one whole reading and leaves details to Settings), light/dark
+appearance, and Reduce Motion. With Reduce Motion on, the phone shows a steady text
+reading that follows the sensor instead of the rotating dial, unless Appearance keeps
+the dial; the dial then moves in steps of about four degrees rather than continuously,
+so a settled reading can differ from the sensor by up to four degrees. Device sensor
+accuracy and these physical-device checks remain separate from simulator state tests.
 
 ## Set up CarPlay
 
@@ -54,7 +59,8 @@ while parked. Never grant Always authorization for this feature.
 
 The full-screen readout uses Apple’s native list details header with a compass
 thumbnail, an explicitly **Sampled** course, **Travel · True north**, the original
-sample time, and status. It is a snapshot rather than a continuously live compass.
+sample time, and status. The thumbnail is drawn at the car display’s own scale and
+style. It is a snapshot rather than a continuously live compass.
 New snapshots appear at most once every ten seconds. Fresh sensor input keeps the
 previous snapshot visible between updates without changing its timestamp. Missing,
 unreliable or older-than-five-second sensor input immediately removes the numeric
@@ -63,16 +69,26 @@ five-second input freshness limit bound the displayed sample’s age to fifteen
 seconds; the app does not retain the last reading after acquisition fails.
 There are no manual drive
 controls on iPhone or CarPlay. Switching to Maps keeps the drive running with the background
-location indicator. A CarPlay template scene disconnect, lost permission, Live
-Activity dismissal, or an eight-hour limit stops acquisition. Reopen the CarPlay
-app after leaving it to start a new drive. An ordinary phone launch never resumes a drive. Slow movement,
-poor measurements, and data older than five seconds remove the bearing.
+location indicator. A CarPlay template scene disconnect, lost permission, Location
+Services being turned off, or an eight-hour limit stops acquisition. Dismissing the Live Activity on iPhone, or iOS
+ending it, only removes the compact display for the rest of that drive. Reopen the
+CarPlay app after leaving it to start a new drive. An ordinary phone launch never resumes a drive. On the full-screen template, slow
+movement, poor measurements, and data older than five seconds remove the bearing.
 
-The compact Dashboard surface uses a Live Activity. iOS and user settings control
-its appearance and refresh timing; an unavailable compact display does not disable
-an eligible full-screen session. Only bearing/status/freshness reaches ActivityKit.
-No coordinates, route history, sensor logs, analytics, or backend are stored by the
-app. iOS manages the minimal Live Activity state while the app is suspended.
+The compact Dashboard surface uses a Live Activity showing **Last travel** and the
+original sample time. A stopped car, missing newer course or temporary poor course
+quality keeps the last accepted direction within the same active drive. It is a
+recorded travel direction, not a measurement of where a stationary car points.
+New course samples must still pass the five-second input check. Unchanged displayed
+readings need no heartbeat updates; changed readings are limited to once a second.
+An explicit location interruption clears the activity reading; drive teardown,
+permission/service loss and the eight-hour limit clear and end the activity.
+Dismissing the activity does not stop the CarPlay drive. iOS controls activity
+lifecycle and rendering. No prior-drive reading is restored.
+Only bearing/status/sample time reaches ActivityKit. No route history or backend
+is added. Physical-device checks must verify the retained sample label, stop and
+recovery behavior, and clearing on teardown. This activity policy does not change
+the phone compass or full-screen CarPlay freshness rules.
 
 The checked-in driving-task entitlement is a declaration only. Full-screen
 CarPlay on a physical device requires Apple’s approval and matching signing and
@@ -85,28 +101,14 @@ locked, Maps visible, actual disconnect, stopping/reversing, poor GPS, denied an
 reduced-precision permission, Live Activities disabled/dismissed, accessibility,
 and thermal/battery behavior. CarPlay-only ActivityKit startup with a locked phone
 and foreground eligibility for starting background acquisition are physical gates.
-Validate that stale/suspended compact content promptly hides its numeric bearing;
-failure to do so blocks release of the compact numeric readout. Updates are bounded
-to at most once per second for usable bearings, with immediate invalidation in the
-producer; iOS does not guarantee rendering cadence.
+Validate that retained compact readings keep their sample time, recover on a new
+valid course, and clear on explicit acquisition failure or teardown. A changed
+reading is pushed at most once per second; unchanged readings need no heartbeat.
+iOS does not guarantee rendering cadence.
 
-## Travel widget
-
-The small Travel Compass widget shows one **last recorded** vehicle travel direction
-and its update age. It becomes **Stale** after five seconds and is retained for at
-most two minutes when no fresh sample arrives. It is not a live heading indicator.
-Invalid measurements, stopping acquisition or losing permission clear the shared
-reading. WidgetKit controls delivery, so clearing and expiry can appear late; the
-recorded age remains visible. The widget does not start location collection or
-read the phone's magnetic compass. Open Compasslet on CarPlay to start the travel
-feed; simply displaying a widget does not start it.
-
-Debug Mode adds bounded acquisition reasons, shared-file read/write outcomes,
-provider timestamps and sample ages to diagnostics. These records contain no
-coordinates or bearings and are capped at 256 records over the latest 30 minutes
-of recorded wall-clock time, separately from the existing active-feed timing log.
-They help distinguish missing acquisition, storage failures and delayed delivery;
-a reload request or provider invocation does not prove a screen redraw.
+Ordinary Home Screen, Lock Screen and CarPlay timeline widgets are not included.
+The Live Activity uses the retained WidgetKit extension with ActivityKit updates,
+not timeline refresh requests. Existing widget placements should be removed.
 
 ## Swift style
 
@@ -162,9 +164,12 @@ sentinels are rejected. Use `.deviceHeading` for device orientation and
 
 Call `isFresh(now:maximumAge:)` with an injected clock and finite nonnegative age
 limit. The age boundary is inclusive; future readings are rejected.
-`CompassSmoother(fraction:)` accepts a fraction in `(0, 1]`. Pass validated samples
+`CompassSmoother(fraction:fullTrackingDelta:)` accepts a fraction in `(0, 1]` and an
+optional positive rotation size in degrees at which a new reading is adopted outright;
+smaller rotations interpolate by at least the fraction. Pass validated samples
 to `update(_:now:maximumAge:)`; pass nil when a sensor reading is invalid. The
 smoother crosses north by the shortest rotation and preserves the latest sample's
-metadata. Missing/stale input clears its state. Changes in source or north
+metadata. `TravelCourseFilter` uses a 0.25 fraction with full tracking at 20
+degrees. Missing/stale input clears its state. Changes in source or north
 reference, stale gaps, and reversed timestamps start a new sequence. Use `reset()`
 when ending a sensor session.

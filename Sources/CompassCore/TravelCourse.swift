@@ -54,8 +54,11 @@ public struct TravelCourseFilter: Sendable {
   private var previousTimestamp: Date?
 
   /// Creates an empty travel-course smoothing sequence.
+  ///
+  /// Location course arrives about once a second and is already filtered by the hardware, so
+  /// small changes are damped while a turn-sized change of 20 degrees or more is adopted at once.
   public init() {
-    guard let smoother = CompassSmoother(fraction: 0.25) else {
+    guard let smoother = CompassSmoother(fraction: 0.25, fullTrackingDelta: 20) else {
       preconditionFailure("The fixed smoothing fraction must be valid")
     }
     self.smoother = smoother
