@@ -6,20 +6,20 @@ commands = [
     ["xcrun", "simctl", "list", "--json"],
     ["xcrun", "simctl", "runtime", "list", "-j"],
     ["/sbin/mount"],
-    ["/usr/bin/log", "show", "--last", "15m", "--style", "compact",
-     "--predicate", 'process == "launchd_sim" OR process == "Carousel" OR process == "SpringBoard"'],
     ["/usr/bin/vm_stat"],
     ["/usr/sbin/sysctl", "vm.swapusage"],
     ["/bin/ps", "-axo", "pid,pcpu,rss,comm", "-r"],
-    ["/usr/bin/log", "show", "--last", "15m", "--style", "compact",
-     "--predicate", 'process == "simdiskimaged" OR process == "cryptexd" OR process BEGINSWITH "SimLaunchHost"'],
+    ["/usr/bin/log", "show", "--last", "30m", "--style", "compact", "--predicate",
+     'process IN {"simdiskimaged", "cryptexd", "CoreSimulatorService", "simctl",'
+     ' "launchd_sim", "SpringBoard", "Carousel"} OR process BEGINSWITH "SimLaunchHost"'],
 ]
 for command in commands:
     print("Diagnostic: " + " ".join(command), flush=True)
     try:
-        result = subprocess.run(command, capture_output=True, text=True, timeout=20)
+        timeout = 120 if command[0] == "/usr/bin/log" else 20
+        result = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
         lines = (result.stdout + result.stderr).splitlines()
         print("\n".join(lines[:40] if command[0] == "/bin/ps" else lines[-200:]), flush=True)
         print("Exit status: " + str(result.returncode), flush=True)
     except subprocess.TimeoutExpired:
-        print("Diagnostic timed out after 20 seconds", flush=True)
+        print("Diagnostic timed out after " + str(timeout) + " seconds", flush=True)
