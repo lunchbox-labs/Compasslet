@@ -204,7 +204,7 @@ final class CompassActivityController: CompassActivityPresenting {
   /// Whether two bearings render the same rounded degrees and the same cardinal direction.
   static func sameReading(_ first: Double, _ second: Double) -> Bool {
     Int(first.rounded()) % 360 == Int(second.rounded()) % 360
-      && Int((first + 22.5) / 45) % 8 == Int((second + 22.5) / 45) % 8
+      && CompassPoint(degrees: first) == CompassPoint(degrees: second)
   }
 
   static func content(_ presentation: TravelPresentation, now: Date)

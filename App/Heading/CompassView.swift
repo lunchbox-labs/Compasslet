@@ -33,10 +33,7 @@ struct CompassView: View {
   }
   private var accessibilitySummary: String {
     guard let sample = compass.sample, let roundedDegrees else { return compass.status.title }
-    let names = [
-      "north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest",
-    ]
-    let direction = names[Int((sample.angle.degrees + 22.5) / 45) % 8]
+    let direction = CompassPoint(angle: sample.angle).name
     return
       "\(roundedDegrees) degrees, \(direction), magnetic heading. Accuracy plus or minus \(Int(min(sample.accuracy, 360).rounded())) degrees."
   }
@@ -144,9 +141,13 @@ struct CompassView: View {
   private func information(details: Bool) -> some View {
     VStack(spacing: details ? 16 : 8) {
       if let sample = compass.sample {
-        phoneReadout
+        if appearance.hasReadout { phoneReadout }
+        // The readout already speaks its accuracy. With both center readouts hidden,
+        // this line becomes the single VoiceOver stop for the heading instead.
         Text("Accuracy ±\(Int(min(sample.accuracy, 360).rounded()))°")
           .font(.subheadline).foregroundStyle(.secondary)
+          .accessibilityHidden(appearance.hasReadout)
+          .accessibilityLabel(accessibilitySummary)
         if steadyReading {
           Text("Dial hidden while Reduce Motion is on")
             .font(.caption2).foregroundStyle(.secondary)
@@ -249,14 +250,14 @@ struct CompassView: View {
       .accessibilityLabel(accessibilitySummary)
   }
 
+  // The dial repeats the readout visually; VoiceOver gets one heading stop from the text.
   @ViewBuilder private func dial(size: CGFloat) -> some View {
     if !steadyReading {
       CompassDial(
         bearing: compass.sample?.angle.degrees, appearance: appearance, showsReadout: false
       )
       .frame(width: max(0, size), height: max(0, size))
-      .accessibilityElement(children: .ignore)
-      .accessibilityLabel(accessibilitySummary)
+      .accessibilityHidden(true)
     }
   }
 
@@ -292,8 +293,7 @@ struct PhoneCompassReadout: View {
   var body: some View {
     VStack(spacing: 0) {
       if appearance.showDirection {
-        let names = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
-        Text(names[Int((bearing + 22.5) / 45) % 8])
+        Text(CompassPoint(degrees: bearing)?.abbreviation ?? "—")
       }
       if appearance.showDegrees {
         Text("\(Int(bearing.rounded()) % 360)°").monospacedDigit()

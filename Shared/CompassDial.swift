@@ -108,10 +108,7 @@ struct CompassReadout: View {
   var maximumTextSize: DynamicTypeSize = .accessibility5
   @Environment(\.dynamicTypeSize) private var systemTextSize
 
-  private var cardinal: String {
-    let names = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
-    return names[Int((bearing + 22.5) / 45) % 8]
-  }
+  private var cardinal: String { CompassPoint(degrees: bearing)?.abbreviation ?? "—" }
 
   var body: some View {
     VStack(spacing: compact ? 0 : 2) {
