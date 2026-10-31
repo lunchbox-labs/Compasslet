@@ -3,27 +3,34 @@ set -euo pipefail
 date -u "+%Y-%m-%dT%H:%M:%SZ Discovering Watch simulator pair"
 selection="$(python3 scripts/select-watch-pair)"
 read -r destination companion <<< "$selection"
-# XCTest uses the existing paired iPhone for its Watch transport. Wait for both
-# simulators to finish booting before starting the test runner's handshake. A first
-# Watch boot on the hosted runner regularly needs several minutes, so the wait fails
-# on a stalled phase rather than on a fixed total. Boot the Watch first: once the
+# A first Watch boot on the hosted runner regularly needs several minutes, so the wait
+# fails on a stalled phase rather than on a fixed total. Boot the Watch first: once the
 # iPhone finishes its own first boot its background work starves the runner, and a
-# Watch boot started then has timed out before reaching CoreSimulator.
-python3 scripts/wait-for-boot "$destination" "$companion"
+# Watch boot started then has timed out before reaching CoreSimulator. Each wait gets
+# its own share of the step's budget.
+python3 scripts/wait-for-boot --deadline-seconds 420 "$destination"
 # Pay for the app's first install and launch here, under a visible bound, instead of
-# inside XCTest's host handshake, which gives up after about five minutes.
-python3 scripts/warm-watch-app "$destination" \
+# inside XCTest's host handshake, which gives up after about five minutes. Do it before
+# the iPhone boots: started during the iPhone's post-boot work, the same install has
+# taken over six minutes, so the install bound is wider than the three minutes it first
+# had; the launch is advisory and keeps the shorter one.
+python3 scripts/warm-watch-app --timeout-seconds 420 --launch-timeout-seconds 180 "$destination" \
   .build/watch/Build/Products/Debug-watchsimulator/CompassWatch.app \
   dev.lunchbox-labs.carplay-compass.watchkitapp
+# XCTest uses the existing paired iPhone for its Watch transport, so it must finish
+# booting before the test runner's handshake starts.
+python3 scripts/wait-for-boot --deadline-seconds 420 "$companion"
 mkdir -p .build
 
+# The test build does not apply the active-architecture rule on a watchOS destination,
+# so exclude the x86_64 slice here as the generic build does.
 run_tests() {
   result_directory="$(mktemp -d .build/watch-test-results.XXXXXX)"
   date -u "+%Y-%m-%dT%H:%M:%SZ Starting Watch xcodebuild tests"
   xcodebuild -project Compass.xcodeproj -scheme CompassWatch \
     -destination "platform=watchOS Simulator,id=$destination" \
     -derivedDataPath .build/watch -resultBundlePath "$result_directory/CompassWatchTests.xcresult" \
-    CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$result_directory/xcodebuild.log"
+    CODE_SIGNING_ALLOWED=NO EXCLUDED_ARCHS=x86_64 test 2>&1 | tee "$result_directory/xcodebuild.log"
 }
 
 # Preserve the first native result, including host-launch failures. A matching log
