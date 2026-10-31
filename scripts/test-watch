@@ -27,7 +27,7 @@ mkdir -p .build
 run_tests() {
   result_directory="$(mktemp -d .build/watch-test-results.XXXXXX)"
   date -u "+%Y-%m-%dT%H:%M:%SZ Starting Watch xcodebuild tests"
-  xcodebuild -project Compass.xcodeproj -scheme CompassWatch \
+  bash scripts/watch-xcodebuild -project Compass.xcodeproj -scheme CompassWatch \
     -destination "platform=watchOS Simulator,id=$destination" \
     -derivedDataPath .build/watch -resultBundlePath "$result_directory/CompassWatchTests.xcresult" \
     CODE_SIGNING_ALLOWED=NO EXCLUDED_ARCHS=x86_64 test 2>&1 | tee "$result_directory/xcodebuild.log"

@@ -85,7 +85,7 @@ jobs:
         # Produces the app the warm-up installs before XCTest; the x86_64 slice is excluded
         # because the simulator is arm64.
         run: >-
-          xcodebuild -project Compass.xcodeproj -scheme CompassWatch
+          bash scripts/watch-xcodebuild -project Compass.xcodeproj -scheme CompassWatch
           -destination 'generic/platform=watchOS Simulator'
           -derivedDataPath .build/watch CODE_SIGNING_ALLOWED=NO EXCLUDED_ARCHS=x86_64 build
       - name: Test on an available Watch simulator

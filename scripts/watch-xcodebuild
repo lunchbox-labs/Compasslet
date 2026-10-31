@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Generic simulator destinations ignore ONLY_ACTIVE_ARCH. Keep Intel hosts usable.
+if [[ "$(uname -m)" == arm64 ]]; then
+  exec xcodebuild "$@" 'EXCLUDED_ARCHS[sdk=watchsimulator*]=x86_64'
+fi
+exec xcodebuild "$@"
