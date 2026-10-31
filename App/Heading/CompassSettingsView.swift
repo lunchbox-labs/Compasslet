@@ -3,11 +3,7 @@ import UIKit
 
 struct CompassSettingsView: View {
   @ObservedObject var drive: DriveSessionController
-  @ObservedObject var location: PhoneLocationController
-  let headingStatus: HeadingController.Status
-  var showLocationDetails = false
   let close: () -> Void
-  @State private var locationDetailsPresented = false
   @AccessibilityFocusState private var closeFocused: Bool
 
   var body: some View {
@@ -17,7 +13,6 @@ struct CompassSettingsView: View {
           NavigationLink("Appearance") { AppearanceSettingsView() }
         }
         Section("Location") {
-          NavigationLink("Location Details") { locationDetails }
           LabeledContent("Location Enabled", value: locationEnabled ? "Yes" : "No")
           Text(locationDetail).foregroundStyle(.secondary)
           if canOpenSettings, let url = URL(string: UIApplication.openSettingsURLString) {
@@ -35,7 +30,6 @@ struct CompassSettingsView: View {
       }
       .navigationTitle("Settings")
       .navigationBarTitleDisplayMode(.inline)
-      .navigationDestination(isPresented: $locationDetailsPresented) { locationDetails }
       .toolbar {
         ToolbarItem(placement: .confirmationAction) {
           Button("Done", action: close)
@@ -45,30 +39,7 @@ struct CompassSettingsView: View {
       }
     }
     .task {
-      locationDetailsPresented = showLocationDetails
       closeFocused = true
-    }
-  }
-
-  private var locationDetails: some View {
-    Form {
-      Section("Current Location") {
-        PhoneLocationReadout(location: location)
-      }
-      if headingStatus != .live {
-        Section(headingStatus.title) {
-          Text(headingStatus.detail)
-          if headingStatus == .denied, let url = URL(string: UIApplication.openSettingsURLString) {
-            Link("Open Settings", destination: url)
-          }
-        }
-      }
-    }
-    .navigationTitle("Location Details")
-    .toolbar {
-      ToolbarItem(placement: .confirmationAction) {
-        Button("Done", action: close).frame(minWidth: 44, minHeight: 44)
-      }
     }
   }
 
