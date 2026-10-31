@@ -1,0 +1,28 @@
+name: Integration Tests
+on:
+  pull_request:
+    paths:
+      - 'scripts/testflight'
+      - 'scripts/check-publish-archive'
+      - 'scripts/tests/test_publish_project.py'
+      - 'Compass.xcodeproj/**'
+      - '.github/workflows/publish.yml'
+      - '.github/workflows/integration.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: publish-archive-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  archive:
+    runs-on: xcode-27
+    timeout-minutes: 25
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Verify unsigned publishing archive contents
+        run: python3 scripts/check-publish-archive

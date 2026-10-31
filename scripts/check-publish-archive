@@ -1,0 +1,28 @@
+#!/usr/bin/env python3
+"""Archive the publishing project without credentials, export, validation or upload."""
+import json
+from pathlib import Path
+import plistlib
+import runpy
+import shutil
+import subprocess
+import sys
+import tempfile
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+publish = runpy.run_path(str(Path(__file__).with_name('testflight')))
+root = Path(__file__).resolve().parents[1]
+with tempfile.TemporaryDirectory(prefix='compass-publish-check-') as temp:
+    source = Path(temp) / 'source'
+    shutil.copytree(root, source, ignore=shutil.ignore_patterns('.git', '.build', '__pycache__'))
+    project = source / 'Compass.xcodeproj/project.pbxproj'
+    data = json.loads(subprocess.check_output(['plutil', '-convert', 'json', '-o', '-', str(project)]))
+    publish['exclude_watch_from_publish'](data)
+    project.write_bytes(plistlib.dumps(data))
+    archive = Path(temp) / 'Compass.xcarchive'
+    subprocess.run(['xcodebuild', '-project', str(source / 'Compass.xcodeproj'), '-scheme', 'Compass',
+                    '-configuration', 'Release', '-destination', 'generic/platform=iOS',
+                    '-derivedDataPath', str(Path(temp) / 'derived'), '-archivePath', str(archive),
+                    'CODE_SIGNING_ALLOWED=NO', 'archive'], cwd=source, check=True)
+    publish['validate_publish_products'](archive)
+    print('Unsigned archive contains iPhone and Live Activity products without Watch content.')

@@ -113,6 +113,46 @@ def decode(name, filename):
     return path
 
 
+def exclude_watch_from_publish(data):
+    """Detach Watch only in the disposable publishing project, before signing."""
+    objects = data['objects']
+
+    def target_for(bundle):
+        matches = []
+        for obj in objects.values():
+            if obj.get('isa') != 'PBXNativeTarget':
+                continue
+            configs = objects[obj['buildConfigurationList']]['buildConfigurations']
+            bundles = {objects[c]['buildSettings'].get('PRODUCT_BUNDLE_IDENTIFIER') for c in configs}
+            if bundles == {bundle}:
+                matches.append(obj)
+        require(len(matches) == 1, 'Project target IDs changed; review publishing configuration.')
+        return matches[0]
+
+    app = target_for(APP)
+    watch = target_for(WATCH)
+    watch_id = next(key for key, obj in objects.items() if obj is watch)
+    dependencies = [ref for ref in app['dependencies'] if objects[ref].get('target') == watch_id]
+    phases = [ref for ref in app['buildPhases']
+              if objects[ref].get('isa') == 'PBXCopyFilesBuildPhase'
+              and any(objects[f].get('fileRef') == watch['productReference']
+                      for f in objects[ref].get('files', []))]
+    require(len(dependencies) == 1 and len(phases) == 1,
+            'Watch embedding changed; review publishing configuration.')
+    phase = objects[phases[0]]
+    require(len(phase['files']) == 1, 'Watch embed phase contains other products; review publishing configuration.')
+    app['dependencies'].remove(dependencies[0])
+    app['buildPhases'].remove(phases[0])
+
+
+def validate_publish_products(archive):
+    """Fail before export if the release copy still embeds Watch or loses Live Activity."""
+    app = Path(archive) / 'Products/Applications/Compass.app'
+    require(app.is_dir(), 'Expected archived iPhone app.')
+    require(not (app / 'Watch').exists(), 'Published iPhone app must not contain Watch content.')
+    require((app / 'PlugIns/CompassActivity.appex').is_dir(), 'Expected archived Live Activity extension.')
+
+
 def publish():
     global STAGE
     require(os.environ.get('GITHUB_ACTIONS') == 'true', 'Run in GitHub Actions.')
@@ -144,8 +184,6 @@ def publish():
     require(os.environ.get('ASC_DEVELOPER_API_PRIVATE_KEY_BASE64'),
             'Missing required Actions secret: ASC_DEVELOPER_API_PRIVATE_KEY_BASE64')
     require(os.environ.get('IOS_DISTRIBUTION_P12_PASSWORD'), 'Missing p12 password.')
-    require(os.environ.get('WATCH_APP_PROFILE_BASE64'),
-            'Watch publishing requires WATCH_APP_PROFILE_BASE64 for ' + WATCH + '; configure its distribution profile before publishing.')
     require(not WORK.exists(), 'Stale signing directory; run cleanup first.')
     WORK.mkdir(mode=0o700)
     state = {'keychains': shlex.split(run('security', 'list-keychains', '-d', 'user', operation='read keychain search list').stdout.decode()), 'profiles': []}
@@ -154,8 +192,7 @@ def publish():
     STAGE = 'signing setup'
     p12 = decode('IOS_DISTRIBUTION_P12_BASE64', 'identity.p12')
     paths = [decode('IOS_APP_PROFILE_BASE64', 'app.mobileprovision'),
-             decode('IOS_ACTIVITY_PROFILE_BASE64', 'activity.mobileprovision'),
-             decode('WATCH_APP_PROFILE_BASE64', 'watch.mobileprovision')]
+             decode('IOS_ACTIVITY_PROFILE_BASE64', 'activity.mobileprovision')]
     decode('ASC_DEVELOPER_API_PRIVATE_KEY_BASE64', 'AuthKey_' + key + '.p8')
     password = secrets.token_urlsafe(32)
     mask(password)
@@ -191,31 +228,33 @@ def publish():
     shutil.copytree(ROOT, source, ignore=shutil.ignore_patterns('.git', '.build', '__pycache__'))
     project = source / 'Compass.xcodeproj/project.pbxproj'
     data = json.loads(run('plutil', '-convert', 'json', '-o', '-', project, operation='convert project').stdout)
+    exclude_watch_from_publish(data)
     seen = set()
     for obj in data['objects'].values():
         settings = obj.get('buildSettings', {})
         bundle = settings.get('PRODUCT_BUNDLE_IDENTIFIER')
-        if bundle in [APP, ACTIVITY, WATCH]:
-            profile_id = profiles[[APP, ACTIVITY, WATCH].index(bundle)]
+        if bundle in [APP, ACTIVITY]:
+            profile_id = profiles[[APP, ACTIVITY].index(bundle)]
             settings.update(CODE_SIGN_STYLE='Manual', DEVELOPMENT_TEAM=team,
                             CODE_SIGN_IDENTITY='Apple Distribution', PROVISIONING_PROFILE_SPECIFIER=profile_id,
                             CURRENT_PROJECT_VERSION=build)
             if version is not None:
                 settings['MARKETING_VERSION'] = version
             seen.add(bundle)
-    require(seen == {APP, ACTIVITY, WATCH}, 'Project target IDs changed; review signing configuration.')
+    require(seen == {APP, ACTIVITY}, 'Project target IDs changed; review signing configuration.')
     project.write_bytes(plistlib.dumps(data))
     STAGE = 'archive'
     archive = WORK / 'Compass.xcarchive'
     run('xcodebuild', '-project', source / 'Compass.xcodeproj', '-scheme', 'Compass',
         '-configuration', 'Release', '-destination', 'generic/platform=iOS',
         '-derivedDataPath', WORK / 'derived', '-archivePath', archive, 'archive', cwd=source, operation='archive')
+    validate_publish_products(archive)
     marketing_version = uploaded_identity(archive, APP, build)
     STAGE = 'export'
     options = WORK / 'ExportOptions.plist'
     options.write_bytes(plistlib.dumps({'method': 'app-store-connect', 'destination': 'export',
         'teamID': team, 'signingStyle': 'manual', 'signingCertificate': 'Apple Distribution',
-        'provisioningProfiles': dict(zip([APP, ACTIVITY, WATCH], profiles)),
+        'provisioningProfiles': dict(zip([APP, ACTIVITY], profiles)),
         'testFlightInternalTestingOnly': event == 'workflow_dispatch', 'manageAppVersionAndBuildNumber': False}))
     exported = WORK / 'export'
     run('xcodebuild', '-exportArchive', '-archivePath', archive, '-exportPath', exported,
