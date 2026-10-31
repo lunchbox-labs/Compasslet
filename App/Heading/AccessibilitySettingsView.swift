@@ -47,7 +47,7 @@ struct AccessibilitySettingsView: View {
         Text("Text size")
       } footer: {
         Text(
-          "Interface text follows the system text size. The compass readout follows it too, or uses a custom size chosen in Appearance. At the largest sizes the compass screen keeps one readable reading; location details and status remain available here in Settings, which scrolls."
+          "Interface text follows the system text size. The compass readout follows it too, or uses a custom size chosen in Appearance, up to the largest accessibility size. At the largest sizes the compass screen keeps one readable reading; location details and status remain available here in Settings, which scrolls. In the Dynamic Island the Live Activity readout stops at Extra Extra Extra Large; the Lock Screen card uses the full range."
         )
       }
       Section {
@@ -59,7 +59,7 @@ struct AccessibilitySettingsView: View {
       }
       Section {
         Text(
-          "Colors follow the system light and dark appearance. Direction and degrees are shown as text, so a reading does not depend on color. North is marked on the dial by a pointed rim tick that is longer than the other ticks, in red, and labeled N; with Rotate arrow it also stays at the top. With Increase Contrast on, the dial’s labels, rim and ticks use stronger colors and strokes."
+          "Colors follow the system light and dark appearance. Direction and degrees are shown as text, so a reading does not depend on color. North is marked on the dial by a pointed rim tick that is longer than the other ticks, in red, and labeled N; with Rotate arrow it also stays at the top. With Increase Contrast on, the dial’s labels and rim use stronger colors, and the rim and minor ticks use thicker strokes."
         )
       } header: {
         Text("Color and contrast")
