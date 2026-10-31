@@ -1,22 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
+date -u "+%Y-%m-%dT%H:%M:%SZ Discovering Watch simulator pair"
 selection="$(python3 scripts/select-watch-pair)"
 read -r destination companion <<< "$selection"
 # XCTest uses the existing paired iPhone for its Watch transport. Wait for both
 # simulators to finish booting before starting the test runner's handshake.
 python3 - "$companion" "$destination" <<'PY'
+from datetime import datetime, timezone
 import subprocess, sys
 for device in sys.argv[1:]:
-    print("Waiting for simulator boot: " + device, flush=True)
+    print(datetime.now(timezone.utc).isoformat() + " Waiting for simulator boot: " + device, flush=True)
     try:
         subprocess.run(["xcrun", "simctl", "bootstatus", device, "-b"],
                        check=True, timeout=240)
     except subprocess.TimeoutExpired:
         sys.exit("Simulator boot did not finish within 240 seconds: " + device)
+    print(datetime.now(timezone.utc).isoformat() + " Simulator boot finished: " + device, flush=True)
 PY
 mkdir -p .build
 result_directory="$(mktemp -d .build/watch-test-results.XXXXXX)"
+date -u "+%Y-%m-%dT%H:%M:%SZ Starting Watch xcodebuild tests"
 xcodebuild -project Compass.xcodeproj -scheme CompassWatch \
   -destination "platform=watchOS Simulator,id=$destination" \
   -derivedDataPath .build/watch -resultBundlePath "$result_directory/CompassWatchTests.xcresult" \
   CODE_SIGNING_ALLOWED=NO test
+date -u "+%Y-%m-%dT%H:%M:%SZ Watch xcodebuild tests succeeded"

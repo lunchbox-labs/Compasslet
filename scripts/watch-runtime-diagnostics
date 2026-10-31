@@ -6,6 +6,8 @@ commands = [
     ["xcrun", "simctl", "list", "--json"],
     ["xcrun", "simctl", "runtime", "list", "-j"],
     ["/sbin/mount"],
+    ["/usr/bin/log", "show", "--last", "15m", "--style", "compact",
+     "--predicate", 'process == "launchd_sim" OR process == "Carousel" OR process == "SpringBoard"'],
     ["/usr/bin/vm_stat"],
     ["/usr/sbin/sysctl", "vm.swapusage"],
     ["/bin/ps", "-axo", "pid,pcpu,rss,comm", "-r"],

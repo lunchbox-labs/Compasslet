@@ -47,7 +47,7 @@ jobs:
         run: bash scripts/test-ios
   watch:
     runs-on: xcode-27
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
     steps:
@@ -62,6 +62,7 @@ jobs:
           -destination 'generic/platform=watchOS Simulator'
           -derivedDataPath .build/watch CODE_SIGNING_ALLOWED=NO build
       - name: Test on an available Watch simulator
+        timeout-minutes: 10
         run: bash scripts/test-watch
       - name: Diagnose Watch runtime failure
         if: failure()
