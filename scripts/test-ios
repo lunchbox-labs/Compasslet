@@ -16,9 +16,8 @@ sys.exit("No available iOS 27+ iPhone simulator")
 ')"
 mkdir -p .build
 result_directory="$(mktemp -d .build/test-results.XXXXXX)"
-# The embedded Watch targets would otherwise also build for x86_64, which the arm64
-# simulator never runs.
-xcodebuild -project Compass.xcodeproj -scheme Compass \
+# Exclude unused simulator slices on ARM hosts, including embedded Watch targets.
+bash scripts/simulator-xcodebuild -project Compass.xcodeproj -scheme Compass \
   -destination "platform=iOS Simulator,id=$destination" \
   -derivedDataPath .build/xcode -resultBundlePath "$result_directory/CompassTests.xcresult" \
-  CODE_SIGNING_ALLOWED=NO EXCLUDED_ARCHS=x86_64 test
+  CODE_SIGNING_ALLOWED=NO test
