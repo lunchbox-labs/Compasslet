@@ -24,16 +24,10 @@ run_tests() {
     CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$result_directory/xcodebuild.log"
 }
 
-# Occasionally the freshly launched Watch host never reaches XCTest on this runner.
-# Retry that one infrastructure failure once; failing tests stay final.
-host_never_connected='never finished bootstrapping|Early unexpected exit|before establishing connection'
+# Preserve the first native result, including host-launch failures. A matching log
+# message is not sufficient to prove that no test assertions ran or failed.
 status=0
 run_tests || status=$?
-if (( status != 0 )) && grep -qE "$host_never_connected" "$result_directory/xcodebuild.log"; then
-  date -u "+%Y-%m-%dT%H:%M:%SZ The Watch test host never connected; retrying once"
-  status=0
-  run_tests || status=$?
-fi
 if (( status == 0 )); then
   date -u "+%Y-%m-%dT%H:%M:%SZ Watch xcodebuild tests succeeded"
 fi

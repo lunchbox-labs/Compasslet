@@ -69,16 +69,18 @@ elif sys.argv[1:4] == ["simctl", "runtime", "list"]:
         self.assertTrue(calls.endswith("test\n"))
         self.assertEqual(calls.count("test\n"), 1)
 
-    def test_retries_once_when_the_test_host_never_connects(self):
+    def test_preserves_a_host_connection_failure(self):
         result, calls = self.run_watch([self.snapshot()], xcodebuild=self.failing_host_then(0))
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(calls.count("test\n"), 2)
-        self.assertIn("retrying once", result.stdout)
+        self.assertEqual(result.returncode, 65, result.stderr)
+        self.assertEqual(calls.count("test\n"), 1)
 
-    def test_reports_a_second_host_failure(self):
-        result, calls = self.run_watch([self.snapshot()], xcodebuild=self.failing_host_then(65))
-        self.assertEqual(result.returncode, 65)
-        self.assertEqual(calls.count("test\n"), 2)
+    def test_does_not_hide_test_failure_alongside_host_connection_error(self):
+        command = self.failing_host_then(0).replace(
+            f"  echo '{self.HOST_NEVER_CONNECTED}'",
+            f"  echo 'Test Case testHeading failed (0.01 seconds).'; echo '{self.HOST_NEVER_CONNECTED}'")
+        result, calls = self.run_watch([self.snapshot()], xcodebuild=command)
+        self.assertEqual(result.returncode, 65, result.stderr)
+        self.assertEqual(calls.count("test\n"), 1)
 
     def test_rejects_unmounted_or_transitioning_watch_runtime(self):
         select_pair = runpy.run_path(str(SCRIPTS / "select-watch-pair"))["select_pair"]
