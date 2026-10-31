@@ -230,6 +230,56 @@ struct CompassActivityControllerTests {
     await controller.end()
   }
 
+  @Test func activityReadingsSpeakOnlyShownReadingsAsRecordedTravel() {
+    func presentation(
+      _ status: CompassActivityAttributes.Status, bearing: Double? = nil, isStale: Bool = false,
+      appearance: AppearanceValues? = nil
+    ) -> CompassActivityReading {
+      CompassActivityReading(
+        state: .init(
+          bearing: bearing, status: status, sampleTime: nil, expiry: nil, appearance: appearance),
+        isStale: isStale)
+    }
+    let usable = presentation(.usable, bearing: 45.4)
+    #expect(usable.reading == .init(point: .northeast, roundedDegrees: 45))
+    #expect(usable.bearing == "NE 45°")
+    #expect(
+      usable.spokenDescription
+        == "45 degrees, northeast, last recorded travel direction, true north")
+    #expect(presentation(.usable, bearing: 359.6).bearing == "N 0°")
+    // A stale payload, any non-usable status, or an out-of-range bearing is never spoken as a
+    // recorded travel direction; each falls back to its visible status line.
+    let withoutReading =
+      [presentation(.usable, bearing: 45, isStale: true)]
+      + [CompassActivityAttributes.Status.waiting, .slow, .unreliable, .unavailable].map {
+        presentation($0, bearing: 45)
+      } + [Double.nan, .infinity, -1, 360].map { presentation(.usable, bearing: $0) }
+    for value in withoutReading {
+      #expect(value.reading == nil)
+      #expect(value.bearing == "—")
+      #expect(!value.spokenDescription.contains("last recorded"))
+      #expect(value.spokenDescription == "\(value.status), travel direction, true north")
+    }
+    #expect(
+      presentation(.usable, bearing: 45, isStale: true).status == presentation(.unavailable).status)
+    let statuses = [CompassActivityAttributes.Status.waiting, .slow, .unreliable, .unavailable]
+      .map { presentation($0).status }
+    #expect(Set(statuses).count == statuses.count)
+    // Shorter forms are offered only when both fields are shown, and never without a reading.
+    #expect(usable.bearingCandidates == ["NE 45°", "45°", "NE"])
+    #expect(presentation(.waiting).bearingCandidates.isEmpty)
+    var degreesOnly = AppearanceValues()
+    degreesOnly.showDirection = false
+    let custom = presentation(.usable, bearing: 180, appearance: degreesOnly)
+    #expect(custom.bearing == "180°")
+    #expect(custom.bearingCandidates == ["180°"])
+    #expect(custom.spokenDescription.hasPrefix("180 degrees, south,"))
+    var hidden = AppearanceValues()
+    hidden.showDirection = false
+    hidden.showDegrees = false
+    #expect(presentation(.usable, bearing: 270, appearance: hidden).bearing == "W")
+  }
+
   @Test func rejectedCourseClearsPreviouslyDeliveredActivityReading() async throws {
     let now = Date(timeIntervalSince1970: 100)
     for (source, reference, timestamp) in [
