@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Generic simulator destinations ignore ONLY_ACTIVE_ARCH. Keep Intel hosts usable.
+# For simulator builds only: generic destinations ignore ONLY_ACTIVE_ARCH.
+# Use a plain CLI assignment; SDK-conditional keys are not parsed by xcodebuild.
 if [[ "$(uname -m)" == arm64 ]]; then
-  exec xcodebuild "$@" 'EXCLUDED_ARCHS[sdk=iphonesimulator*]=x86_64' \
-    'EXCLUDED_ARCHS[sdk=watchsimulator*]=x86_64'
+  exec xcodebuild "$@" EXCLUDED_ARCHS=x86_64
 fi
 exec xcodebuild "$@"

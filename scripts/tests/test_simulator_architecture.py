@@ -18,7 +18,7 @@ class SimulatorArchitectureTests(unittest.TestCase):
                 result = subprocess.run(['bash', str(SCRIPTS / 'simulator-xcodebuild'), '-destination', 'a b', 'test'], env={**os.environ, 'PATH': directory + ':' + os.environ['PATH']}, capture_output=True, text=True)
                 self.assertEqual(result.returncode, 7)
                 self.assertEqual(result.stdout.splitlines()[:3], ['-destination', 'a b', 'test'])
-                self.assertEqual('EXCLUDED_ARCHS[sdk=watchsimulator*]=x86_64' in result.stdout, arch == 'arm64')
+                self.assertEqual('EXCLUDED_ARCHS=x86_64' in result.stdout, arch == 'arm64')
     def test_both_entrypoints_preserve_native_failure_and_host_architecture(self):
         import json
         for entrypoint in ('test-ios', 'test-watch'):
@@ -41,7 +41,6 @@ class SimulatorArchitectureTests(unittest.TestCase):
                                             capture_output=True, text=True, timeout=10)
                     self.assertEqual(result.returncode, 7, result.stderr)
                     arguments = json.loads((root / 'arguments.json').read_text())
-                    self.assertNotIn('EXCLUDED_ARCHS=x86_64', arguments)
-                    for sdk in ('iphonesimulator', 'watchsimulator'):
-                        self.assertEqual(f'EXCLUDED_ARCHS[sdk={sdk}*]=x86_64' in arguments, arch == 'arm64')
+                    exclusions = [arg for arg in arguments if arg.startswith('EXCLUDED_ARCHS')]
+                    self.assertEqual(exclusions, ['EXCLUDED_ARCHS=x86_64'] if arch == 'arm64' else [])
                     self.assertIn('platform=' + ('iOS Simulator,id=phone' if entrypoint == 'test-ios' else 'watchOS Simulator,id=watch'), arguments)
