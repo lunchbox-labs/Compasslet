@@ -63,6 +63,22 @@ class WaitForBootTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "did not finish within 1 seconds"):
             self.wait(scripted(*steps, 0), stall_seconds=5, deadline_seconds=1)
 
+    def test_repeated_multiline_phase_does_not_reset_stall_deadline(self):
+        blocks = [(0.1, PHASE.format(i) + "\n" + MIGRATION.format("Siri.migrator", i))
+                  for i in range(10)]
+        with self.assertRaisesRegex(RuntimeError, "no progress"):
+            self.wait(scripted(*blocks, 0), stall_seconds=0.3)
+
+    def test_closed_output_does_not_disable_deadlines(self):
+        command = [sys.executable, "-c", "import os,time; os.close(1); os.close(2); time.sleep(1)"]
+        with self.assertRaisesRegex(RuntimeError, "no progress"):
+            self.wait(command, stall_seconds=0.2, deadline_seconds=0.5)
+
+    def test_partial_output_does_not_block_deadline_check(self):
+        command = [sys.executable, "-c", "import sys,time; sys.stdout.write('Boot'); sys.stdout.flush(); time.sleep(1)"]
+        with self.assertRaisesRegex(RuntimeError, "no progress"):
+            self.wait(command, stall_seconds=0.2, deadline_seconds=0.5)
+
     def test_reports_a_failed_boot(self):
         with self.assertRaisesRegex(RuntimeError, "failed with status 3: device"):
             self.wait(scripted((0, "\tBooting"), 3), stall_seconds=5)

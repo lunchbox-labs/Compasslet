@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Boot simulators one at a time and fail only when a boot stops progressing."""
 import argparse
+from datetime import datetime, timezone
+import os
 import re
 import select
 import subprocess
@@ -17,40 +19,58 @@ def normalize(line):
 
 
 def wait_for_boot(udid, stall_seconds, deadline_seconds, command=None):
-    """Return once ``simctl bootstatus`` exits; raise RuntimeError when it stalls or fails."""
+    """Return on successful bootstatus exit, with bounded progress and total waits."""
     command = command or ["xcrun", "simctl", "bootstatus", udid, "-b"]
-    print("Waiting for simulator boot: " + udid, flush=True)
+    print(datetime.now(timezone.utc).isoformat() + " Waiting for simulator boot: " + udid, flush=True)
     started = time.monotonic()
     with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                          text=True, bufsize=1) as process:
+                          bufsize=0) as process:
         try:
             last_progress = started
-            previous = None
-            while True:
+            fields = {}
+            pending = b""
+            stream_open = True
+            while stream_open or process.poll() is None:
                 now = time.monotonic()
-                if now - started > deadline_seconds:
+                remaining = deadline_seconds - (now - started)
+                idle = stall_seconds - (now - last_progress)
+                if remaining <= 0:
                     raise RuntimeError("Simulator boot did not finish within "
                                        + str(deadline_seconds) + " seconds: " + udid)
-                if now - last_progress > stall_seconds:
+                if idle <= 0:
                     raise RuntimeError("Simulator boot made no progress for "
                                        + str(stall_seconds) + " seconds: " + udid)
-                ready, _, _ = select.select([process.stdout], [], [], 1)
+                # Read raw chunks: buffered readline can wait on an unfinished line,
+                # or hide already-buffered lines from select. EOF is not process exit.
+                ready, _, _ = select.select([process.stdout] if stream_open else [],
+                                            [], [], min(0.1, remaining, idle))
                 if not ready:
-                    if process.poll() is not None:
-                        break
                     continue
-                line = process.stdout.readline()
-                if not line:
-                    break
-                sys.stdout.write(line)
-                sys.stdout.flush()
-                phase = normalize(line)
-                if phase and phase != previous:
-                    previous = phase
-                    last_progress = time.monotonic()
-            status = process.wait()
+                chunk = os.read(process.stdout.fileno(), 65536)
+                if not chunk:
+                    stream_open = False
+                    if pending:
+                        print(pending.decode(errors="replace"), end="", flush=True)
+                    continue
+                pending += chunk
+                while b"\n" in pending:
+                    raw, pending = pending.split(b"\n", 1)
+                    line = raw.decode(errors="replace")
+                    print(line, flush=True)
+                    phase = normalize(line)
+                    if not phase or "Migration Elapsed:" in line:
+                        continue
+                    # A status report spans several lines. Compare each field with
+                    # its last value, not with the preceding line in that report.
+                    key = ("status" if "Status=" in phase else
+                           "reason" if phase.startswith("Reason:") else "message")
+                    if fields.get(key) != phase:
+                        fields[key] = phase
+                        last_progress = time.monotonic()
+            status = process.poll()
             if status:
                 raise RuntimeError("Simulator boot failed with status " + str(status) + ": " + udid)
+            print(datetime.now(timezone.utc).isoformat() + " Simulator boot finished: " + udid, flush=True)
         finally:
             if process.poll() is None:
                 process.kill()
