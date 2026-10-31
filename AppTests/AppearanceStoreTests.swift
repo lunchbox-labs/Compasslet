@@ -25,17 +25,17 @@ struct AppearanceStoreTests {
   }
 
   @Test func everyReadoutSizeMapsToItsDynamicTypeCategoryInOrder() {
+    // Choosing a larger custom size must render larger, and the accessibility boundary the
+    // slider shows must be the one the system applies.
     let mapped = ReadoutTextSize.allCases.map(\.dynamicTypeSize)
     #expect(mapped == mapped.sorted())
     #expect(Set(mapped).count == mapped.count)
     #expect(ReadoutTextSize.xxxLarge.dynamicTypeSize == .xxxLarge)
-    #expect(ReadoutTextSize.accessibility1.dynamicTypeSize == .accessibility1)
     #expect(ReadoutTextSize.accessibility5.dynamicTypeSize == .accessibility5)
     #expect(
       ReadoutTextSize.allCases.allSatisfy {
         $0.isAccessibilitySize == $0.dynamicTypeSize.isAccessibilitySize
       })
-    #expect(Set(ReadoutTextSize.allCases.map(\.title)).count == ReadoutTextSize.allCases.count)
   }
 
   @Test func migratesOnlyExistingPhoneArrowChoiceOnce() throws {

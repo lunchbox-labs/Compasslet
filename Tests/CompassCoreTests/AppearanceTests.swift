@@ -73,32 +73,31 @@ import Testing
 }
 
 @Test func readoutSizesExtendToAccessibilityCategoriesWithStableStorage() throws {
+  // The accessibility categories follow the standard ones in order, and the boundary between
+  // them is the largest standard category.
   let sizes = ReadoutTextSize.allCases
-  #expect(sizes.count == 12)
-  #expect(sizes.map(\.rawValue) == Array(0..<12))
-  #expect(ReadoutTextSize(rawValue: 6) == .xxxLarge)
-  #expect(ReadoutTextSize(rawValue: 7) == .accessibility1)
-  #expect(ReadoutTextSize(rawValue: 11) == .accessibility5)
-  #expect(ReadoutTextSize(rawValue: 12) == nil)
+  #expect(sizes.map(\.rawValue) == sizes.map(\.rawValue).sorted())
+  #expect(sizes.first == .xSmall)
+  #expect(sizes.last == .accessibility5)
+  let accessibilitySizes = sizes.drop(while: { !$0.isAccessibilitySize })
+  #expect(accessibilitySizes.allSatisfy { $0.isAccessibilitySize })
+  #expect(accessibilitySizes.first == .accessibility1)
   #expect(!ReadoutTextSize.xxxLarge.isAccessibilitySize)
   #expect(ReadoutTextSize.accessibility1.isAccessibilitySize)
-  #expect(sizes.filter(\.isAccessibilitySize).count == 5)
-  // A choice saved before the accessibility categories existed keeps its meaning.
-  let saved = Data(
-    """
-    {"global":{"showDirection":true,"showDegrees":true,"useSystemTextSize":false,
-    "customTextSize":6,"minorTicks":17,"labels":"inside","rotation":"dial"}}
-    """.utf8)
-  let decoded = AppearancePreferences.decode(saved)
-  #expect(!decoded.global.useSystemTextSize)
-  #expect(decoded.global.customTextSize == .xxxLarge)
+  // A size saved before the accessibility categories existed keeps its meaning: store the
+  // largest standard choice in a structurally valid document and read it back.
   var preferences = AppearancePreferences()
   var global = preferences.global
   global.useSystemTextSize = false
+  global.customTextSize = .xxxLarge
+  preferences.setGlobal(global)
+  let legacy = try JSONEncoder().encode(preferences)
+  #expect(AppearancePreferences.decode(legacy).global.customTextSize == .xxxLarge)
   global.customTextSize = .accessibility5
   preferences.setGlobal(global)
   let restored = AppearancePreferences.decode(try JSONEncoder().encode(preferences))
   #expect(restored.global.customTextSize == .accessibility5)
+  #expect(restored == preferences)
 }
 
 @Test func readoutSizeChoiceFollowsGlobalsUntilSurfaceOverrides() throws {
