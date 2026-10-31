@@ -23,14 +23,14 @@ python3 scripts/wait-for-boot --deadline-seconds 420 "$companion"
 mkdir -p .build
 
 # The test build does not apply the active-architecture rule on a watchOS destination,
-# so exclude the x86_64 slice here as the generic build does.
+# so use the same host-aware architecture wrapper as the generic build.
 run_tests() {
   result_directory="$(mktemp -d .build/watch-test-results.XXXXXX)"
   date -u "+%Y-%m-%dT%H:%M:%SZ Starting Watch xcodebuild tests"
   bash scripts/watch-xcodebuild -project Compass.xcodeproj -scheme CompassWatch \
     -destination "platform=watchOS Simulator,id=$destination" \
     -derivedDataPath .build/watch -resultBundlePath "$result_directory/CompassWatchTests.xcresult" \
-    CODE_SIGNING_ALLOWED=NO EXCLUDED_ARCHS=x86_64 test 2>&1 | tee "$result_directory/xcodebuild.log"
+    CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$result_directory/xcodebuild.log"
 }
 
 # Preserve the first native result, including host-launch failures. A matching log
