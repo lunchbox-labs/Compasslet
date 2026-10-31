@@ -46,7 +46,7 @@ struct CompassSettingsView: View {
 
   private var locationDetails: some View {
     Form {
-      Section("Current location") {
+      Section("Current Location") {
         PhoneLocationReadout(location: location)
       }
       if headingStatus != .live {

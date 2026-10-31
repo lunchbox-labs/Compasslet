@@ -22,7 +22,7 @@ struct AccessibilitySettingsView: View {
           "The Live Activity keeps the last accepted reading, and its card shows the sample time. Dismissing the Live Activity does not stop the drive."
         )
       } header: {
-        Text("Two kinds of reading")
+        Text("Two Kinds of Reading")
       }
       Section {
         Text(
@@ -44,7 +44,7 @@ struct AccessibilitySettingsView: View {
       Section {
         NavigationLink("Appearance") { AppearanceSettingsView() }
       } header: {
-        Text("Text size")
+        Text("Text Size")
       } footer: {
         Text(
           "Interface text follows the system text size. The compass readout follows it too, or uses a custom size chosen in Appearance, up to the largest accessibility size. At the largest sizes the compass screen keeps one readable reading; location details and status remain available here in Settings, which scrolls. In the Dynamic Island the Live Activity readout stops at Extra Extra Extra Large; the Lock Screen card uses the full range."
@@ -52,17 +52,17 @@ struct AccessibilitySettingsView: View {
       }
       Section {
         Text(
-          "With Reduce Motion on, Settings appears and closes without animation, and the compass shows a steady direction and degrees reading instead of the rotating dial. Appearance › Reduce Motion can keep the dial instead; it then moves in steps of about four degrees, so a settled reading can differ from the sensor by up to four degrees. Choosing Rotate arrow keeps the dial still and moves only the arrow."
+          "With Reduce Motion on, Settings appears and closes without animation, and the compass shows a steady direction and degrees reading instead of the rotating dial. Appearance › Reduce Motion can keep the dial instead; it then moves in steps of about four degrees, so a settled reading can differ from the sensor by up to four degrees. Choosing Rotate Arrow keeps the dial still and moves only the arrow."
         )
       } header: {
         Text("Motion")
       }
       Section {
         Text(
-          "Colors follow the system light and dark appearance. Direction and degrees are shown as text, so a reading does not depend on color. North is marked on the dial by a pointed rim tick that is longer than the other ticks, in red, and labeled N; with Rotate arrow it also stays at the top. With Increase Contrast on, the dial’s labels and rim use stronger colors, and the rim and minor ticks use thicker strokes."
+          "Colors follow the system light and dark appearance. Direction and degrees are shown as text, so a reading does not depend on color. North is marked on the dial by a pointed rim tick that is longer than the other ticks, in red, and labeled N; with Rotate Arrow it also stays at the top. With Increase Contrast on, the dial’s labels and rim use stronger colors, and the rim and minor ticks use thicker strokes."
         )
       } header: {
-        Text("Color and contrast")
+        Text("Color and Contrast")
       } footer: {
         Text(
           "Hiding the cardinal labels in Appearance keeps the pointed north tick, so north stays identifiable by shape as well as color."
