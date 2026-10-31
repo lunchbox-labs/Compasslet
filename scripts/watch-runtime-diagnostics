@@ -3,6 +3,7 @@
 import subprocess
 
 commands = [
+    ["xcrun", "simctl", "list", "--json"],
     ["xcrun", "simctl", "runtime", "list", "-j"],
     ["/sbin/mount"],
     ["/usr/bin/vm_stat"],
