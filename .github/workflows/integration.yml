@@ -1,13 +1,6 @@
 name: Integration Tests
 on:
   pull_request:
-    paths:
-      - 'scripts/testflight'
-      - 'scripts/check-publish-archive'
-      - 'scripts/tests/test_publish_project.py'
-      - 'Compass.xcodeproj/**'
-      - '.github/workflows/publish.yml'
-      - '.github/workflows/integration.yml'
   push:
     branches: [main]
   workflow_dispatch:
@@ -17,7 +10,25 @@ concurrency:
   group: publish-archive-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
+  scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      simulators: ${{ steps.scope.outputs.simulators }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 2
+      - name: Decide whether the changed files need native checks
+        id: scope
+        env:
+          PULL_REQUEST_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: python3 scripts/ci-scope
   archive:
+    needs: scope
+    # Run this native lane on code PRs as well as main/manual: simulator tests do
+    # not exercise the publishing graph, which must be verified before merging.
+    if: ${{ !cancelled() && (needs.scope.result != 'success' || needs.scope.outputs.simulators == 'true') }}
     runs-on: xcode-27
     timeout-minutes: 25
     env:
