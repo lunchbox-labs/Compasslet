@@ -111,10 +111,20 @@ swipe.
 Prerequisite: the Larger Text changes from #78. Settings: Larger Accessibility Sizes on,
 tested at the default size, AX3 and AX5, with and without Bold Text, on the smallest
 supported iPhone. Apple's criteria treat AX3 as the 200 percent point, so the primary
-reading must be whole and readable there and at AX5. The compass screen collapses to one
-essential reading at accessibility sizes and sends the remaining details to Settings;
-confirm those details are still reachable and readable at AX3 and AX5. Check each Live
-Activity family in its real bounds.
+reading must be whole and readable there and at AX5, and information lost to truncation
+must be reachable visually, not only through a spoken label. Cover each of these rows:
+
+- Compass screen with a live reading, and in each permission and error state (no heading,
+  stale, calibration, denied, Location Services off, approximate location). The screen
+  collapses to one essential reading at accessibility sizes and sends the remaining
+  details to Settings; confirm those details are reachable and readable at AX3 and AX5.
+- Settings and every Appearance subpage, with the readout on the system size and on a
+  custom accessibility size, and with both center readouts hidden.
+- Live Activity in its real bounds: Lock Screen, small supplemental family, expanded
+  Dynamic Island and compact Dynamic Island. In the small family, confirm the reading
+  falls back from the full reading to degrees alone and then direction alone instead of
+  shrinking, and that the status line and sample time stay readable. In the Dynamic
+  Island, confirm the readout stops at Extra Extra Extra Large without clipping.
 
 | Task | Surface | Device | iOS | Build / commit | Text size | Steps | Result | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
