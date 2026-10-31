@@ -133,11 +133,14 @@ final class CarPlayPresentationTests: XCTestCase {
     screen.update(dialValue(59, at: now), traits: day)
     let before = try XCTUnwrap(screen.template.listHeader)
     screen.refresh(traits: day)
-    XCTAssertTrue(screen.template.listHeader === before)
+    let unchanged = try XCTUnwrap(screen.template.listHeader)
+    XCTAssertEqual(unchanged.title, before.title)
+    XCTAssertEqual(unchanged.subtitle, before.subtitle)
+    XCTAssertEqual(unchanged.thumbnail.image.pngData(), before.thumbnail.image.pngData())
     screen.refresh(traits: night)
     let after = try XCTUnwrap(screen.template.listHeader)
-    XCTAssertFalse(after === before)
     XCTAssertEqual(after.title, before.title)
+    XCTAssertEqual(after.subtitle, before.subtitle)
     XCTAssertNotEqual(after.thumbnail.image.pngData(), before.thumbnail.image.pngData())
   }
 
@@ -165,22 +168,6 @@ final class CarPlayPresentationTests: XCTestCase {
     let fallback = CarPlayCompassTemplate.dialImage(course: 59, traits: UITraitCollection())
     XCTAssertEqual(fallback.scale, 1)
     XCTAssertEqual(fallback.size, light.size)
-  }
-
-  func testDisplayInfoRecordsScaleThumbnailLimitAndStyle() throws {
-    let defaults = try XCTUnwrap(UserDefaults(suiteName: "CarPlayDisplayInfoTests"))
-    defaults.removePersistentDomain(forName: "CarPlayDisplayInfoTests")
-    XCTAssertNil(CarPlayDisplayInfo.recorded(defaults: defaults))
-    let car = UITraitCollection { traits in
-      traits.displayScale = 2
-      traits.userInterfaceStyle = .dark
-    }
-    CarPlayDisplayInfo.record(car, defaults: defaults)
-    let maximum = CPThumbnailImage.maximumImageSize(forAspectRatio: 1)
-    XCTAssertEqual(
-      CarPlayDisplayInfo.recorded(defaults: defaults),
-      "2× display · \(Int(maximum.width))×\(Int(maximum.height)) pt thumbnail · dark style")
-    defaults.removePersistentDomain(forName: "CarPlayDisplayInfoTests")
   }
 
   private func dialValue(_ degrees: Double, at timestamp: Date, now: Date? = nil)

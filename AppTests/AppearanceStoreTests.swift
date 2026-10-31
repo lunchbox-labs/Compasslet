@@ -16,9 +16,11 @@ struct AppearanceStoreTests {
       preferences.setOverride(activity, for: .activity)
     }
     #expect(!AppearanceStore.read(from: defaults).effective(for: .activity).showDegrees)
+    let saved = store.preferences
     store.update { _ in }
+    #expect(store.preferences == saved)
     let reopened = AppearanceStore(defaults: defaults, legacyDefaults: defaults)
-    #expect(reopened.preferences == store.preferences)
+    #expect(reopened.preferences == saved)
   }
 
   @Test func migratesOnlyExistingPhoneArrowChoiceOnce() throws {
