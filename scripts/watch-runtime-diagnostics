@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 """Bounded, read-only runner diagnostics after Watch validation fails."""
 import subprocess
+from pathlib import Path
 
 commands = [
+    ["xcrun", "xcresulttool", "get", "test-results", "summary", "--path", str(bundle)]
+    for bundle in sorted(Path(".build").glob("watch-test-results.*/CompassWatchTests.xcresult"))
+]
+commands += [
     ["xcrun", "simctl", "list", "--json"],
     ["xcrun", "simctl", "runtime", "list", "-j"],
     ["/sbin/mount"],
@@ -13,7 +18,11 @@ commands = [
      'process IN {"simdiskimaged", "cryptexd", "CoreSimulatorService", "simctl"}'
      ' OR process BEGINSWITH "SimLaunchHost"'],
     ["/usr/bin/log", "show", "--last", "25m", "--style", "compact", "--predicate",
-     'process IN {"launchd_sim", "SpringBoard", "Carousel"}'],
+     '(process IN {"CoreSimulatorService", "com.apple.CoreSimulator.CoreSimulatorService",'
+     ' "testmanagerd", "xcodebuild"} AND '
+     '(eventMessage CONTAINS[c] "shutdown" OR eventMessage CONTAINS[c] "terminat"'
+     ' OR eventMessage CONTAINS[c] "crash" OR eventMessage CONTAINS[c] "bootstrap"))'
+     ' OR process IN {"CompassWatch", "SpringBoard", "Carousel"}'],
 ]
 for command in commands:
     print("Diagnostic: " + " ".join(command), flush=True)

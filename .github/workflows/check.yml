@@ -67,3 +67,12 @@ jobs:
       - name: Diagnose Watch runtime failure
         if: failure()
         run: python3 scripts/watch-runtime-diagnostics
+      - name: Preserve failed Watch test results
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: watch-test-results
+          path: .build/watch-test-results.*/CompassWatchTests.xcresult
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 7
