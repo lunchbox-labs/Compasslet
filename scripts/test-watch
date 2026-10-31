@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+selection="$(xcrun simctl list --json | python3 -c '
+import json, re, sys
+payload = json.load(sys.stdin)
+available = {device["udid"]: device for devices in payload["devices"].values()
+             for device in devices if device.get("isAvailable")}
+for runtime, devices in sorted(payload["devices"].items(), reverse=True):
+    match = re.search(r"\.watchOS-(\d+)-", runtime)
+    if not match or int(match.group(1)) < 27:
+        continue
+    for device in devices:
+        if device.get("isAvailable") and device["name"].startswith("Apple Watch"):
+            for pair in payload["pairs"].values():
+                if pair["watch"]["udid"] != device["udid"]:
+                    continue
+                phone = available.get(pair["phone"]["udid"])
+                if phone:
+                    print("Selected " + device["name"] + " with " + phone["name"], file=sys.stderr)
+                    print(device["udid"], phone["udid"])
+                    sys.exit(0)
+sys.exit("No available watchOS 27+ Watch with an available paired iPhone")
+')"
+read -r destination companion <<< "$selection"
+# XCTest uses the existing paired iPhone for its Watch transport. Wait for both
+# simulators to finish booting before starting the test runner's handshake.
+python3 - "$companion" "$destination" <<'PY'
+import subprocess, sys
+for device in sys.argv[1:]:
+    print("Waiting for simulator boot: " + device, flush=True)
+    try:
+        subprocess.run(["xcrun", "simctl", "bootstatus", device, "-b"],
+                       check=True, timeout=240)
+    except subprocess.TimeoutExpired:
+        sys.exit("Simulator boot did not finish within 240 seconds: " + device)
+PY
+mkdir -p .build
+result_directory="$(mktemp -d .build/watch-test-results.XXXXXX)"
+xcodebuild -project Compass.xcodeproj -scheme CompassWatch \
+  -destination "platform=watchOS Simulator,id=$destination" \
+  -derivedDataPath .build/watch -resultBundlePath "$result_directory/CompassWatchTests.xcresult" \
+  CODE_SIGNING_ALLOWED=NO test

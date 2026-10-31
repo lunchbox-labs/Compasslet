@@ -25,6 +25,13 @@ struct CompassSettingsView: View {
             Link("Open Settings", destination: url)
           }
         }
+        Section("Apple Watch") {
+          Label("Experimental Support", systemImage: "applewatch")
+          Text(
+            "Apple Watch runtime and device validation are incomplete. Support is experimental and may not work as expected."
+          )
+          .foregroundStyle(.secondary)
+        }
         DiagnosticsSettingsSection()
       }
       .navigationTitle("Settings")

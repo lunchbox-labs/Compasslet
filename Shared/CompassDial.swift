@@ -11,6 +11,7 @@ struct CompassDial: View {
   let bearing: Double?
   let appearance: AppearanceValues
   var showsReadout = true
+  var unavailableSymbol = "safari"
   @Environment(\.colorSchemeContrast) private var contrast
 
   private var increasedContrast: Bool { contrast == .increased }
@@ -76,7 +77,7 @@ struct CompassDial: View {
               .rotationEffect(.degrees(bearing))
           }
         } else {
-          Image(systemName: "safari").font(.largeTitle).foregroundStyle(.tertiary)
+          Image(systemName: unavailableSymbol).font(.largeTitle).foregroundStyle(.tertiary)
         }
       }
       // Without a reading the dial is dimmed; status text carries the explanation.
