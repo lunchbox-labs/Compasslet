@@ -84,15 +84,21 @@ import Testing
   #expect(accessibilitySizes.first == .accessibility1)
   #expect(!ReadoutTextSize.xxxLarge.isAccessibilitySize)
   #expect(ReadoutTextSize.accessibility1.isAccessibilitySize)
-  // A size saved before the accessibility categories existed keeps its meaning: store the
-  // largest standard choice in a structurally valid document and read it back.
+  // A size saved before the accessibility categories existed keeps its meaning. The stored
+  // value 6 is the historical wire value for Extra Extra Extra Large, written here
+  // independently of the current encoder so a shift in raw values would be caught.
   var preferences = AppearancePreferences()
   var global = preferences.global
   global.useSystemTextSize = false
-  global.customTextSize = .xxxLarge
   preferences.setGlobal(global)
-  let legacy = try JSONEncoder().encode(preferences)
-  #expect(AppearancePreferences.decode(legacy).global.customTextSize == .xxxLarge)
+  var stored = try #require(
+    JSONSerialization.jsonObject(with: JSONEncoder().encode(preferences)) as? [String: Any])
+  var earlier = try #require(stored["global"] as? [String: Any])
+  earlier["customTextSize"] = 6
+  stored["global"] = earlier
+  let legacy = AppearancePreferences.decode(try JSONSerialization.data(withJSONObject: stored))
+  #expect(legacy.global.customTextSize == .xxxLarge)
+  #expect(!legacy.global.useSystemTextSize)
   global.customTextSize = .accessibility5
   preferences.setGlobal(global)
   let restored = AppearancePreferences.decode(try JSONEncoder().encode(preferences))
