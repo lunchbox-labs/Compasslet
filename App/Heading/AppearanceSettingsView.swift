@@ -457,7 +457,7 @@ private extension AppearanceStore {
       set: { newValue in
         var changed = current()
         changed[keyPath: keyPath] = newValue
-        update { preferences in
+        self.update { preferences in
           if let surface {
             preferences.setOverride(changed, for: surface)
           } else {
