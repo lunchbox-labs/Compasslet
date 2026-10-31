@@ -12,7 +12,10 @@ SCRIPTS = Path(__file__).resolve().parents[1]
 
 
 class WatchSimulatorTests(unittest.TestCase):
-    def run_watch(self, snapshots, test_status=0):
+    HOST_NEVER_CONNECTED = ("CompassWatch (1) encountered an error (Early unexpected exit, operation never"
+                            " finished bootstrapping - no restart will be attempted.)")
+
+    def run_watch(self, snapshots, test_status=0, xcodebuild=None):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "scripts").symlink_to(SCRIPTS)
@@ -31,13 +34,23 @@ if sys.argv[1:3] == ["simctl", "list"]:
 elif sys.argv[1:4] == ["simctl", "runtime", "list"]:
     print(json.dumps({"watch": {"runtimeIdentifier": "com.apple.CoreSimulator.SimRuntime.watchOS-27-0", "state": "Ready", "mountPath": "/"}, "phone": {"runtimeIdentifier": "com.apple.CoreSimulator.SimRuntime.iOS-27-0", "state": "Ready", "mountPath": "/"}}))
 ''')
-            (root / "xcodebuild").write_text(f"#!/bin/sh\necho test >> '{root}/calls'\nexit {test_status}\n")
+            (root / "xcodebuild").write_text(
+                xcodebuild or f"#!/bin/sh\necho test >> '{root}/calls'\nexit {test_status}\n")
             for name in ("xcrun", "xcodebuild"):
                 (root / name).chmod(0o755)
             result = subprocess.run(["bash", str(SCRIPTS / "test-watch")], cwd=root,
                                     env={**os.environ, "PATH": str(root) + os.pathsep + os.environ["PATH"]},
                                     capture_output=True, text=True, timeout=20)
             return result, (root / "calls").read_text()
+
+    def failing_host_then(self, status):
+        """An xcodebuild stand-in whose first run reports the host handshake failure."""
+        return ("#!/bin/sh\n"
+                "echo test >> calls\n"
+                "if [ \"$(grep -c '^test$' calls)\" -eq 1 ]; then\n"
+                f"  echo '{self.HOST_NEVER_CONNECTED}'; exit 65\n"
+                "fi\n"
+                f"exit {status}\n")
 
     def snapshot(self, available=True):
         return {"devices": {
@@ -50,7 +63,22 @@ elif sys.argv[1:4] == ["simctl", "runtime", "list"]:
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("simctl bootstatus phone -b", calls)
         self.assertIn("simctl bootstatus watch -b", calls)
+        self.assertIn("simctl install watch .build/watch/Build/Products/Debug-watchsimulator/CompassWatch.app", calls)
+        self.assertIn("simctl launch watch dev.lunchbox-labs.carplay-compass.watchkitapp", calls)
+        self.assertIn("simctl terminate watch dev.lunchbox-labs.carplay-compass.watchkitapp", calls)
         self.assertTrue(calls.endswith("test\n"))
+        self.assertEqual(calls.count("test\n"), 1)
+
+    def test_retries_once_when_the_test_host_never_connects(self):
+        result, calls = self.run_watch([self.snapshot()], xcodebuild=self.failing_host_then(0))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls.count("test\n"), 2)
+        self.assertIn("retrying once", result.stdout)
+
+    def test_reports_a_second_host_failure(self):
+        result, calls = self.run_watch([self.snapshot()], xcodebuild=self.failing_host_then(65))
+        self.assertEqual(result.returncode, 65)
+        self.assertEqual(calls.count("test\n"), 2)
 
     def test_rejects_unmounted_or_transitioning_watch_runtime(self):
         select_pair = runpy.run_path(str(SCRIPTS / "select-watch-pair"))["select_pair"]
@@ -89,6 +117,7 @@ elif sys.argv[1:4] == ["simctl", "runtime", "list"]:
         result, calls = self.run_watch([self.snapshot()], test_status=7)
         self.assertEqual(result.returncode, 7, result.stderr)
         self.assertTrue(calls.endswith("test\n"))
+        self.assertEqual(calls.count("test\n"), 1, "a failing test must not be retried")
 
 
 if __name__ == "__main__":
