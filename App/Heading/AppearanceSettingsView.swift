@@ -148,6 +148,19 @@ private struct AppearanceDetailView: View {
             )
           }
           .pickerStyle(.navigationLink)
+          Section {
+            Picker("With Reduce Motion", selection: binding(\.reducedMotionDial)) {
+              Text("Steady reading").tag(ReducedMotionDial.steadyReadout)
+              Text("Keep the dial").tag(ReducedMotionDial.rotatingDial)
+            }
+          } header: {
+            Text("Reduce Motion")
+          } footer: {
+            Text(
+              "Applies while the system Reduce Motion setting is on. Steady reading hides the dial and shows direction and degrees text that follows the sensor; if both are hidden above, direction is shown. Keep the dial moves the dial in steps of about four degrees, so a settled reading can differ from the sensor by up to four degrees."
+            )
+          }
+          .pickerStyle(.navigationLink)
         }
         Section {
           Button(surface == nil ? "Reset Global Appearance" : "Reset Appearance") {
