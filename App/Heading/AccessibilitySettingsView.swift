@@ -52,7 +52,7 @@ struct AccessibilitySettingsView: View {
       }
       Section {
         Text(
-          "With Reduce Motion on, Settings appears and closes without animation, and heading smoothing is turned off so the dial moves only when the sensor reports a changed heading. Choosing Rotate arrow in Appearance keeps the dial still and moves only the arrow."
+          "With Reduce Motion on, Settings appears and closes without animation, and the compass shows a steady direction and degrees reading instead of the rotating dial. Appearance › Reduce Motion can keep the dial instead; it then moves in steps of about four degrees, so a settled reading can differ from the sensor by up to four degrees. Choosing Rotate arrow keeps the dial still and moves only the arrow."
         )
       } header: {
         Text("Motion")
