@@ -42,9 +42,10 @@ class WarmWatchAppTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "Installing the Watch app failed with status 2"):
             self.warm(simctl(install="2"))
 
-    def test_fails_when_the_launch_hangs(self):
-        with self.assertRaisesRegex(RuntimeError, "Launching the Watch app did not finish within 0.5 seconds"):
-            self.warm(simctl(launch="hang"), timeout=0.5)
+    def test_reports_a_hung_launch_and_carries_on(self):
+        output = self.warm(simctl(launch="hang"), timeout=0.5)
+        self.assertIn("Launching the Watch app did not finish within 0.5 seconds", output)
+        self.assertIn("Stopping the Watch app", output)
 
     def test_tolerates_an_app_that_already_exited(self):
         output = self.warm(simctl(terminate="3"))

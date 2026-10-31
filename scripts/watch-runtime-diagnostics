@@ -8,8 +8,8 @@ SIMULATOR_PREDICATE = ('process IN {"Carousel", "SpringBoard", "launchd_sim", "i
                        ' "nanoregistrylaunchd", "CompassWatch"} OR eventMessage CONTAINS "watchkitapp"')
 
 
-def booted_devices():
-    """Return (name, udid) for every booted simulator, or nothing when simctl is unusable."""
+def booted_watches():
+    """Return (name, udid) for every booted Watch simulator, or nothing when simctl is unusable."""
     try:
         result = subprocess.run(["xcrun", "simctl", "list", "devices", "booted", "-j"],
                                 capture_output=True, text=True, timeout=20, check=True)
@@ -17,7 +17,8 @@ def booted_devices():
     except (subprocess.SubprocessError, ValueError):
         return []
     return [(device["name"], device["udid"])
-            for devices in payload.get("devices", {}).values() for device in devices]
+            for runtime, devices in payload.get("devices", {}).items() if ".watchOS-" in runtime
+            for device in devices]
 
 
 commands = [
@@ -42,8 +43,8 @@ commands += [
      ' OR process IN {"CompassWatch", "SpringBoard", "Carousel"}'],
 ]
 # Simulators keep their own log store, so the host log never shows their processes.
-for name, udid in booted_devices():
-    commands.append(["xcrun", "simctl", "spawn", udid, "log", "show", "--last", "25m",
+for name, udid in booted_watches():
+    commands.append(["xcrun", "simctl", "spawn", udid, "log", "show", "--last", "20m",
                      "--style", "compact", "--predicate", SIMULATOR_PREDICATE])
     print("Simulator log for " + name + ": " + udid, flush=True)
 for command in commands:
