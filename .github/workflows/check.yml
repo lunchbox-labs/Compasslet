@@ -21,50 +21,66 @@ jobs:
       - run: bash scripts/swift-style check
       - run: swift build --jobs 4 -c release
       - run: swift test --jobs 4
+  scripts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Test the helper scripts
+        run: python3 -m unittest discover -s scripts/tests -v
+  scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      simulators: ${{ steps.scope.outputs.simulators }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          # The pull request merge commit and both of its parents, so the diff against
+          # the base branch needs no further fetch.
+          fetch-depth: 2
+      - name: Decide whether the changed files need the simulator checks
+        id: scope
+        env:
+          PULL_REQUEST_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: python3 scripts/ci-scope
   native:
+    needs: scope
+    # Pushes to main always run the simulator checks. When the scope job cannot say what
+    # changed, they run anyway and that failed job keeps the run red.
+    if: ${{ !cancelled() && (needs.scope.result != 'success' || needs.scope.outputs.simulators == 'true') }}
     runs-on: xcode-27
     timeout-minutes: 25
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-      - name: Verify Apple toolchain
-        run: |
-          xcode_version="$(xcodebuild -version)"
-          printf '%s\n' "$xcode_version"
-          grep -Fx 'Xcode 27.1' <<< "$xcode_version"
-          grep -Fx 'Build version 27A9275' <<< "$xcode_version"
-          simulator_sdk_version="$(xcrun --sdk iphonesimulator --show-sdk-version)"
-          printf '%s\n' "$simulator_sdk_version"
-          grep -E '^27\.' <<< "$simulator_sdk_version"
-          xcrun swift --version
-      - name: Build unsigned simulator app
-        run: >-
-          xcodebuild -project Compass.xcodeproj -scheme Compass
-          -destination 'generic/platform=iOS Simulator'
-          -derivedDataPath .build/xcode CODE_SIGNING_ALLOWED=NO build
-      - name: Test on an available iPhone simulator
+      - name: Build and test on an available iPhone simulator
+        # DEVELOPER_DIR pins the toolchain, and the test build compiles the arm64 products
+        # the simulator runs, so neither a toolchain probe nor a separate build is needed.
         run: bash scripts/test-ios
   watch:
+    needs: scope
+    if: ${{ !cancelled() && (needs.scope.result != 'success' || needs.scope.outputs.simulators == 'true') }}
     runs-on: xcode-27
-    # Step budget plus checkout, unit tests, build, the bounded diagnostics and the upload.
+    # Step budget plus checkout, build, the bounded diagnostics and the upload.
     timeout-minutes: 45
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-      - name: Test Watch simulator provisioning
-        run: python3 -m unittest discover -s scripts/tests -v
       - name: Remove duplicate simulator runtimes
         # The image registers the watchOS runtime twice and later unmounts the booted copy
         # while cleaning up the duplicate. Delete the unusable record before anything boots.
         timeout-minutes: 8
         run: python3 scripts/remove-duplicate-runtimes
       - name: Build unsigned Watch app
+        # Produces the app the warm-up installs before XCTest; the x86_64 slice is excluded
+        # because the simulator is arm64.
         run: >-
           xcodebuild -project Compass.xcodeproj -scheme CompassWatch
           -destination 'generic/platform=watchOS Simulator'
-          -derivedDataPath .build/watch CODE_SIGNING_ALLOWED=NO build
+          -derivedDataPath .build/watch CODE_SIGNING_ALLOWED=NO EXCLUDED_ARCHS=x86_64 build
       - name: Test on an available Watch simulator
         # Bound the step rather than the job so a hung test run still reaches diagnostics.
         timeout-minutes: 30
