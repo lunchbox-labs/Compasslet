@@ -206,3 +206,49 @@ import Testing
     #expect(restored.effective(for: .activity) == activity)
   }
 }
+
+@Test func phonePresentationOnlyHidesDialForSteadyReadingWithReduceMotion() {
+  for reduceMotion in [false, true] {
+    for mode in ReducedMotionDial.allCases {
+      for direction in [false, true] {
+        for degrees in [false, true] {
+          var appearance = AppearanceValues()
+          appearance.reducedMotionDial = mode
+          appearance.showDirection = direction
+          appearance.showDegrees = degrees
+          appearance.minorTicks = .five
+          appearance.labels = .outside
+          appearance.rotation = .arrow
+          let state = PhoneCompassPresentation(appearance: appearance, reduceMotion: reduceMotion)
+          let steady = reduceMotion && mode == .steadyReadout
+          #expect(state.showsDial == !steady)
+          #expect(state.appearance.showDirection == (direction || (steady && !degrees)))
+          #expect(state.appearance.showDegrees == degrees)
+          #expect(state.appearance.minorTicks == .five)
+          #expect(state.appearance.labels == .outside)
+          #expect(state.appearance.rotation == .arrow)
+          #expect(appearance.showDirection == direction)
+        }
+      }
+    }
+  }
+}
+
+@Test func readoutModesMapVisibleFieldsAndPreserveOtherAppearanceChoices() {
+  for mode in ReadoutMode.allCases {
+    var value = AppearanceValues()
+    value.rotation = .arrow
+    value.labels = .hidden
+    value.setReadoutMode(mode)
+    #expect(value.readoutMode == mode)
+    #expect(value.showDirection == (mode != .degrees))
+    #expect(value.showDegrees == (mode != .direction))
+    #expect(value.rotation == .arrow)
+    #expect(value.labels == .hidden)
+  }
+  var hidden = AppearanceValues()
+  hidden.showDirection = false
+  hidden.showDegrees = false
+  #expect(hidden.readoutMode == nil)
+  #expect(!hidden.hasReadout)
+}

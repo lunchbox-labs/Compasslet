@@ -7,6 +7,113 @@ import UIKit
 
 @Suite @MainActor
 struct AppearanceStoreTests {
+  @Test func phonePreviewRendersDialChoicesAndReducedMotionFallback() throws {
+    func render(_ value: AppearanceValues, reduceMotion: Bool = false) throws -> UIImage {
+      let renderer = ImageRenderer(
+        content: AppearancePreview(surface: .phone, appearance: value, reduceMotion: reduceMotion)
+          .frame(width: 280)
+          .environment(\.dynamicTypeSize, .large)
+          .environment(\.colorScheme, .light))
+      renderer.scale = 1
+      return try #require(renderer.uiImage)
+    }
+    let initial = AppearanceValues()
+    let original = try #require(render(initial).pngData())
+    var changed = initial
+    changed.minorTicks = .none
+    #expect(try #require(render(changed).pngData()) != original)
+    changed = initial
+    changed.labels = .hidden
+    #expect(try #require(render(changed).pngData()) != original)
+    changed = initial
+    changed.rotation = .arrow
+    #expect(try #require(render(changed).pngData()) != original)
+    changed.showDirection = false
+    changed.showDegrees = false
+    let steady = try render(changed, reduceMotion: true)
+    let restored = try render(changed.requiringReadout(), reduceMotion: true)
+    #expect(steady.pngData() == restored.pngData())
+    changed.reducedMotionDial = .rotatingDial
+    let dial = try render(changed, reduceMotion: true)
+    #expect(dial.size.height > steady.size.height)
+    // Keep the Dial is a static example, identical to the ordinary dial preview.
+    #expect(try render(changed).pngData() == dial.pngData())
+  }
+
+  @Test func readoutSelectionPreservesHiddenLegacyValuesUntilExplicitChoice() throws {
+    let name = "readout-editor-tests-\(UUID())"
+    let defaults = try #require(UserDefaults(suiteName: name))
+    defer { defaults.removePersistentDomain(forName: name) }
+    let store = AppearanceStore(defaults: defaults, legacyDefaults: defaults)
+    store.update { preferences in
+      var hidden = preferences.effective(for: .phone)
+      hidden.showDirection = false
+      hidden.showDegrees = false
+      hidden.rotation = .arrow
+      preferences.setOverride(hidden, for: .phone)
+    }
+    let phone = AppearanceReadoutControl(surface: .phone, store: store)
+    #expect(phone.selection == nil)
+    #expect(!AppearanceStore.read(from: defaults).effective(for: .phone).hasReadout)
+    for mode in ReadoutMode.allCases {
+      phone.select(mode)
+      #expect(phone.selection == mode)
+      let saved = AppearanceStore.read(from: defaults)
+      #expect(saved.effective(for: .phone).readoutMode == mode)
+      #expect(saved.effective(for: .phone).rotation == .arrow)
+      #expect(saved.global.readoutMode == .both)
+      #expect(saved.usesGlobal(for: .activity))
+    }
+    let global = AppearanceReadoutControl(surface: nil, store: store)
+    let activity = AppearanceReadoutControl(surface: .activity, store: store)
+    global.select(.degrees)
+    #expect(activity.selection == .degrees)
+    #expect(phone.selection == .both)
+    store.update { $0.setUsesGlobal(true, for: .phone) }
+    #expect(phone.selection == .degrees)
+    global.select(.direction)
+    #expect(phone.selection == .direction)
+    activity.select(.both)
+    #expect(activity.selection == .both)
+    #expect(global.selection == .direction)
+  }
+
+  @Test func editorSelectionsPersistImmediatelyAndReadCurrentStoreValues() throws {
+    let name = "appearance-editor-tests-\(UUID())"
+    let defaults = try #require(UserDefaults(suiteName: name))
+    defer { defaults.removePersistentDomain(forName: name) }
+    let store = AppearanceStore(defaults: defaults, legacyDefaults: defaults)
+    let global = AppearanceOptionEditor(surface: nil, option: .minorTicks, store: store)
+    let phone = AppearanceOptionEditor(surface: .phone, option: .rotation, store: store)
+    global.binding(\.minorTicks).wrappedValue = .five
+    #expect(phone.value.minorTicks == .five)
+    #expect(store.preferences.usesGlobal(for: .phone))
+    phone.binding(\.rotation).wrappedValue = .arrow
+    phone.binding(\.labels).wrappedValue = .outside
+    phone.binding(\.reducedMotionDial).wrappedValue = .rotatingDial
+    let saved = AppearanceStore.read(from: defaults)
+    #expect(saved.effective(for: .phone).rotation == .arrow)
+    #expect(saved.effective(for: .phone).labels == .outside)
+    #expect(saved.effective(for: .phone).reducedMotionDial == .rotatingDial)
+    #expect(saved.effective(for: .phone).minorTicks == .five)
+    #expect(saved.global.rotation == .dial)
+    #expect(saved.usesGlobal(for: .activity))
+    global.binding(\.minorTicks).wrappedValue = .eight
+    #expect(phone.value.minorTicks == .five)
+    store.update { $0.setUsesGlobal(true, for: .phone) }
+    #expect(phone.value.minorTicks == .eight)
+    #expect(phone.value.rotation == .dial)
+    // A binding made before a later store update must preserve the newer fields.
+    let labels = phone.binding(\.labels)
+    global.binding(\.minorTicks).wrappedValue = .none
+    labels.wrappedValue = .hidden
+    #expect(phone.value.minorTicks == .none)
+    #expect(phone.value.labels == .hidden)
+    #expect(
+      AppearanceStore(defaults: defaults, legacyDefaults: defaults).preferences == store.preferences
+    )
+  }
+
   @Test func savesOverridesAndPreservesUnchangedPreferences() throws {
     let name = "appearance-tests-\(UUID())"
     let defaults = try #require(UserDefaults(suiteName: name))
