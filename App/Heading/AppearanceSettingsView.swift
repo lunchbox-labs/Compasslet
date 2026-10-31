@@ -32,7 +32,6 @@ private struct AppearanceDetailView: View {
   private var followsGlobal: Bool {
     surface.map { store.preferences.usesGlobal(for: $0) } ?? false
   }
-  private var requiresReadout: Bool { surface == nil || surface == .activity }
 
   var body: some View {
     Form {
@@ -83,18 +82,12 @@ private struct AppearanceDetailView: View {
       }
       if !followsGlobal {
         Section {
-          Toggle("Show Direction", isOn: binding(\.showDirection))
-            .disabled(requiresReadout && value.showDirection && !value.showDegrees)
-          Toggle("Show Degrees", isOn: binding(\.showDegrees))
-            .disabled(requiresReadout && value.showDegrees && !value.showDirection)
+          AppearanceReadoutControl(surface: surface, store: store)
         } header: {
           Text("Readout")
         } footer: {
-          if requiresReadout {
-            Text(
-              surface == nil
-                ? "Keep direction or degrees visible for Live Activity. To hide both on a dial, customize that surface."
-                : "Keep direction or degrees visible in Live Activity.")
+          if value.readoutMode == nil {
+            Text("This saved appearance hides the readout. Choose a mode to show it.")
           }
         }
         Section {
@@ -195,6 +188,78 @@ private struct AppearanceDetailView: View {
   private func binding<Value>(_ keyPath: WritableKeyPath<AppearanceValues, Value>) -> Binding<Value>
   {
     store.binding(keyPath, for: surface)
+  }
+}
+
+struct AppearanceReadoutControl: View {
+  let surface: AppearanceSurface?
+  @ObservedObject var store: AppearanceStore
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+  var selection: ReadoutMode? {
+    let value = surface.map { store.preferences.effective(for: $0) } ?? store.preferences.global
+    return value.readoutMode
+  }
+
+  var body: some View {
+    if let selection, !dynamicTypeSize.isAccessibilitySize {
+      ViewThatFits(in: .horizontal) {
+        Picker(
+          "Readout",
+          selection: Binding(get: { self.selection ?? selection }, set: select)
+        ) {
+          ForEach(ReadoutMode.allCases, id: \.self) { mode in
+            Text(mode.title).tag(mode)
+          }
+        }
+        .pickerStyle(.segmented)
+        .fixedSize(horizontal: true, vertical: false)
+        menu
+      }
+    } else {
+      menu
+    }
+  }
+
+  private var menu: some View {
+    Menu {
+      ForEach(ReadoutMode.allCases, id: \.self) { mode in
+        Button {
+          select(mode)
+        } label: {
+          if selection == mode {
+            Label(mode.title, systemImage: "checkmark")
+          } else {
+            Text(mode.title)
+          }
+        }
+        .accessibilityAddTraits(selection == mode ? [.isSelected] : [])
+      }
+    } label: {
+      LabeledContent("Readout", value: selection?.title ?? "Choose Readout")
+    }
+  }
+
+  func select(_ mode: ReadoutMode) {
+    store.update { preferences in
+      var changed = surface.map { preferences.effective(for: $0) } ?? preferences.global
+      changed.setReadoutMode(mode)
+      if let surface {
+        preferences.setOverride(changed, for: surface)
+      } else {
+        preferences.setGlobal(changed)
+      }
+    }
+  }
+}
+
+private extension ReadoutMode {
+  var title: String {
+    switch self {
+    case .direction: "Direction"
+    case .degrees: "Degrees"
+    case .both: "Both"
+    }
   }
 }
 
@@ -304,7 +369,7 @@ struct AppearanceOptionEditor: View {
   }
 }
 
-private struct AppearancePreview: View {
+struct AppearancePreview: View {
   let surface: AppearanceSurface?
   let appearance: AppearanceValues
   var reduceMotion = false

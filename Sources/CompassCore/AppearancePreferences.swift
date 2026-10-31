@@ -51,6 +51,11 @@ public enum ReadoutTextSize: Int, CaseIterable, Codable, Sendable {
   public var isAccessibilitySize: Bool { rawValue > Self.xxxLarge.rawValue }
 }
 
+/// The supported choices when selecting a visible compass readout.
+public enum ReadoutMode: CaseIterable, Sendable {
+  case direction, degrees, both
+}
+
 /// Display-only choices; never contains sensor samples or validity timestamps.
 public struct AppearanceValues: Codable, Hashable, Sendable {
   /// Shows the abbreviated direction in the readout.
@@ -103,6 +108,22 @@ public struct AppearanceValues: Codable, Hashable, Sendable {
 
   /// Whether any central reading is visible.
   public var hasReadout: Bool { showDirection || showDegrees }
+
+  /// A hidden legacy phone readout has no selected visible mode.
+  public var readoutMode: ReadoutMode? {
+    switch (showDirection, showDegrees) {
+    case (true, false): .direction
+    case (false, true): .degrees
+    case (true, true): .both
+    case (false, false): nil
+    }
+  }
+
+  /// Sets both readout fields together, preserving unrelated appearance choices.
+  public mutating func setReadoutMode(_ mode: ReadoutMode) {
+    showDirection = mode != .degrees
+    showDegrees = mode != .direction
+  }
 
   /// Recovers direction-only presentation if both fields were disabled.
   public func requiringReadout() -> Self {

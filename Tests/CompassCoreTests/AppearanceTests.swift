@@ -233,3 +233,22 @@ import Testing
     }
   }
 }
+
+@Test func readoutModesMapVisibleFieldsAndPreserveOtherAppearanceChoices() {
+  for mode in ReadoutMode.allCases {
+    var value = AppearanceValues()
+    value.rotation = .arrow
+    value.labels = .hidden
+    value.setReadoutMode(mode)
+    #expect(value.readoutMode == mode)
+    #expect(value.showDirection == (mode != .degrees))
+    #expect(value.showDegrees == (mode != .direction))
+    #expect(value.rotation == .arrow)
+    #expect(value.labels == .hidden)
+  }
+  var hidden = AppearanceValues()
+  hidden.showDirection = false
+  hidden.showDegrees = false
+  #expect(hidden.readoutMode == nil)
+  #expect(!hidden.hasReadout)
+}
