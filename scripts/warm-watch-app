@@ -21,13 +21,14 @@ def run(step, command, timeout, fatal=True):
     print(message, flush=True)
 
 
-def warm(udid, app, bundle_id, timeout, simctl=("xcrun", "simctl")):
+def warm(udid, app, bundle_id, timeout, simctl=("xcrun", "simctl"), launch_timeout=None):
     """Install, launch and stop the app; raise RuntimeError only when the install fails."""
     simctl = list(simctl)
     run("Installing the Watch app", simctl + ["install", udid, app], timeout)
     # XCTest launches the app itself, so a slow or failed warm-up launch is only reported;
     # the app may also have exited on its own before it is stopped.
-    run("Launching the Watch app", simctl + ["launch", udid, bundle_id], timeout, fatal=False)
+    run("Launching the Watch app", simctl + ["launch", udid, bundle_id],
+        timeout if launch_timeout is None else launch_timeout, fatal=False)
     run("Stopping the Watch app", simctl + ["terminate", udid, bundle_id], 30, fatal=False)
 
 
@@ -37,10 +38,13 @@ def main(argv=None, simctl=("xcrun", "simctl")):
     parser.add_argument("app", help="path to the built Watch app bundle")
     parser.add_argument("bundle_id", help="bundle identifier of the Watch app")
     parser.add_argument("--timeout-seconds", type=float, default=180,
-                        help="give up on the install or the launch after this long")
+                        help="give up on the install after this long")
+    parser.add_argument("--launch-timeout-seconds", type=float,
+                        help="give up on the launch after this long; defaults to --timeout-seconds")
     arguments = parser.parse_args(argv)
     try:
-        warm(arguments.udid, arguments.app, arguments.bundle_id, arguments.timeout_seconds, simctl)
+        warm(arguments.udid, arguments.app, arguments.bundle_id, arguments.timeout_seconds, simctl,
+             arguments.launch_timeout_seconds)
     except RuntimeError as error:
         sys.exit(str(error))
 

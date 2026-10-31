@@ -47,9 +47,25 @@ class WarmWatchAppTests(unittest.TestCase):
         self.assertIn("Launching the Watch app did not finish within 0.5 seconds", output)
         self.assertIn("Stopping the Watch app", output)
 
+    def test_launch_can_have_a_shorter_bound_than_the_install(self):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            MODULE["warm"]("watch", "/tmp/App.app", "dev.example.watchkitapp", 5,
+                           simctl=simctl(launch="hang"), launch_timeout=0.5)
+        self.assertIn("Launching the Watch app did not finish within 0.5 seconds", output.getvalue())
+        self.assertIn("Stopping the Watch app", output.getvalue())
+
     def test_tolerates_an_app_that_already_exited(self):
         output = self.warm(simctl(terminate="3"))
         self.assertIn("Stopping the Watch app failed with status 3", output)
+
+    def test_entry_point_passes_the_launch_bound_through(self):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            MODULE["main"](["watch", "/tmp/App.app", "dev.example.watchkitapp",
+                            "--timeout-seconds", "5", "--launch-timeout-seconds", "0.5"],
+                           simctl=simctl(launch="hang"))
+        self.assertIn("did not finish within 0.5 seconds", output.getvalue())
 
     def test_entry_point_reports_failures_as_exit_status(self):
         with self.assertRaises(SystemExit) as raised, contextlib.redirect_stdout(io.StringIO()):
