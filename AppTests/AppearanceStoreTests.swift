@@ -7,6 +7,42 @@ import UIKit
 
 @Suite @MainActor
 struct AppearanceStoreTests {
+  @Test func editorSelectionsPersistImmediatelyAndReadCurrentStoreValues() throws {
+    let name = "appearance-editor-tests-\(UUID())"
+    let defaults = try #require(UserDefaults(suiteName: name))
+    defer { defaults.removePersistentDomain(forName: name) }
+    let store = AppearanceStore(defaults: defaults, legacyDefaults: defaults)
+    let global = AppearanceOptionEditor(surface: nil, option: .minorTicks, store: store)
+    let phone = AppearanceOptionEditor(surface: .phone, option: .rotation, store: store)
+    global.binding(\.minorTicks).wrappedValue = .five
+    #expect(phone.value.minorTicks == .five)
+    #expect(store.preferences.usesGlobal(for: .phone))
+    phone.binding(\.rotation).wrappedValue = .arrow
+    phone.binding(\.labels).wrappedValue = .outside
+    phone.binding(\.reducedMotionDial).wrappedValue = .rotatingDial
+    let saved = AppearanceStore.read(from: defaults)
+    #expect(saved.effective(for: .phone).rotation == .arrow)
+    #expect(saved.effective(for: .phone).labels == .outside)
+    #expect(saved.effective(for: .phone).reducedMotionDial == .rotatingDial)
+    #expect(saved.effective(for: .phone).minorTicks == .five)
+    #expect(saved.global.rotation == .dial)
+    #expect(saved.usesGlobal(for: .activity))
+    global.binding(\.minorTicks).wrappedValue = .eight
+    #expect(phone.value.minorTicks == .five)
+    store.update { $0.setUsesGlobal(true, for: .phone) }
+    #expect(phone.value.minorTicks == .eight)
+    #expect(phone.value.rotation == .dial)
+    // A binding made before a later store update must preserve the newer fields.
+    let labels = phone.binding(\.labels)
+    global.binding(\.minorTicks).wrappedValue = .none
+    labels.wrappedValue = .hidden
+    #expect(phone.value.minorTicks == .none)
+    #expect(phone.value.labels == .hidden)
+    #expect(
+      AppearanceStore(defaults: defaults, legacyDefaults: defaults).preferences == store.preferences
+    )
+  }
+
   @Test func savesOverridesAndPreservesUnchangedPreferences() throws {
     let name = "appearance-tests-\(UUID())"
     let defaults = try #require(UserDefaults(suiteName: name))

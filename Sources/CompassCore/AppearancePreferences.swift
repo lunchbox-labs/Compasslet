@@ -187,3 +187,17 @@ public struct AppearancePreferences: Codable, Hashable, Sendable {
     }
   }
 }
+
+/// Resolves the visible phone content without changing the stored appearance.
+public struct PhoneCompassPresentation: Equatable, Sendable {
+  /// Whether the dial remains visible in this presentation.
+  public let showsDial: Bool
+  /// Readout choices, including the direction fallback when the dial is hidden.
+  public let appearance: AppearanceValues
+
+  /// Resolves actual or simulated Reduce Motion without mutating preferences.
+  public init(appearance: AppearanceValues, reduceMotion: Bool) {
+    showsDial = !(reduceMotion && appearance.reducedMotionDial == .steadyReadout)
+    self.appearance = showsDial ? appearance : appearance.requiringReadout()
+  }
+}
