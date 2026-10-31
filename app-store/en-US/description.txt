@@ -1,12 +1,7 @@
-Keep your bearings with Compasslet, a simple compass for iPhone and a focused direction display for CarPlay.
+Find your bearings with Compasslet. Check your direction on iPhone and see your direction while driving with CarPlay.
 
-ON YOUR IPHONE
-Find magnetic north with a rotating compass dial or direction arrow.
+On iPhone, choose a rotating compass dial or direction arrow. Adjust the labels, degrees and text size for a reading that suits you.
 
-IN YOUR CAR
-See your direction of travel on a full-screen CarPlay display. Compasslet uses your vehicle's course relative to true north, so it works best while you're moving with a reliable GPS signal.
-
-AT A GLANCE
-Keep your direction and degrees visible in a compact Live Activity.
+Keep your last recorded travel direction handy with a compact Live Activity.
 
 No account needed.
