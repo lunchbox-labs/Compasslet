@@ -144,7 +144,7 @@ private struct AppearanceDetailView: View {
             Text("Dial")
           } footer: {
             Text(
-              "Minor ticks are the small marks between cardinal directions. Four major ticks remain. Cardinal labels are N, E, S, and W."
+              "Minor ticks are the small marks between cardinal directions. Four major ticks remain, and north's tick is a pointed red marker so it stays identifiable when labels are hidden. Cardinal labels are N, E, S, and W."
             )
           }
           .pickerStyle(.navigationLink)
