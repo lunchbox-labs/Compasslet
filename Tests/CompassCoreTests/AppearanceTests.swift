@@ -99,11 +99,14 @@ import Testing
   let legacy = AppearancePreferences.decode(try JSONSerialization.data(withJSONObject: stored))
   #expect(legacy.global.customTextSize == .xxxLarge)
   #expect(!legacy.global.useSystemTextSize)
+  // The largest accessibility size has its own stable stored value.
+  earlier["customTextSize"] = 11
+  stored["global"] = earlier
+  let largest = AppearancePreferences.decode(try JSONSerialization.data(withJSONObject: stored))
+  #expect(largest.global.customTextSize == .accessibility5)
   global.customTextSize = .accessibility5
   preferences.setGlobal(global)
-  let restored = AppearancePreferences.decode(try JSONEncoder().encode(preferences))
-  #expect(restored.global.customTextSize == .accessibility5)
-  #expect(restored == preferences)
+  #expect(AppearancePreferences.decode(try JSONEncoder().encode(preferences)) == preferences)
 }
 
 @Test func readoutSizeChoiceFollowsGlobalsUntilSurfaceOverrides() throws {

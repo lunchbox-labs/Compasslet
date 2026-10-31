@@ -36,6 +36,9 @@ struct AppearanceStoreTests {
       ReadoutTextSize.allCases.allSatisfy {
         $0.isAccessibilitySize == $0.dynamicTypeSize.isAccessibilitySize
       })
+    // Every slider step announces a distinct value.
+    let titles = ReadoutTextSize.allCases.map(\.title)
+    #expect(Set(titles).count == titles.count)
   }
 
   @Test func migratesOnlyExistingPhoneArrowChoiceOnce() throws {
