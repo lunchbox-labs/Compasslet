@@ -35,11 +35,11 @@ def wait_for_boot(udid, stall_seconds, deadline_seconds, command=None):
                 remaining = deadline_seconds - (now - started)
                 idle = stall_seconds - (now - last_progress)
                 if remaining <= 0:
-                    raise RuntimeError("Simulator boot did not finish within "
-                                       + str(deadline_seconds) + " seconds: " + udid)
+                    raise RuntimeError(f"Simulator boot did not finish within "
+                                       f"{deadline_seconds:g} seconds: {udid}")
                 if idle <= 0:
-                    raise RuntimeError("Simulator boot made no progress for "
-                                       + str(stall_seconds) + " seconds: " + udid)
+                    raise RuntimeError(f"Simulator boot made no progress for "
+                                       f"{stall_seconds:g} seconds: {udid}")
                 # Read raw chunks: buffered readline can wait on an unfinished line,
                 # or hide already-buffered lines from select. EOF is not process exit.
                 ready, _, _ = select.select([process.stdout] if stream_open else [],
@@ -69,24 +69,27 @@ def wait_for_boot(udid, stall_seconds, deadline_seconds, command=None):
                         last_progress = time.monotonic()
             status = process.poll()
             if status:
-                raise RuntimeError("Simulator boot failed with status " + str(status) + ": " + udid)
+                raise RuntimeError(f"Simulator boot failed with status {status}: {udid}")
             print(datetime.now(timezone.utc).isoformat() + " Simulator boot finished: " + udid, flush=True)
         finally:
             if process.poll() is None:
                 process.kill()
 
 
-def main(argv=None):
+def main(argv=None, boot=wait_for_boot):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("udids", nargs="+", help="simulator UDIDs to boot in order")
     parser.add_argument("--stall-seconds", type=float, default=300,
                         help="fail when bootstatus reports no new phase for this long")
-    parser.add_argument("--deadline-seconds", type=float, default=540,
-                        help="fail when one boot takes longer than this in total")
+    parser.add_argument("--deadline-seconds", type=float, default=720,
+                        help="fail when all boots together take longer than this")
     arguments = parser.parse_args(argv)
+    # One budget covers every device so the script always finishes inside the CI step
+    # that bounds it, and reports which boot used the time up.
+    deadline = time.monotonic() + arguments.deadline_seconds
     try:
         for udid in arguments.udids:
-            wait_for_boot(udid, arguments.stall_seconds, arguments.deadline_seconds)
+            boot(udid, arguments.stall_seconds, max(0, deadline - time.monotonic()))
     except RuntimeError as error:
         sys.exit(str(error))
 

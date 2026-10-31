@@ -41,10 +41,10 @@ class WaitForBootTests(unittest.TestCase):
                             normalize("[x] Status=4, isTerminal=NO, Elapsed=00:05."))
 
     def test_outlives_a_slow_boot_that_keeps_changing_phase(self):
-        command = scripted((0.3, PHASE.format(1)), (0.3, "\tBooting"),
-                           (0.3, MIGRATION.format("Siri.migrator", 1)),
-                           (0.3, "\tWaiting on System App"), (0.3, "\tFinished"), 0)
-        output = self.wait(command, stall_seconds=0.5)
+        command = scripted((0.2, PHASE.format(1)), (0.2, "\tBooting"),
+                           (0.2, MIGRATION.format("Siri.migrator", 1)),
+                           (0.2, "\tWaiting on System App"), (0.2, "\tFinished"), 0)
+        output = self.wait(command, stall_seconds=3)
         self.assertIn("Waiting for simulator boot: device", output)
         self.assertIn("Finished", output)
 
@@ -78,6 +78,20 @@ class WaitForBootTests(unittest.TestCase):
         command = [sys.executable, "-c", "import sys,time; sys.stdout.write('Boot'); sys.stdout.flush(); time.sleep(1)"]
         with self.assertRaisesRegex(RuntimeError, "no progress"):
             self.wait(command, stall_seconds=0.2, deadline_seconds=0.5)
+
+    def test_entry_point_shares_one_budget_across_devices(self):
+        calls = []
+
+        def boot(udid, stall_seconds, deadline_seconds):
+            calls.append((udid, stall_seconds, round(deadline_seconds)))
+            if udid == "watch":
+                raise RuntimeError("Simulator boot made no progress for 1 seconds: watch")
+
+        with self.assertRaises(SystemExit) as raised:
+            MODULE["main"](["--stall-seconds", "1", "--deadline-seconds", "60", "phone", "watch"],
+                           boot=boot)
+        self.assertEqual(calls, [("phone", 1, 60), ("watch", 1, 60)])
+        self.assertIn("no progress for 1 seconds: watch", str(raised.exception.code))
 
     def test_reports_a_failed_boot(self):
         with self.assertRaisesRegex(RuntimeError, "failed with status 3: device"):

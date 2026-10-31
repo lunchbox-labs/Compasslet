@@ -47,7 +47,8 @@ jobs:
         run: bash scripts/test-ios
   watch:
     runs-on: xcode-27
-    timeout-minutes: 30
+    # Step budget plus checkout, unit tests, build and the bounded diagnostics.
+    timeout-minutes: 35
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
     steps:

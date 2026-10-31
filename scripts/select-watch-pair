@@ -30,15 +30,31 @@ def select_pair(payload, runtimes):
     return None
 
 
-def wait_for_pair(timeout=180):
+def summarize(payload, runtimes):
+    """Describe the Watch-related runtime and device state for a failure report."""
+    lines = ["Watch runtimes: " + ", ".join(sorted(
+        runtime.get("state", "?") + " at " + str(runtime.get("mountPath"))
+        for runtime in runtimes.values()
+        if "watchOS" in str(runtime.get("runtimeIdentifier"))) or "none")]
+    for runtime, devices in sorted(payload.get("devices", {}).items()):
+        if ".watchOS-" in runtime or ".iOS-" in runtime:
+            lines.append(runtime.rsplit(".", 1)[-1] + ": " + ", ".join(
+                device["name"] + (" available" if device.get("isAvailable") else " unavailable")
+                for device in devices) or "no devices")
+    lines.append("Pairs: " + str(len(payload.get("pairs", {}))))
+    return "\n".join(lines)
+
+
+def wait_for_pair(timeout=180, clock=time.monotonic):
     # The image can replace its initially mounted Watch runtime after the build.
     # Re-read both runtime and device state instead of treating a missing pair as final.
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
+    deadline = clock() + timeout
+    snapshots = []
+    while clock() < deadline:
         try:
             snapshots = []
             for arguments in (["runtime", "list", "-j"], ["list", "--json"]):
-                remaining = deadline - time.monotonic()
+                remaining = deadline - clock()
                 if remaining <= 0:
                     break
                 result = subprocess.run(["xcrun", "simctl", *arguments], check=True,
@@ -52,7 +68,9 @@ def wait_for_pair(timeout=180):
             print("Waiting for a mounted watchOS 27+ runtime and available paired iPhone", file=sys.stderr, flush=True)
         except (subprocess.SubprocessError, ValueError) as error:
             print("Watch simulator discovery failed: " + str(error), file=sys.stderr, flush=True)
-        time.sleep(min(2, max(0, deadline - time.monotonic())))
+        time.sleep(min(2, max(0, deadline - clock())))
+    if len(snapshots) == 2:
+        print(summarize(snapshots[1], snapshots[0]), file=sys.stderr, flush=True)
     raise RuntimeError("No mounted watchOS 27+ Watch with an available paired iPhone within " + str(timeout) + " seconds")
 
 

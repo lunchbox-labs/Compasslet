@@ -9,14 +9,16 @@ commands = [
     ["/usr/bin/vm_stat"],
     ["/usr/sbin/sysctl", "vm.swapusage"],
     ["/bin/ps", "-axo", "pid,pcpu,rss,comm", "-r"],
-    ["/usr/bin/log", "show", "--last", "30m", "--style", "compact", "--predicate",
-     'process IN {"simdiskimaged", "cryptexd", "CoreSimulatorService", "simctl",'
-     ' "launchd_sim", "SpringBoard", "Carousel"} OR process BEGINSWITH "SimLaunchHost"'],
+    ["/usr/bin/log", "show", "--last", "25m", "--style", "compact", "--predicate",
+     'process IN {"simdiskimaged", "cryptexd", "CoreSimulatorService", "simctl"}'
+     ' OR process BEGINSWITH "SimLaunchHost"'],
+    ["/usr/bin/log", "show", "--last", "25m", "--style", "compact", "--predicate",
+     'process IN {"launchd_sim", "SpringBoard", "Carousel"}'],
 ]
 for command in commands:
     print("Diagnostic: " + " ".join(command), flush=True)
     try:
-        timeout = 120 if command[0] == "/usr/bin/log" else 20
+        timeout = 90 if command[0] == "/usr/bin/log" else 20
         result = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
         lines = (result.stdout + result.stderr).splitlines()
         print("\n".join(lines[:40] if command[0] == "/bin/ps" else lines[-200:]), flush=True)

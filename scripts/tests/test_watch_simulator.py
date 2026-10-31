@@ -1,8 +1,8 @@
 """Exercise the Watch test entry point with a simulated CoreSimulator service."""
+import itertools
 import json
 import os
 import runpy
-from unittest.mock import patch
 from pathlib import Path
 import subprocess
 import tempfile
@@ -67,9 +67,19 @@ elif sys.argv[1:4] == ["simctl", "runtime", "list"]:
 
     def test_missing_pair_fails_at_deadline(self):
         wait = runpy.run_path(str(SCRIPTS / "select-watch-pair"))["wait_for_pair"]
-        with patch("time.monotonic", side_effect=[0, 2]):
-            with self.assertRaisesRegex(RuntimeError, "within 1 seconds"):
-                wait(timeout=1)
+        clock = itertools.count(0, 2).__next__  # the deadline passes before the first poll
+        with self.assertRaisesRegex(RuntimeError, "within 1 seconds"):
+            wait(timeout=1, clock=clock)
+
+    def test_summarizes_state_when_no_pair_appears(self):
+        summarize = runpy.run_path(str(SCRIPTS / "select-watch-pair"))["summarize"]
+        runtimes = {"watch": {"runtimeIdentifier": "com.apple.CoreSimulator.SimRuntime.watchOS-27-0",
+                              "state": "Copying", "mountPath": None}}
+        summary = summarize(self.snapshot(False), runtimes)
+        self.assertIn("Watch runtimes: Copying at None", summary)
+        self.assertIn("watchOS-27-0: Apple Watch unavailable", summary)
+        self.assertIn("iOS-27-0: iPhone available", summary)
+        self.assertIn("Pairs: 1", summary)
 
     def test_preserves_native_test_failure(self):
         result, calls = self.run_watch([self.snapshot()], test_status=7)
