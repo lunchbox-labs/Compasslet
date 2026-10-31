@@ -55,6 +55,10 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Test Watch simulator provisioning
         run: python3 -m unittest discover -s scripts/tests -v
+      - name: Start CoreSimulator
+        # The image replaces its watchOS runtime mount shortly after CoreSimulator first
+        # starts. Start it now so that swap happens during the build, not during the boot.
+        run: xcrun simctl runtime list
       - name: Build unsigned Watch app
         run: >-
           xcodebuild -project Compass.xcodeproj -scheme CompassWatch

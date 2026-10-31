@@ -6,8 +6,10 @@ read -r destination companion <<< "$selection"
 # XCTest uses the existing paired iPhone for its Watch transport. Wait for both
 # simulators to finish booting before starting the test runner's handshake. A first
 # Watch boot on the hosted runner regularly needs several minutes, so the wait fails
-# on a stalled phase rather than on a fixed total.
-python3 scripts/wait-for-boot "$companion" "$destination"
+# on a stalled phase rather than on a fixed total. Boot the Watch first: once the
+# iPhone finishes its own first boot its background work starves the runner, and a
+# Watch boot started then has timed out before reaching CoreSimulator.
+python3 scripts/wait-for-boot "$destination" "$companion"
 # Pay for the app's first install and launch here, under a visible bound, instead of
 # inside XCTest's host handshake, which gives up after about five minutes.
 python3 scripts/warm-watch-app "$destination" \

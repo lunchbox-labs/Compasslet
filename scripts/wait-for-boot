@@ -76,7 +76,15 @@ def wait_for_boot(udid, stall_seconds, deadline_seconds, command=None):
                 process.kill()
 
 
-def main(argv=None, boot=wait_for_boot):
+def shutdown(udid):
+    """Return the device to Shutdown after a failed boot; errors here are only reported."""
+    try:
+        subprocess.run(["xcrun", "simctl", "shutdown", udid], timeout=60)
+    except subprocess.SubprocessError as error:
+        print(f"Shutdown after a failed boot did not complete: {error}", flush=True)
+
+
+def main(argv=None, boot=wait_for_boot, shutdown=shutdown):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("udids", nargs="+", help="simulator UDIDs to boot in order")
     parser.add_argument("--stall-seconds", type=float, default=300,
@@ -89,7 +97,16 @@ def main(argv=None, boot=wait_for_boot):
     deadline = time.monotonic() + arguments.deadline_seconds
     try:
         for udid in arguments.udids:
-            boot(udid, arguments.stall_seconds, max(0, deadline - time.monotonic()))
+            try:
+                boot(udid, arguments.stall_seconds, max(0, deadline - time.monotonic()))
+            except RuntimeError as error:
+                # CoreSimulator sometimes gives up on a boot outright ("Device boot failed")
+                # under load. Shut the device down and try once more within the budget.
+                if "failed with status" not in str(error):
+                    raise
+                print(f"{error}; shutting the device down and booting it again", flush=True)
+                shutdown(udid)
+                boot(udid, arguments.stall_seconds, max(0, deadline - time.monotonic()))
     except RuntimeError as error:
         sys.exit(str(error))
 

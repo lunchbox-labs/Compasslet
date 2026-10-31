@@ -93,6 +93,28 @@ class WaitForBootTests(unittest.TestCase):
         self.assertEqual(calls, [("phone", 1, 60), ("watch", 1, 60)])
         self.assertIn("no progress for 1 seconds: watch", str(raised.exception.code))
 
+    def test_entry_point_retries_a_failed_boot_once_after_shutdown(self):
+        events = []
+
+        def boot(udid, stall_seconds, deadline_seconds):
+            events.append("boot " + udid)
+            if events.count("boot watch") == 1:
+                raise RuntimeError("Simulator boot failed with status 60: watch")
+
+        MODULE["main"](["phone", "watch"], boot=boot, shutdown=lambda udid: events.append("shutdown " + udid))
+        self.assertEqual(events, ["boot phone", "boot watch", "shutdown watch", "boot watch"])
+
+    def test_entry_point_does_not_retry_a_stalled_boot(self):
+        events = []
+
+        def boot(udid, stall_seconds, deadline_seconds):
+            events.append("boot " + udid)
+            raise RuntimeError("Simulator boot made no progress for 300 seconds: " + udid)
+
+        with self.assertRaises(SystemExit):
+            MODULE["main"](["watch"], boot=boot, shutdown=lambda udid: events.append("shutdown " + udid))
+        self.assertEqual(events, ["boot watch"])
+
     def test_reports_a_failed_boot(self):
         with self.assertRaisesRegex(RuntimeError, "failed with status 3: device"):
             self.wait(scripted((0, "\tBooting"), 3), stall_seconds=5)
