@@ -66,6 +66,10 @@ elif sys.argv[1:4] == ["simctl", "runtime", "list"]:
         self.assertIn("simctl install watch .build/watch/Build/Products/Debug-watchsimulator/CompassWatch.app", calls)
         self.assertIn("simctl launch watch dev.lunchbox-labs.carplay-compass.watchkitapp", calls)
         self.assertIn("simctl terminate watch dev.lunchbox-labs.carplay-compass.watchkitapp", calls)
+        # The warm-up runs between the two boots: during the iPhone's post-boot work the
+        # starved runner has taken minutes over the install.
+        self.assertLess(calls.index("simctl bootstatus watch -b"), calls.index("simctl install watch"))
+        self.assertLess(calls.index("simctl install watch"), calls.index("simctl bootstatus phone -b"))
         self.assertTrue(calls.endswith("test\n"))
         self.assertEqual(calls.count("test\n"), 1)
 

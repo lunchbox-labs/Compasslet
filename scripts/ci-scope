@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+"""Decide whether a pull request's changed files need the simulator checks."""
+import os
+import subprocess
+import sys
+
+# A pull request that changes only these paths skips the simulator jobs: neither the
+# Xcode builds nor the tests read them. Every other path keeps the jobs, including
+# workflows, scripts, the project file and the Swift package.
+DOCUMENTATION_FILES = ("README.md", "AGENTS.md", ".github/CODEOWNERS")
+DOCUMENTATION_DIRECTORIES = ("docs/", "app-store/")
+
+
+def is_documentation(path):
+    return path in DOCUMENTATION_FILES or path.startswith(DOCUMENTATION_DIRECTORIES)
+
+
+def simulator_checks_required(changed_files):
+    """An empty comparison means the diff did not describe the pull request; run everything."""
+    return not changed_files or any(not is_documentation(path) for path in changed_files)
+
+
+def git(arguments, cwd):
+    return subprocess.run(["git", *arguments], check=True, capture_output=True, text=True,
+                          cwd=cwd).stdout
+
+
+def pull_request_changes(head, cwd=None):
+    """Return the files the pull request changes, or None when HEAD is not the merge of head.
+
+    actions/checkout provides the pull request's merge commit: its first parent is the base
+    branch and its second parent is the pull request head. GitHub can start a run before it
+    has refreshed that merge commit, in which case it merges an older head and nothing can be
+    proven about the change.
+    """
+    parents = git(["rev-list", "--parents", "--max-count=1", "HEAD"], cwd).split()
+    if len(parents) != 3 or parents[2] != head:
+        return None
+    output = git(["diff", "--name-only", "--no-renames", "-z", parents[1], "HEAD"], cwd)
+    return [path for path in output.split("\0") if path]
+
+
+def main(environment=os.environ, cwd=None, out=sys.stdout):
+    event = environment.get("GITHUB_EVENT_NAME", "local")
+    simulators = True
+    reason = event + " runs every check"
+    if event == "pull_request":
+        head = environment.get("PULL_REQUEST_HEAD")
+        if not head:
+            raise SystemExit("PULL_REQUEST_HEAD must name the pull request head commit")
+        changed = pull_request_changes(head, cwd)
+        if changed is None:
+            print("::warning::HEAD is not the merge of pull request head " + head
+                  + "; running every check", file=out)
+            reason = "the checkout does not show what the pull request changes"
+        else:
+            print("\n".join(["Changed files:"] + ["  " + path for path in changed]), file=out)
+            simulators = simulator_checks_required(changed)
+            reason = ("the pull request changes files that the simulator checks use" if simulators
+                      else "the pull request changes only documentation")
+    value = "true" if simulators else "false"
+    print("simulators=" + value + " (" + reason + ")", file=out)
+    if "GITHUB_OUTPUT" in environment:
+        with open(environment["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+            output.write("simulators=" + value + "\n")
+
+
+if __name__ == "__main__":
+    main()
