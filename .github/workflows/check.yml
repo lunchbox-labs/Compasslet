@@ -58,7 +58,7 @@ jobs:
       - name: Remove duplicate simulator runtimes
         # The image registers the watchOS runtime twice and later unmounts the booted copy
         # while cleaning up the duplicate. Delete the unusable record before anything boots.
-        timeout-minutes: 5
+        timeout-minutes: 8
         run: python3 scripts/remove-duplicate-runtimes
       - name: Build unsigned Watch app
         run: >-

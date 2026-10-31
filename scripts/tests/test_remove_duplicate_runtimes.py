@@ -79,8 +79,14 @@ class RemoveDuplicateRuntimesTests(unittest.TestCase):
         output, _ = self.run_removal([before, gap, after])
         self.assertIn("Runtime now: watchOS-27-0 Ready", output)
 
+    def test_keeps_an_unusable_record_that_has_no_ready_sibling(self):
+        before = {"only": runtime("watchOS-27-0", "Unusable"), "ios": runtime("iOS-27-0", "Ready", IOS)}
+        output, deleted = self.run_removal([before])
+        self.assertEqual(deleted, [])
+        self.assertIn("Keeping unusable runtime only with no Ready sibling", output)
+
     def test_fails_when_the_platform_never_recovers(self):
-        before = {"dup": runtime("watchOS-27-0", "Unusable")}
+        before = {"dup": runtime("watchOS-27-0", "Unusable"), "ok": runtime("watchOS-27-0", "Ready")}
         with self.assertRaisesRegex(RuntimeError, "No Ready runtime for com.apple.platform.watchsimulator"):
             self.run_removal([before, {}], timeout=0.1)
 

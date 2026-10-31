@@ -13,7 +13,7 @@ import time
 
 def runtimes(simctl=("xcrun", "simctl")):
     result = subprocess.run([*simctl, "runtime", "list", "-j"], check=True,
-                            capture_output=True, text=True, timeout=60)
+                            capture_output=True, text=True, timeout=30)
     return json.loads(result.stdout)
 
 
@@ -23,21 +23,34 @@ def describe(runtime):
 
 
 def remove_unusable(simctl=("xcrun", "simctl"), timeout=120):
-    """Delete Unusable records and return once their platforms still have a Ready runtime."""
+    """Delete Unusable records that have a Ready sibling; return once their platforms recover."""
     listed = runtimes(simctl)
     for runtime in listed.values():
         print("Runtime: " + describe(runtime), flush=True)
-    unusable = {identifier: runtime for identifier, runtime in listed.items()
-                if runtime.get("state") == "Unusable"}
-    for identifier, runtime in unusable.items():
+    ready_identifiers = {runtime.get("runtimeIdentifier") for runtime in listed.values()
+                         if runtime.get("state") == "Ready"}
+    platforms = set()
+    for identifier, runtime in listed.items():
+        if runtime.get("state") != "Unusable":
+            continue
+        # Deletion is irreversible. Mid-swap the only record for a runtime can be the
+        # Unusable one; leave that to select-watch-pair, which waits for a Ready mount.
+        if runtime.get("runtimeIdentifier") not in ready_identifiers:
+            print("Keeping unusable runtime " + identifier + " with no Ready sibling: "
+                  + describe(runtime), flush=True)
+            continue
         print("Deleting unusable runtime " + identifier + ": " + describe(runtime), flush=True)
-        completed = subprocess.run([*simctl, "runtime", "delete", identifier], timeout=120)
-        if completed.returncode:
-            print(f"::warning::Could not delete simulator runtime {identifier}"
-                  f" (status {completed.returncode})", flush=True)
-    platforms = {runtime.get("platformIdentifier") for runtime in unusable.values()}
+        try:
+            completed = subprocess.run([*simctl, "runtime", "delete", identifier], timeout=120)
+            problem = f"status {completed.returncode}" if completed.returncode else None
+        except subprocess.SubprocessError as error:
+            problem = str(error)
+        if problem:
+            print(f"::warning::Could not delete simulator runtime {identifier} ({problem})", flush=True)
+        platforms.add(runtime.get("platformIdentifier"))
     # Deleting a record can briefly leave its platform without a Ready runtime. Wait for
-    # every affected platform to show one again rather than booting into that gap.
+    # every affected platform to show one again rather than booting into that gap. The
+    # mount itself is re-checked by select-watch-pair immediately before the boot.
     deadline = time.monotonic() + timeout
     while True:
         listed = runtimes(simctl)
