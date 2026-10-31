@@ -1,10 +1,14 @@
 """Exercise the simulator boot wait against scripted bootstatus output."""
 import contextlib
 import io
+import os
 import runpy
 import sys
+import tempfile
+import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SCRIPTS = Path(__file__).resolve().parents[1]
 MODULE = runpy.run_path(str(SCRIPTS / "wait-for-boot"))
@@ -101,8 +105,42 @@ class WaitForBootTests(unittest.TestCase):
             if events.count("boot watch") == 1:
                 raise RuntimeError("Simulator boot failed with status 60: watch")
 
-        MODULE["main"](["phone", "watch"], boot=boot, shutdown=lambda udid: events.append("shutdown " + udid))
+        MODULE["main"](["phone", "watch"], boot=boot, shutdown=lambda udid, timeout: events.append("shutdown " + udid))
         self.assertEqual(events, ["boot phone", "boot watch", "shutdown watch", "boot watch"])
+
+    def test_shutdown_cannot_outlive_the_shared_budget(self):
+        boots = []
+
+        def boot(udid, stall_seconds, deadline_seconds):
+            boots.append(udid)
+            if len(boots) == 1:
+                raise RuntimeError("Simulator boot failed with status 60: watch")
+
+        with tempfile.TemporaryDirectory() as directory:
+            command = Path(directory) / "xcrun"
+            command.write_text(f"#!{sys.executable}\nimport time\ntime.sleep(3)\n")
+            command.chmod(0o755)
+            started = time.monotonic()
+            with patch.dict(os.environ, {"PATH": directory + os.pathsep + os.environ["PATH"]}):
+                with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(SystemExit) as raised:
+                    MODULE["main"](["--deadline-seconds", "0.1", "watch"], boot=boot)
+            self.assertLess(time.monotonic() - started, 2)
+        self.assertIn("shared budget", str(raised.exception.code))
+        self.assertEqual(boots, ["watch"], "a shutdown that uses the budget must not start another boot")
+
+    def test_exhausted_budget_does_not_start_shutdown_or_retry(self):
+        events = []
+
+        def boot(udid, stall_seconds, deadline_seconds):
+            events.append("boot")
+            time.sleep(0.15)
+            raise RuntimeError("Simulator boot failed with status 60: watch")
+
+        with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(SystemExit) as raised:
+            MODULE["main"](["--deadline-seconds", "0.1", "watch"], boot=boot,
+                           shutdown=lambda *args: events.append("shutdown"))
+        self.assertIn("shared budget", str(raised.exception.code))
+        self.assertEqual(events, ["boot"])
 
     def test_entry_point_does_not_retry_a_stalled_boot(self):
         events = []
@@ -112,7 +150,7 @@ class WaitForBootTests(unittest.TestCase):
             raise RuntimeError("Simulator boot made no progress for 300 seconds: " + udid)
 
         with self.assertRaises(SystemExit):
-            MODULE["main"](["watch"], boot=boot, shutdown=lambda udid: events.append("shutdown " + udid))
+            MODULE["main"](["watch"], boot=boot, shutdown=lambda udid, timeout: events.append("shutdown " + udid))
         self.assertEqual(events, ["boot watch"])
 
     def test_reports_a_failed_boot(self):

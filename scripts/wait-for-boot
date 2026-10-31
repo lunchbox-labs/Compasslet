@@ -76,10 +76,10 @@ def wait_for_boot(udid, stall_seconds, deadline_seconds, command=None):
                 process.kill()
 
 
-def shutdown(udid):
+def shutdown(udid, timeout):
     """Return the device to Shutdown after a failed boot; errors here are only reported."""
     try:
-        subprocess.run(["xcrun", "simctl", "shutdown", udid], timeout=60)
+        subprocess.run(["xcrun", "simctl", "shutdown", udid], timeout=min(60, timeout))
     except subprocess.SubprocessError as error:
         print(f"Shutdown after a failed boot did not complete: {error}", flush=True)
 
@@ -95,18 +95,25 @@ def main(argv=None, boot=wait_for_boot, shutdown=shutdown):
     # One budget covers every device so the script always finishes inside the CI step
     # that bounds it, and reports which boot used the time up.
     deadline = time.monotonic() + arguments.deadline_seconds
+
+    def remaining_budget(udid):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise RuntimeError("Simulator boot exhausted the shared budget: " + udid)
+        return remaining
+
     try:
         for udid in arguments.udids:
             try:
-                boot(udid, arguments.stall_seconds, max(0, deadline - time.monotonic()))
+                boot(udid, arguments.stall_seconds, remaining_budget(udid))
             except RuntimeError as error:
                 # CoreSimulator sometimes gives up on a boot outright ("Device boot failed")
                 # under load. Shut the device down and try once more within the budget.
                 if "failed with status" not in str(error):
                     raise
                 print(f"{error}; shutting the device down and booting it again", flush=True)
-                shutdown(udid)
-                boot(udid, arguments.stall_seconds, max(0, deadline - time.monotonic()))
+                shutdown(udid, remaining_budget(udid))
+                boot(udid, arguments.stall_seconds, remaining_budget(udid))
     except RuntimeError as error:
         sys.exit(str(error))
 
