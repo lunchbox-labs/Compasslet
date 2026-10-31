@@ -41,8 +41,11 @@ produce it; an undetermined location authorization alone does not block magnetic
 heading. Also check VoiceOver, larger Dynamic Type (including the AX3 and AX5
 accessibility sizes with Bold Text on the smallest supported iPhone, where the
 compass screen keeps one whole reading and leaves details to Settings), light/dark
-appearance, and Reduce Motion. Device sensor accuracy and these physical-device checks remain
-separate from simulator state tests.
+appearance, and Reduce Motion. With Reduce Motion on, the phone shows a steady text
+reading that follows the sensor instead of the rotating dial, unless Appearance keeps
+the dial; the dial then moves in steps of about four degrees rather than continuously,
+so a settled reading can differ from the sensor by up to four degrees. Device sensor
+accuracy and these physical-device checks remain separate from simulator state tests.
 
 ## Set up CarPlay
 

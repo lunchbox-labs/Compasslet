@@ -94,6 +94,10 @@ final class HeadingController: ObservableObject {
   private var reducedMotion = false
   private var session: UUID?
   static let maximumAge: TimeInterval = 5
+  /// In stepped mode the shown heading holds until the sensor moves at least this far, so a
+  /// rotating dial steps between settled readings instead of drifting with every small sample.
+  /// A settled reading can therefore differ from the sensor by up to this many degrees.
+  static let reducedMotionStep: Double = 4
 
   init(sensor: any HeadingSensor, now: @escaping () -> Date = Date.init) {
     self.sensor = sensor
@@ -101,6 +105,8 @@ final class HeadingController: ObservableObject {
     sensor.receive = { [weak self] event in self?.receive(event) }
   }
 
+  /// Switches between smoothed headings and stepped headings. Pass true only while a rotating
+  /// dial is shown under Reduce Motion; a text reading is more accurate when smoothed.
   func setReducedMotion(_ value: Bool) {
     reducedMotion = value
     smoother?.reset()
@@ -164,10 +170,28 @@ final class HeadingController: ObservableObject {
         clear(.stale)
         return
       }
-      if reducedMotion { smoother?.reset() }
+      if reducedMotion {
+        smoother?.reset()
+        if let held = heldReading(for: reading) {
+          sample = held
+          status = .live
+          return
+        }
+      }
       sample = smoother?.update(reading, now: now(), maximumAge: Self.maximumAge)
       status = sample == nil ? .interrupted : .live
     }
+  }
+
+  /// Keeps the displayed angle for a small change while adopting the new sample's metadata, so
+  /// freshness and accuracy stay current. Larger changes are shown directly without smoothing.
+  private func heldReading(for reading: CompassSample) -> CompassSample? {
+    guard let current = sample, reading.timestamp >= current.timestamp,
+      abs(current.angle.shortestDelta(to: reading.angle)) < Self.reducedMotionStep
+    else { return nil }
+    return CompassSample(
+      degrees: current.angle.degrees, source: reading.source, reference: reading.reference,
+      accuracy: reading.accuracy, timestamp: reading.timestamp)
   }
 
   private func clear(_ next: Status) {

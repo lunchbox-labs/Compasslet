@@ -16,7 +16,18 @@ struct CompassView: View {
   @ScaledMetric(relativeTo: .body) private var compactStatusSize = 17
   @AccessibilityFocusState private var menuFocused: Bool
 
-  private var appearance: AppearanceValues { appearanceStore.preferences.effective(for: .phone) }
+  private var storedAppearance: AppearanceValues {
+    appearanceStore.preferences.effective(for: .phone)
+  }
+  /// Reduce Motion replaces the rotating dial with steady text unless Appearance keeps the dial.
+  private var steadyReading: Bool {
+    reduceMotion && storedAppearance.reducedMotionDial == .steadyReadout
+  }
+  private var appearance: AppearanceValues {
+    steadyReading ? storedAppearance.requiringReadout() : storedAppearance
+  }
+  /// Only a rotating dial shown under Reduce Motion steps; steady text keeps smoothed headings.
+  private var stepsHeading: Bool { reduceMotion && !steadyReading }
   private var roundedDegrees: Int? {
     compass.sample.map { Int($0.angle.degrees.rounded()) % 360 }
   }
@@ -101,7 +112,7 @@ struct CompassView: View {
       }
       await drive.phoneBecameActive()
       guard !Task.isCancelled else { return }
-      compass.setReducedMotion(reduceMotion)
+      compass.setReducedMotion(stepsHeading)
       async let heading: Void = compass.run()
       async let phoneLocation: Void = location.run()
       while !Task.isCancelled {
@@ -111,7 +122,7 @@ struct CompassView: View {
       _ = await heading
       _ = await phoneLocation
     }
-    .onChange(of: reduceMotion) { _, value in compass.setReducedMotion(value) }
+    .onChange(of: stepsHeading) { _, value in compass.setReducedMotion(value) }
   }
 
   private var header: some View {
@@ -136,6 +147,10 @@ struct CompassView: View {
         phoneReadout
         Text("Accuracy ±\(Int(min(sample.accuracy, 360).rounded()))°")
           .font(.subheadline).foregroundStyle(.secondary)
+        if steadyReading {
+          Text("Dial hidden while Reduce Motion is on")
+            .font(.caption2).foregroundStyle(.secondary)
+        }
       } else {
         Text(compass.status.title).font(.headline)
         if details {
@@ -234,11 +249,15 @@ struct CompassView: View {
       .accessibilityLabel(accessibilitySummary)
   }
 
-  private func dial(size: CGFloat) -> some View {
-    CompassDial(bearing: compass.sample?.angle.degrees, appearance: appearance, showsReadout: false)
+  @ViewBuilder private func dial(size: CGFloat) -> some View {
+    if !steadyReading {
+      CompassDial(
+        bearing: compass.sample?.angle.degrees, appearance: appearance, showsReadout: false
+      )
       .frame(width: max(0, size), height: max(0, size))
       .accessibilityElement(children: .ignore)
       .accessibilityLabel(accessibilitySummary)
+    }
   }
 
   private var locationNotice: String? {

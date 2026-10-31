@@ -109,6 +109,35 @@ import Testing
   #expect(AppearancePreferences.decode(try JSONEncoder().encode(preferences)) == preferences)
 }
 
+@Test func reducedMotionChoiceDefaultsForAppearancesSavedWithoutIt() throws {
+  // A document saved before the field existed decodes with the standard choice and keeps
+  // every other stored value.
+  var preferences = AppearancePreferences()
+  var global = preferences.global
+  global.showDegrees = false
+  global.minorTicks = .eight
+  global.labels = .outside
+  global.rotation = .arrow
+  preferences.setGlobal(global)
+  var stored = try #require(
+    JSONSerialization.jsonObject(with: JSONEncoder().encode(preferences)) as? [String: Any])
+  var earlier = try #require(stored["global"] as? [String: Any])
+  #expect(earlier.removeValue(forKey: "reducedMotionDial") != nil)
+  stored["global"] = earlier
+  let decoded = AppearancePreferences.decode(try JSONSerialization.data(withJSONObject: stored))
+  #expect(decoded.global.reducedMotionDial == .steadyReadout)
+  #expect(decoded == preferences)
+  // Any key an earlier version did not store falls back to the standard choice.
+  stored["global"] = [String: Any]()
+  let sparse = AppearancePreferences.decode(try JSONSerialization.data(withJSONObject: stored))
+  #expect(sparse == AppearancePreferences())
+  global.reducedMotionDial = .rotatingDial
+  preferences.setGlobal(global)
+  let restored = AppearancePreferences.decode(try JSONEncoder().encode(preferences))
+  #expect(restored.global.reducedMotionDial == .rotatingDial)
+  #expect(restored == preferences)
+}
+
 @Test func readoutSizeChoiceFollowsGlobalsUntilSurfaceOverrides() throws {
   var preferences = AppearancePreferences()
   var global = preferences.global
