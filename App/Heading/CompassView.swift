@@ -234,7 +234,7 @@ struct CompassView: View {
   private var compactLocationStatus: String {
     switch drive.setupStatus {
     case .ready: "Location details"
-    case .permissionRequired: "Enable location"
+    case .permissionRequired: "Enable Location"
     case .denied: "Location denied"
     case .restricted: "Location restricted"
     case .servicesDisabled: "Location Services off"
@@ -264,7 +264,7 @@ struct CompassView: View {
   private var locationNotice: String? {
     switch drive.setupStatus {
     case .ready: nil
-    case .permissionRequired: "Enable location"
+    case .permissionRequired: "Enable Location"
     case .denied: "Location access denied"
     case .restricted: "Location access is restricted"
     case .servicesDisabled: "Location Services is off"

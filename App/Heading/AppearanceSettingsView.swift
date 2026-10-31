@@ -39,7 +39,7 @@ private struct AppearanceDetailView: View {
       if let surface {
         Section {
           Toggle(
-            "Use global settings",
+            "Use Global Settings",
             isOn: Binding(
               get: { followsGlobal },
               set: { follow in store.update { $0.setUsesGlobal(follow, for: surface) } }
@@ -63,9 +63,9 @@ private struct AppearanceDetailView: View {
       }
       if !followsGlobal {
         Section {
-          Toggle("Show direction", isOn: binding(\.showDirection))
+          Toggle("Show Direction", isOn: binding(\.showDirection))
             .disabled(requiresReadout && value.showDirection && !value.showDegrees)
-          Toggle("Show degrees", isOn: binding(\.showDegrees))
+          Toggle("Show Degrees", isOn: binding(\.showDegrees))
             .disabled(requiresReadout && value.showDegrees && !value.showDirection)
         } header: {
           Text("Readout")
@@ -81,7 +81,7 @@ private struct AppearanceDetailView: View {
           Toggle("Use System Text Size", isOn: binding(\.useSystemTextSize))
           if !value.useSystemTextSize {
             VStack(spacing: 8) {
-              Text("Custom text size")
+              Text("Custom Text Size")
               Slider(
                 value: Binding(
                   get: { Double(value.customTextSize.rawValue) },
@@ -91,7 +91,7 @@ private struct AppearanceDetailView: View {
                   }),
                 in: 0...Double(ReadoutTextSize.allCases.count - 1), step: 1
               ) {
-                Text("Custom text size")
+                Text("Custom Text Size")
               } minimumValueLabel: {
                 Text("A").font(.caption).accessibilityHidden(true)
               } maximumValueLabel: {
@@ -100,7 +100,7 @@ private struct AppearanceDetailView: View {
               .accessibilityValue(value.customTextSize.title)
               Text(value.customTextSize.title).font(.caption).foregroundStyle(.secondary)
               if value.customTextSize.isAccessibilitySize {
-                Text("Accessibility size")
+                Text("Accessibility Size")
                   .font(.caption2).foregroundStyle(.secondary).accessibilityHidden(true)
               }
             }
@@ -126,19 +126,19 @@ private struct AppearanceDetailView: View {
         .disabled(!value.hasReadout)
         if surface != .activity {
           Section {
-            Picker("Minor ticks per quarter", selection: binding(\.minorTicks)) {
+            Picker("Minor Ticks per Quarter", selection: binding(\.minorTicks)) {
               ForEach(MinorTicks.allCases, id: \.self) { count in
                 Text("\(count.rawValue)").tag(count)
               }
             }
-            Picker("Cardinal labels", selection: binding(\.labels)) {
+            Picker("Cardinal Labels", selection: binding(\.labels)) {
               Text("Inside").tag(CardinalLabels.inside)
               Text("Outside").tag(CardinalLabels.outside)
               Text("Hidden").tag(CardinalLabels.hidden)
             }
             Picker("Rotation", selection: binding(\.rotation)) {
-              Text("Rotate dial").tag(DialRotation.dial)
-              Text("Rotate arrow").tag(DialRotation.arrow)
+              Text("Rotate Dial").tag(DialRotation.dial)
+              Text("Rotate Arrow").tag(DialRotation.arrow)
             }
           } header: {
             Text("Dial")
@@ -150,14 +150,14 @@ private struct AppearanceDetailView: View {
           .pickerStyle(.navigationLink)
           Section {
             Picker("With Reduce Motion", selection: binding(\.reducedMotionDial)) {
-              Text("Steady reading").tag(ReducedMotionDial.steadyReadout)
-              Text("Keep the dial").tag(ReducedMotionDial.rotatingDial)
+              Text("Steady Reading").tag(ReducedMotionDial.steadyReadout)
+              Text("Keep the Dial").tag(ReducedMotionDial.rotatingDial)
             }
           } header: {
             Text("Reduce Motion")
           } footer: {
             Text(
-              "Applies while the system Reduce Motion setting is on. Steady reading hides the dial and shows direction and degrees text that follows the sensor; if both are hidden above, direction is shown. Keep the dial moves the dial in steps of about four degrees, so a settled reading can differ from the sensor by up to four degrees."
+              "Applies while the system Reduce Motion setting is on. Steady Reading hides the dial and shows direction and degrees text that follows the sensor; if both are hidden above, direction is shown. Keep the Dial moves the dial in steps of about four degrees, so a settled reading can differ from the sensor by up to four degrees."
             )
           }
           .pickerStyle(.navigationLink)
@@ -206,7 +206,7 @@ private struct AppearancePreview: View {
     VStack(spacing: 16) {
       if surface != .activity {
         VStack(spacing: 4) {
-          Text("Phone · Magnetic north")
+          Text("Phone · Magnetic North")
             .font(.caption2).foregroundStyle(.secondary)
           CompassDial(
             bearing: 45, appearance: appearance,
@@ -227,7 +227,7 @@ private struct AppearancePreview: View {
       if surface == nil || surface == .activity {
         VStack(spacing: 8) {
           CompassReadout(bearing: 45, appearance: appearance.requiringReadout())
-          Text("Travel · True north").font(.caption2).foregroundStyle(.secondary)
+          Text("Travel · True North").font(.caption2).foregroundStyle(.secondary)
         }
         .padding(24).frame(maxWidth: 300)
         .background(.background, in: RoundedRectangle(cornerRadius: 20))

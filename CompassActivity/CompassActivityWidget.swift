@@ -55,7 +55,7 @@ private struct CompassActivityCard: View {
         VStack(spacing: 1) {
           readout
           if presentation.reading != nil {
-            Text("Last travel").font(.caption2).foregroundStyle(.secondary)
+            Text("Last Travel").font(.caption2).foregroundStyle(.secondary)
           }
         }
       }
@@ -98,9 +98,9 @@ private struct CompassActivityCard: View {
   private var secondaryLine: some View {
     Group {
       if presentation.reading != nil, let sample = context.state.sampleTime {
-        Text("Last travel \(sample, style: .time)")
+        Text("Last Travel \(sample, style: .time)")
       } else {
-        Text("Travel · True north")
+        Text("Travel · True North")
       }
     }
     .font(.caption2).foregroundStyle(.secondary).monospacedDigit()
@@ -148,9 +148,9 @@ private struct CompassActivityView: View {
       } else {
         Text("—").font(.largeTitle.bold())
       }
-      Text("Travel · True north").font(.caption2)
+      Text("Travel · True North").font(.caption2)
       if presentation.reading != nil, let sample = context.state.sampleTime {
-        Text("Last travel \(sample, style: .time)").font(.caption2).foregroundStyle(.secondary)
+        Text("Last Travel \(sample, style: .time)").font(.caption2).foregroundStyle(.secondary)
       }
       if context.isStale || context.state.status != .usable {
         Text(presentation.status).font(.caption)

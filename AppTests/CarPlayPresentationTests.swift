@@ -107,7 +107,7 @@ final class CarPlayPresentationTests: XCTestCase {
     let header = try XCTUnwrap(screen.template.listHeader)
     XCTAssertEqual(header.title, "Sampled 59° NE")
     XCTAssertEqual(
-      header.subtitle, "Travel · True north · \(now.formatted(date: .omitted, time: .standard))")
+      header.subtitle, "Travel · True North · \(now.formatted(date: .omitted, time: .standard))")
     XCTAssertEqual(header.bodyVariants.map(\.string), ["Updates limited to once every 10 seconds"])
     XCTAssertTrue(header.actionButtons.isEmpty)
     XCTAssertTrue(screen.template.sections.isEmpty)
@@ -116,7 +116,7 @@ final class CarPlayPresentationTests: XCTestCase {
     XCTAssertEqual(screen.template.emptyViewSubtitleVariants, [""])
     screen.update(dialValue(59, at: now, now: now.addingTimeInterval(6)), traits: car)
     XCTAssertEqual(screen.template.listHeader?.title, "—")
-    XCTAssertEqual(screen.template.listHeader?.subtitle, "Travel · True north")
+    XCTAssertEqual(screen.template.listHeader?.subtitle, "Travel · True North")
   }
 
   func testStyleChangeRedrawsTheCurrentContentWithoutANewValue() throws {
@@ -212,7 +212,7 @@ final class CarPlayPresentationTests: XCTestCase {
       presentation: .init(sample: sample, status: .usable),
       setup: .ready, driving: true, now: now)
     XCTAssertEqual(value.bearing, "0° N")
-    XCTAssertEqual(value.reference, "Travel · True north")
+    XCTAssertEqual(value.reference, "Travel · True North")
   }
 
   func testWrongSourceFutureTimeAndNonfiniteInputNeverExposeBearing() {
