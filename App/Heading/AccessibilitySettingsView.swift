@@ -59,13 +59,13 @@ struct AccessibilitySettingsView: View {
       }
       Section {
         Text(
-          "Colors follow the system light and dark appearance. Direction and degrees are shown as text, so a reading does not depend on color. North is red on the dial and is also labeled N; with Rotate arrow it also stays at the top."
+          "Colors follow the system light and dark appearance. Direction and degrees are shown as text, so a reading does not depend on color. North is marked on the dial by a pointed rim tick that is longer than the other ticks, in red, and labeled N; with Rotate arrow it also stays at the top. With Increase Contrast on, the dial’s labels, rim and ticks use stronger colors and strokes."
         )
       } header: {
         Text("Color and contrast")
       } footer: {
         Text(
-          "Hiding the cardinal labels in Appearance leaves color as the rotating dial’s north cue. Keep the labels or the readout visible if you rely on shape or text."
+          "Hiding the cardinal labels in Appearance keeps the pointed north tick, so north stays identifiable by shape as well as color."
         )
       }
       Section {
