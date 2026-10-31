@@ -19,4 +19,3 @@ class WatchArchitectureTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 7)
                 self.assertEqual(result.stdout.splitlines()[:3], ['-destination', 'a b', 'test'])
                 self.assertEqual('EXCLUDED_ARCHS[sdk=watchsimulator*]=x86_64' in result.stdout, arch == 'arm64')
-
