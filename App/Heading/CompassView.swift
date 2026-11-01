@@ -5,13 +5,14 @@ import UIKit
 struct CompassView: View {
   @ObservedObject var drive: DriveSessionController
   @Environment(\.scenePhase) private var scenePhase
+  @Environment(\.openURL) private var openURL
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   @StateObject private var compass = HeadingController(sensor: DeviceHeadingSensor())
   @StateObject private var location = PhoneLocationController()
   @ObservedObject private var appearanceStore = AppearanceStore.shared
   @State private var showingSettings = false
-  @State private var showingLocationDetails = false
+  @State private var showingHeadingStatus = false
   @State private var debugEnabled = false
   @ScaledMetric(relativeTo: .body) private var compactStatusSize = 17
   @AccessibilityFocusState private var menuFocused: Bool
@@ -65,7 +66,7 @@ struct CompassView: View {
               information(details: false)
                 .fixedSize(horizontal: false, vertical: true)
               // At extreme text sizes, keep the reading or critical status readable.
-              // All supporting details remain available in the scrollable Settings.
+              // Location preferences remain available in the scrollable Settings.
               // This last layout is the one place the main screen limits the user's size: the
               // reading is capped to the screen so it stays whole rather than clipped, which
               // is a deliberate non-scrolling design choice rather than a Dynamic Type gap.
@@ -89,8 +90,7 @@ struct CompassView: View {
         )
         if showingSettings {
           CompassSettingsView(
-            drive: drive, location: location, headingStatus: compass.status,
-            showLocationDetails: showingLocationDetails, close: closeSettings
+            drive: drive, close: closeSettings
           )
           .frame(width: geometry.size.width, height: geometry.size.height)
           .gesture(SettingsDismissGesture(close: closeSettings))
@@ -119,6 +119,14 @@ struct CompassView: View {
       }
       _ = await heading
       _ = await phoneLocation
+    }
+    .alert(compass.status.title, isPresented: $showingHeadingStatus) {
+      if compass.status == .denied, let url = URL(string: UIApplication.openSettingsURLString) {
+        Button("Open Settings") { openURL(url) }
+      }
+      Button("OK", role: .cancel) {}
+    } message: {
+      Text(compass.status.detail)
     }
     .onChange(of: stepsHeading) { _, value in compass.setReducedMotion(value) }
   }
@@ -164,11 +172,6 @@ struct CompassView: View {
       }
       if details {
         PhoneLocationReadout(location: location)
-      } else {
-        Button("Location Details", systemImage: "chevron.right") {
-          openSettings(locationDetails: true)
-        }
-        .frame(minHeight: 44)
       }
       if let notice = locationNotice {
         Button(notice) { openSettings() }.font(.subheadline).frame(minHeight: 44)
@@ -196,12 +199,12 @@ struct CompassView: View {
           .accessibilityLabel(accessibilitySummary)
         }
       } else {
-        Button(action: { openSettings(locationDetails: true) }) {
+        Button(action: { showingHeadingStatus = true }) {
           Text(compactHeadingStatus).multilineTextAlignment(.center)
         }
         .frame(minHeight: 44)
         .accessibilityLabel(compass.status.title)
-        .accessibilityHint("Opens details and available recovery actions")
+        .accessibilityHint("Shows heading status and available recovery actions")
       }
       if let notice = locationNotice {
         Button(action: { openSettings() }) {
@@ -234,7 +237,7 @@ struct CompassView: View {
 
   private var compactLocationStatus: String {
     switch drive.setupStatus {
-    case .ready: "Location Details"
+    case .ready: "Location Enabled"
     case .permissionRequired: "Enable Location"
     case .denied: "Location denied"
     case .restricted: "Location restricted"
@@ -274,8 +277,7 @@ struct CompassView: View {
     }
   }
 
-  private func openSettings(locationDetails: Bool = false) {
-    showingLocationDetails = locationDetails
+  private func openSettings() {
     withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) { showingSettings = true }
   }
 
