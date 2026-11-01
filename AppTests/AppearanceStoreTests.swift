@@ -76,6 +76,37 @@ struct AppearanceStoreTests {
     }
   }
 
+  @Test func activityCardsRespectIndependentTimestampChoices() throws {
+    let sample = Date(timeIntervalSince1970: 100)
+    func render(_ appearance: AppearanceValues, small: Bool, stale: Bool = false) throws -> Data {
+      let state = CompassActivityAttributes.ContentState(
+        bearing: 45, status: .usable, sampleTime: sample, expiry: nil, appearance: appearance)
+      let renderer = ImageRenderer(
+        content: CompassActivityCard(state: state, isStale: stale, isSmall: small)
+          .frame(width: 300, height: 160)
+          .environment(\.dynamicTypeSize, .large)
+          .environment(\.colorScheme, .light))
+      return try #require(renderer.uiImage?.pngData())
+    }
+    let original = AppearanceValues()
+    var hidden = original
+    hidden.lockScreenTimestamp = .hidden
+    #expect(try render(original, small: false) != render(hidden, small: false))
+    #expect(try render(original, small: true) == render(hidden, small: true))
+    hidden.smallActivityTimestamp = .hidden
+    #expect(try render(original, small: true) != render(hidden, small: true))
+    var elapsed = original
+    elapsed.lockScreenTimestamp = .elapsed
+    elapsed.smallActivityTimestamp = .elapsed
+    for small in [false, true] {
+      #expect(try render(elapsed, small: small) != render(hidden, small: small))
+      // Unavailable cards must never expose a timestamp from a stale payload.
+      #expect(
+        try render(original, small: small, stale: true) == render(hidden, small: small, stale: true)
+      )
+    }
+  }
+
   @Test func phonePreviewRendersDialChoicesAndReducedMotionFallback() throws {
     func render(_ value: AppearanceValues, reduceMotion: Bool = false) throws -> UIImage {
       let renderer = ImageRenderer(
