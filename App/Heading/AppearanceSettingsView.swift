@@ -65,7 +65,7 @@ private struct AppearanceDetailView: View {
             ))
         } footer: {
           Text(
-            "Turn off to customize this surface. Turning on replaces its custom appearance with global settings."
+            "Turning on replaces custom settings with global settings."
           )
         }
       }
@@ -125,13 +125,11 @@ private struct AppearanceDetailView: View {
           VStack(alignment: .leading, spacing: 4) {
             Text(
               value.hasReadout
-                ? (value.useSystemTextSize
-                  ? "The compass readout follows the system text size for each surface. Other interface text continues to follow Dynamic Type."
-                  : "Choose a size for the compass readout, up to the largest accessibility size. Other interface text continues to follow Dynamic Type.")
-                : "Text size is kept while both center readouts are hidden.")
+                ? "Changes the compass readout only."
+                : "Show a readout to change its text size.")
             if surface != .phone {
               Text(
-                "In the Dynamic Island the readout stops at Extra Extra Extra Large; the Lock Screen uses the full range."
+                "Dynamic Island limits larger text sizes; the Lock Screen supports the full range."
               )
             }
           }
@@ -144,10 +142,6 @@ private struct AppearanceDetailView: View {
             editorLink(.rotation)
           } header: {
             Text("Dial")
-          } footer: {
-            Text(
-              "Minor ticks are the small marks between cardinal directions. Four major ticks remain, and north's tick is a pointed red marker so it stays identifiable when labels are hidden. Cardinal labels are N, E, S, and W."
-            )
           }
           Section {
             editorLink(.reduceMotion)
@@ -155,7 +149,7 @@ private struct AppearanceDetailView: View {
             Text("Reduce Motion")
           } footer: {
             Text(
-              "Applies while the system Reduce Motion setting is on. Steady Reading hides the dial and shows direction and degrees text that follows the sensor; if both are hidden above, direction is shown. Keep the Dial moves the dial in steps of about four degrees, so a settled reading can differ from the sensor by up to four degrees."
+              "Used when Reduce Motion is on. Choose a text-only reading or a dial with reduced movement."
             )
           }
         }
