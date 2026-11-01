@@ -410,6 +410,14 @@ struct AppearancePreview: View {
     PhoneCompassPresentation(appearance: appearance, reduceMotion: reduceMotion)
   }
 
+  private var phoneAccessibilityDescription: String {
+    var parts = ["Phone, magnetic north", phone.showsDial ? "Dial visible" : "Dial hidden"]
+    if phone.appearance.showDirection { parts.append("northeast") }
+    if phone.appearance.showDegrees { parts.append("45 degrees") }
+    if !phone.appearance.hasReadout { parts.append("Readout hidden") }
+    return parts.joined(separator: ", ")
+  }
+
   var body: some View {
     VStack(spacing: 16) {
       if surface != .activity {
@@ -433,6 +441,8 @@ struct AppearancePreview: View {
         }
         .padding().frame(maxWidth: 260)
         .background(.background, in: RoundedRectangle(cornerRadius: 20))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(phoneAccessibilityDescription)
       }
       if surface == nil || surface == .activity {
         activityExample("Lock Screen", small: false)
