@@ -1,25 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
-date -u "+%Y-%m-%dT%H:%M:%SZ Discovering Watch simulator pair"
-selection="$(python3 scripts/select-watch-pair)"
-read -r destination companion <<< "$selection"
+# Test on a fresh, unpaired Watch. A paired Watch destination makes xcodebuild build the
+# iOS companion, boot the paired iPhone and tunnel the test session through it, and the
+# iPhone's first boot is what starves this runner. An unpaired Watch needs none of that.
+date -u "+%Y-%m-%dT%H:%M:%SZ Creating an unpaired Watch simulator"
+destination="$(python3 scripts/create-watch-simulator)"
 # A first Watch boot on the hosted runner regularly needs several minutes, so the wait
-# fails on a stalled phase rather than on a fixed total. Boot the Watch first: once the
-# iPhone finishes its own first boot its background work starves the runner, and a
-# Watch boot started then has timed out before reaching CoreSimulator. Each wait gets
-# its own share of the step's budget.
+# fails on a stalled phase rather than on a fixed total.
 python3 scripts/wait-for-boot --deadline-seconds 420 "$destination"
 # Pay for the app's first install and launch here, under a visible bound, instead of
-# inside XCTest's host handshake, which gives up after about five minutes. Do it before
-# the iPhone boots: started during the iPhone's post-boot work, the same install has
-# taken over six minutes, so the install bound is wider than the three minutes it first
-# had; the launch is advisory and keeps the shorter one.
+# inside XCTest's host handshake, which gives up after about five minutes.
 python3 scripts/warm-watch-app --timeout-seconds 420 --launch-timeout-seconds 180 "$destination" \
   .build/watch/Build/Products/Debug-watchsimulator/CompassWatch.app \
   dev.lunchbox-labs.carplay-compass.watchkitapp
-# XCTest uses the existing paired iPhone for its Watch transport, so it must finish
-# booting before the test runner's handshake starts.
-python3 scripts/wait-for-boot --deadline-seconds 420 "$companion"
 mkdir -p .build
 
 # The test build does not apply the active-architecture rule on a watchOS destination,
@@ -37,6 +30,10 @@ run_tests() {
 # message is not sufficient to prove that no test assertions ran or failed.
 status=0
 run_tests || status=$?
+# Record which simulators ended up booted, so the log shows whether xcodebuild
+# brought up any iPhone on its own.
+date -u "+%Y-%m-%dT%H:%M:%SZ Booted simulators after the test run"
+xcrun simctl list devices booted || true
 if (( status == 0 )); then
   date -u "+%Y-%m-%dT%H:%M:%SZ Watch xcodebuild tests succeeded"
 fi

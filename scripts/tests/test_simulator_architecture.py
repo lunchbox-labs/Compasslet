@@ -31,7 +31,8 @@ class SimulatorArchitectureTests(unittest.TestCase):
                         'com.apple.CoreSimulator.SimRuntime.iOS-27-0': [{'udid': 'phone', 'name': 'iPhone', 'isAvailable': True}]},
                         'pairs': {'pair': {'watch': {'udid': 'watch'}, 'phone': {'udid': 'phone'}}}}
                     runtimes = {name: {'runtimeIdentifier': 'com.apple.CoreSimulator.SimRuntime.' + platform + '-27-0', 'state': 'Ready', 'mountPath': '/'} for name, platform in [('watch', 'watchOS'), ('phone', 'iOS')]}
-                    (root / 'xcrun').write_text('#!/usr/bin/env python3\nimport sys, json\nif sys.argv[1:4] == ["simctl", "runtime", "list"]: print(' + repr(json.dumps(runtimes)) + ')\nelif sys.argv[1:3] == ["simctl", "list"]: print(' + repr(json.dumps(devices)) + ')\n')
+                    devicetypes = {'devicetypes': [{'name': 'Apple Watch Series 12 (46mm)', 'identifier': 'com.apple.CoreSimulator.SimDeviceType.Apple-Watch-Series-12-46mm'}]}
+                    (root / 'xcrun').write_text('#!/usr/bin/env python3\nimport sys, json\nif sys.argv[1:4] == ["simctl", "runtime", "list"]: print(' + repr(json.dumps(runtimes)) + ')\nelif sys.argv[1:4] == ["simctl", "list", "devicetypes"]: print(' + repr(json.dumps(devicetypes)) + ')\nelif sys.argv[1:3] == ["simctl", "create"]: print("watch")\nelif sys.argv[1:3] == ["simctl", "list"]: print(' + repr(json.dumps(devices)) + ')\n')
                     (root / 'xcodebuild').write_text('#!/usr/bin/env python3\nimport json, sys\nfrom pathlib import Path\nPath("arguments.json").write_text(json.dumps(sys.argv[1:]))\nsys.exit(7)\n')
                     (root / 'uname').write_text('#!/bin/sh\necho ' + arch + '\n')
                     for executable in ('xcrun', 'xcodebuild', 'uname'):

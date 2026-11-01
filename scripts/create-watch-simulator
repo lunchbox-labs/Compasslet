@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+"""Create an unpaired Apple Watch simulator on a mounted watchOS runtime and print its UDID."""
+# The image pairs every preinstalled Watch with an iPhone. xcodebuild treats a paired
+# Watch destination as reachable only through its companion: it builds the iOS app,
+# boots the iPhone and tunnels the test session through it. On this runner that iPhone
+# boot is what starves the machine. A fresh, unpaired Watch has no companion, so the
+# tests run on the Watch alone.
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+
+MINIMUM_WATCHOS = 27
+
+
+def watch_runtime(runtimes):
+    """Return (identifier, version) of the newest Ready, mounted watchOS runtime, or None."""
+    candidates = []
+    for runtime in runtimes.values():
+        match = re.search(r"\.watchOS-(\d+)-(\d+)$", str(runtime.get("runtimeIdentifier")))
+        if not match or int(match.group(1)) < MINIMUM_WATCHOS:
+            continue
+        if runtime.get("state") != "Ready" or not os.path.ismount(runtime.get("mountPath") or ""):
+            continue
+        candidates.append(((int(match.group(1)), int(match.group(2))), runtime["runtimeIdentifier"]))
+    if not candidates:
+        return None
+    (major, minor), identifier = max(candidates)
+    return identifier, f"{major}.{minor}"
+
+
+def watch_device_type(devicetypes):
+    """Return the identifier of the newest Apple Watch device type the runtime can boot."""
+    watches = [entry for entry in devicetypes.get("devicetypes", [])
+               if str(entry.get("name", "")).startswith("Apple Watch")]
+    if not watches:
+        raise RuntimeError("No Apple Watch device type is installed")
+    # Series numbers sort the generations; the larger case within a series sorts last.
+    def order(entry):
+        name = entry["name"]
+        series = re.search(r"Series (\d+)", name)
+        return (int(series.group(1)) if series else 0, name)
+    return max(watches, key=order)["identifier"]
+
+
+def simctl_json(simctl, arguments, timeout=30):
+    result = subprocess.run([*simctl, *arguments], check=True, capture_output=True,
+                            text=True, timeout=timeout)
+    return json.loads(result.stdout)
+
+
+def create_watch(simctl=("xcrun", "simctl"), timeout=180, clock=time.monotonic):
+    """Wait for a usable watchOS runtime, create an unpaired Watch on it, return its UDID."""
+    # The image can replace its watchOS runtime mount shortly after CoreSimulator starts.
+    # Re-read the runtime state instead of treating an unmounted runtime as final.
+    deadline = clock() + timeout
+    chosen = None
+    while clock() < deadline:
+        try:
+            chosen = watch_runtime(simctl_json(simctl, ["runtime", "list", "-j"]))
+            if chosen:
+                break
+            print(f"Waiting for a mounted watchOS {MINIMUM_WATCHOS}+ runtime", file=sys.stderr, flush=True)
+        except (subprocess.SubprocessError, ValueError) as error:
+            print("Runtime discovery failed: " + str(error), file=sys.stderr, flush=True)
+        time.sleep(min(2, max(0, deadline - clock())))
+    if not chosen:
+        raise RuntimeError(f"No mounted watchOS {MINIMUM_WATCHOS}+ runtime within {timeout:g} seconds")
+    identifier, version = chosen
+    device_type = watch_device_type(simctl_json(simctl, ["list", "devicetypes", "-j"]))
+    result = subprocess.run([*simctl, "create", "CI Watch", device_type, identifier],
+                            check=True, capture_output=True, text=True, timeout=120)
+    udid = result.stdout.strip().splitlines()[-1]
+    print(f"Created unpaired {device_type.rsplit('.', 1)[-1]} on watchOS {version}: {udid}",
+          file=sys.stderr, flush=True)
+    return udid
+
+
+if __name__ == "__main__":
+    try:
+        print(create_watch())
+    except (RuntimeError, subprocess.SubprocessError, ValueError, IndexError) as error:
+        sys.exit(str(error))
