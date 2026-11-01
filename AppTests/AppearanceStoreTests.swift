@@ -7,6 +7,75 @@ import UIKit
 
 @Suite @MainActor
 struct AppearanceStoreTests {
+  @Test func readoutPickerFillsFormRowAndFallsBackWhenNeeded() async throws {
+    let name = "readout-layout-tests-\(UUID())"
+    let defaults = try #require(UserDefaults(suiteName: name))
+    defer { defaults.removePersistentDomain(forName: name) }
+    let store = AppearanceStore(defaults: defaults, legacyDefaults: defaults)
+    let scene = try #require(
+      UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+
+    func segments(in view: UIView) -> [UISegmentedControl] {
+      (view as? UISegmentedControl).map { [$0] }
+        ?? view.subviews.flatMap { segments(in: $0) }
+    }
+
+    for (width, textSize, hidden, expectsSegments) in [
+      (390.0, DynamicTypeSize.large, false, true),
+      (744.0, .large, false, true),
+      (150.0, .large, false, false),
+      (390.0, .accessibility5, false, false),
+      (390.0, .large, true, false),
+    ] {
+      store.update { preferences in
+        var value = preferences.effective(for: .phone)
+        value.showDirection = !hidden
+        value.showDegrees = !hidden
+        preferences.setOverride(value, for: .phone)
+      }
+      let host = UIHostingController(
+        rootView: Form {
+          Section {
+            Picker("Reference", selection: .constant(0)) {
+              Text("First").tag(0)
+              Text("Second").tag(1)
+            }
+            .pickerStyle(.segmented)
+          }
+          Section {
+            AppearanceReadoutControl(surface: .phone, store: store)
+          }
+        }
+        .environment(\.dynamicTypeSize, textSize))
+      let window = UIWindow(windowScene: scene)
+      window.frame = CGRect(x: 0, y: 0, width: width, height: 1000)
+      window.rootViewController = host
+      window.isHidden = false
+      defer {
+        window.isHidden = true
+        window.rootViewController = nil
+      }
+      let deadline = ContinuousClock.now + .seconds(3)
+      while segments(in: host.view).count != (expectsSegments ? 2 : 1),
+        ContinuousClock.now < deadline
+      {
+        host.view.layoutIfNeeded()
+        try await Task.sleep(for: .milliseconds(10))
+      }
+      host.view.layoutIfNeeded()
+      let controls = segments(in: host.view)
+      let reference = try #require(controls.first { $0.numberOfSegments == 2 })
+      let readout = controls.first { $0.numberOfSegments == 3 }
+      #expect((readout != nil) == expectsSegments)
+      if expectsSegments {
+        let readout = try #require(readout)
+        #expect(abs(readout.bounds.width - reference.bounds.width) < 1)
+        #expect(readout.bounds.width > 0)
+      }
+      #expect(store.preferences.effective(for: .phone).hasReadout == !hidden)
+    }
+  }
+
   @Test func phonePreviewRendersDialChoicesAndReducedMotionFallback() throws {
     func render(_ value: AppearanceValues, reduceMotion: Bool = false) throws -> UIImage {
       let renderer = ImageRenderer(

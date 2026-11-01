@@ -198,16 +198,17 @@ struct AppearanceReadoutControl: View {
   var body: some View {
     if let selection, !dynamicTypeSize.isAccessibilitySize {
       ViewThatFits(in: .horizontal) {
-        Picker(
-          "Readout",
-          selection: Binding(get: { self.selection ?? selection }, set: select)
-        ) {
-          ForEach(ReadoutMode.allCases, id: \.self) { mode in
-            Text(mode.title).tag(mode)
+        ReadoutPickerLayout {
+          Picker(
+            "Readout",
+            selection: Binding(get: { self.selection ?? selection }, set: select)
+          ) {
+            ForEach(ReadoutMode.allCases, id: \.self) { mode in
+              Text(mode.title).tag(mode)
+            }
           }
+          .pickerStyle(.segmented)
         }
-        .pickerStyle(.segmented)
-        .fixedSize(horizontal: true, vertical: false)
         menu
       }
     } else {
@@ -244,6 +245,25 @@ struct AppearanceReadoutControl: View {
         preferences.setGlobal(changed)
       }
     }
+  }
+}
+
+// Keep the intrinsic width for ViewThatFits, but give the visible picker the full row.
+private struct ReadoutPickerLayout: Layout {
+  func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    guard let picker = subviews.first else { return .zero }
+    let ideal = picker.sizeThatFits(.unspecified)
+    let width = max(ideal.width, proposal.width ?? ideal.width)
+    let size = picker.sizeThatFits(ProposedViewSize(width: width, height: proposal.height))
+    return CGSize(width: width, height: size.height)
+  }
+
+  func placeSubviews(
+    in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()
+  ) {
+    subviews.first?.place(
+      at: bounds.origin, anchor: .topLeading,
+      proposal: ProposedViewSize(width: bounds.width, height: bounds.height))
   }
 }
 
