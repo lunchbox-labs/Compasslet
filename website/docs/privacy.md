@@ -2,8 +2,10 @@
 
 _Last updated November 2, 2026_
 
-Compasslet does not collect personal information. It has no account, advertising,
-analytics or tracking, and the app sends no data to Lunchbox Labs.
+The Compasslet app does not collect personal information. It has no account,
+advertising, analytics or tracking, and the app sends no data to Lunchbox Labs. Lunchbox
+Labs receives personal information only if you send it through the support form, as
+described under [Support Requests](#support-requests).
 
 ## Location
 
@@ -39,10 +41,22 @@ events, with dates and times, for the Live Activity and CarPlay display on your 
 These events do not include coordinates or directions. Turning Debug Mode off deletes them. They leave your
 device only if you export them and choose where to share them.
 
+## Support Requests
+
+The [support page](support.md) shows a support form hosted by Google Forms. When you
+open that page, your browser loads the form from Google, and Google handles it under
+[Google's Privacy Policy](https://policies.google.com/privacy). If you send the form,
+Lunchbox Labs receives what you submit, including any contact details you choose to
+give, and uses it only to answer your request. Lunchbox Labs keeps a request only as
+long as needed to answer it, then deletes it. To have a request deleted sooner, ask
+through the support form. If you open an issue on GitHub instead, it is public and
+handled under GitHub's terms.
+
 ## Changes
 
 If this policy changes, the updated version will be posted on this page with a new date.
 
 ## Contact
 
-For privacy questions, see [Compasslet Support](support.md).
+For privacy questions, use the support form on the
+[Compasslet Support](support.md) page.
