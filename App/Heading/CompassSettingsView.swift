@@ -27,7 +27,7 @@ struct CompassSettingsView: View {
         } header: {
           Text("About")
         } footer: {
-          Text("Compasslet is open source.")
+          Text("Compasslet is open source under the MIT License.")
         }
       }
       .navigationTitle("Settings")

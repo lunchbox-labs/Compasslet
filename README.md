@@ -19,3 +19,7 @@ Ordinary Home Screen and Lock Screen widgets are not included.
 - [User guide and CarPlay setup](https://github.com/lunchbox-labs/Compasslet/wiki/User-Guide)
 - [Support diagnostics](https://github.com/lunchbox-labs/Compasslet/wiki/User-Diagnostics)
 - [Developer documentation](https://github.com/lunchbox-labs/Compasslet/wiki/Developer-Development)
+
+## License
+
+Compasslet is available under the [MIT License](LICENSE).
