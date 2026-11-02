@@ -17,7 +17,9 @@ import uuid
 
 ORIGIN = 'https://api.appstoreconnect.apple.com'
 FIELDS = {
-    'appStoreVersionLocalizations': {'description', 'keywords', 'promotionalText', 'whatsNew'},
+    'appInfoLocalizations': {'name', 'subtitle', 'privacyPolicyUrl', 'privacyChoicesUrl'},
+    'appStoreVersionLocalizations': {'description', 'keywords', 'marketingUrl', 'promotionalText',
+                                     'supportUrl', 'whatsNew'},
     'betaAppLocalizations': {'description'},
     'betaBuildLocalizations': {'whatsNew'},
 }
@@ -25,7 +27,14 @@ FILES = {'description.txt': ('description', 4000),
          'promotional-text.txt': ('promotionalText', 170),
          'keywords.txt': ('keywords', 100),
          'whats-new.txt': ('whatsNew', 4000),
-         'what-to-test.txt': ('whatToTest', 4000)}
+         'what-to-test.txt': ('whatToTest', 4000),
+         'name.txt': ('name', 30),
+         'subtitle.txt': ('subtitle', 30),
+         'privacy-policy-url.txt': ('privacyPolicyUrl', 2000),
+         'privacy-choices-url.txt': ('privacyChoicesUrl', 2000),
+         'support-url.txt': ('supportUrl', 2000),
+         'marketing-url.txt': ('marketingUrl', 2000)}
+URL_FIELDS = {'privacyPolicyUrl', 'privacyChoicesUrl', 'supportUrl', 'marketingUrl'}
 EDITABLE = {'PREPARE_FOR_SUBMISSION', 'DEVELOPER_REJECTED', 'REJECTED', 'METADATA_REJECTED'}
 
 
@@ -67,10 +76,22 @@ def read_copy(root):
             size = len(value.encode('utf-8')) if field == 'keywords' else len(value)
             require(value and size <= maximum and '\x00' not in value,
                     'Empty, invalid or overlong metadata file: ' + locale + '/' + filename)
+            require(field not in URL_FIELDS or listing_url(value),
+                    'Metadata URL must be a single https URL: ' + locale + '/' + filename)
             fields[field] = value
         if fields:
             result[locale] = fields
     return result
+
+
+def listing_url(value):
+    try:
+        parsed = urlsplit(value)
+        parsed.port
+    except ValueError:
+        return False
+    return (parsed.scheme == 'https' and '.' in (parsed.hostname or '') and not parsed.username
+            and not parsed.password and not re.search(r'\s', value))
 
 
 def uploaded_identity(archive, bundle_id, build_number):
@@ -229,6 +250,10 @@ def editable(record):
     return record.get('attributes', {}).get('appVersionState') in EDITABLE
 
 
+def editable_info(record):
+    return record.get('attributes', {}).get('state') in EDITABLE
+
+
 def processed_build(client, app_id, marketing_version, build_number, attempts, sleep):
     for attempt in range(attempts):
         builds, included = client.collection('/v1/builds', {
@@ -269,7 +294,7 @@ def sync(client, copy, bundle_id, marketing_version, build_number, report=print,
     app_id = identifier(app['id'])
     plans = []
 
-    def plan(kind, rows, locale, desired, label, version_id=None):
+    def plan(kind, rows, locale, desired, label, guard=None):
         target = exact_one(rows, lambda r: r.get('type') == kind
                            and r.get('attributes', {}).get('locale') == locale,
                            label + ' locale', optional=True)
@@ -280,7 +305,7 @@ def sync(client, copy, bundle_id, marketing_version, build_number, report=print,
         if not changes:
             report('UNCHANGED ' + label + ' ' + locale)
             return
-        plans.append((kind, identifier(target['id']), changes, label + ' ' + locale, version_id))
+        plans.append((kind, identifier(target['id']), changes, label + ' ' + locale, guard))
 
     if any('description' in fields for fields in copy.values()):
         rows, _ = client.collection('/v1/apps/' + app_id + '/betaAppLocalizations', {'limit': 200})
@@ -288,7 +313,10 @@ def sync(client, copy, bundle_id, marketing_version, build_number, report=print,
             if 'description' in fields:
                 plan('betaAppLocalizations', rows, locale, {'description': fields['description']}, 'TestFlight app')
 
-    if any(set(fields) & FIELDS['appStoreVersionLocalizations'] for fields in copy.values()):
+    wants_version = any(set(fields) & FIELDS['appStoreVersionLocalizations'] for fields in copy.values())
+    wants_info = any(set(fields) & FIELDS['appInfoLocalizations'] for fields in copy.values())
+    version_still_editable = None
+    if wants_version or wants_info:
         versions, _ = client.collection('/v1/apps/' + app_id + '/appStoreVersions', {
             'filter[platform]': 'IOS', 'filter[versionString]': marketing_version, 'limit': 200})
         version = exact_one(versions, lambda r: is_version(r, marketing_version),
@@ -297,11 +325,18 @@ def sync(client, copy, bundle_id, marketing_version, build_number, report=print,
             report('SKIP App Store version ' + marketing_version + ': absent or not editable; no live-version fallback.')
         else:
             version_id = identifier(version['id'])
-            rows, _ = client.collection('/v1/appStoreVersions/' + version_id + '/appStoreVersionLocalizations', {'limit': 200})
-            for locale, fields in copy.items():
-                desired = {k: v for k, v in fields.items() if k in FIELDS['appStoreVersionLocalizations']}
-                if desired:
-                    plan('appStoreVersionLocalizations', rows, locale, desired, 'App Store version', version_id)
+
+            def version_still_editable():
+                current = client.request('GET', '/v1/appStoreVersions/' + version_id).get('data', {})
+                return is_version(current, marketing_version) and editable(current)
+
+            if wants_version:
+                rows, _ = client.collection('/v1/appStoreVersions/' + version_id + '/appStoreVersionLocalizations', {'limit': 200})
+                for locale, fields in copy.items():
+                    desired = {k: v for k, v in fields.items() if k in FIELDS['appStoreVersionLocalizations']}
+                    if desired:
+                        plan('appStoreVersionLocalizations', rows, locale, desired, 'App Store version',
+                             version_still_editable)
 
     if any('whatToTest' in fields for fields in copy.values()):
         build_id = processed_build(client, app_id, marketing_version, build_number, attempts, sleep)
@@ -312,12 +347,34 @@ def sync(client, copy, bundle_id, marketing_version, build_number, report=print,
     else:
         report('SKIP TestFlight build notes: no what-to-test.txt supplied.')
 
-    for kind, resource_id, changes, label, version_id in plans:
-        if version_id:
-            version = client.request('GET', '/v1/appStoreVersions/' + version_id).get('data', {})
-            if not is_version(version, marketing_version) or not editable(version):
-                report('SKIP ' + label + ': version is no longer editable or no longer matches.')
-                continue
+    # App info has no version relationship, so it is edited only while the uploaded version is
+    # editable, and written last so a rejected name cannot block the build's own notes.
+    if wants_info and not version_still_editable:
+        report('SKIP app info: the uploaded version is absent or not editable; name, subtitle and privacy URLs unchanged.')
+    elif wants_info:
+        infos, _ = client.collection('/v1/apps/' + app_id + '/appInfos', {'limit': 200})
+        info = exact_one(infos, lambda r: r.get('type') == 'appInfos' and editable_info(r),
+                         'editable app info', optional=True)
+        if not info:
+            report('SKIP app info: no editable app info; name, subtitle and privacy URLs unchanged.')
+        else:
+            info_id = identifier(info['id'])
+            rows, _ = client.collection('/v1/appInfos/' + info_id + '/appInfoLocalizations', {'limit': 200})
+
+            def info_still_editable():
+                current = client.request('GET', '/v1/appInfos/' + info_id).get('data', {})
+                return (current.get('type') == 'appInfos' and editable_info(current)
+                        and version_still_editable())
+
+            for locale, fields in copy.items():
+                desired = {k: v for k, v in fields.items() if k in FIELDS['appInfoLocalizations']}
+                if desired:
+                    plan('appInfoLocalizations', rows, locale, desired, 'App info', info_still_editable)
+
+    for kind, resource_id, changes, label, guard in plans:
+        if guard and not guard():
+            report('SKIP ' + label + ': no longer editable or no longer matches.')
+            continue
         client.patch(kind, resource_id, changes)
         report('UPDATED ' + label + ': ' + ', '.join(sorted(changes)))
     report('Metadata sync finished. Review explicit SKIP messages; no submission or distribution was requested.')
