@@ -14,10 +14,11 @@ nav = [
 
 [project.theme]
 font = false
+icon.repo = "fontawesome/brands/github"
 features = [
   # Load pages in place instead of full reloads, prefetch them on hover and
-  # show a progress bar when a load takes longer than 400 ms. All requests stay
-  # on this site; instant navigation relies on site_url for its sitemap.
+  # show a progress bar when a load takes longer than 400 ms. These page loads
+  # stay on this site; instant navigation relies on site_url for its sitemap.
   "navigation.instant",
   "navigation.instant.prefetch",
   "navigation.instant.progress",

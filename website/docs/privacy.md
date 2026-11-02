@@ -53,7 +53,7 @@ If you open an issue on GitHub instead, it is public and handled under GitHub's 
 
 ## This Website
 
-The header of this website links to Compasslet's source code on GitHub and shows details
+Each page of this website links to Compasslet's source code on GitHub and shows details
 such as the repository's star and fork counts. Your browser loads those details from
 GitHub, which handles the request under
 [GitHub's Privacy Statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).
