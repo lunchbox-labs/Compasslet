@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AB1310000000000000000001 /* CompassActivityCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB1310000000000000000003 /* CompassActivityCard.swift */; };
+		AB1310000000000000000002 /* CompassActivityCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB1310000000000000000003 /* CompassActivityCard.swift */; };
 		020F1378FBC3CA202F0BD64E /* TravelLocationSensor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B8C91614F79675159741862 /* TravelLocationSensor.swift */; };
 		0838A3A568319EC0360654D0 /* HeadingController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A46DD5AFEAE45BDDC8C05D /* HeadingController.swift */; };
 		09DF70A050F3531A490635EF /* CompassCore in Frameworks */ = {isa = PBXBuildFile; productRef = EE2B30918BA1EF40AF49F626 /* CompassCore */; };
@@ -125,6 +127,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		AB1310000000000000000003 /* CompassActivityCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompassActivityCard.swift; sourceTree = "<group>"; };
 		00E111F986E110C7D82BA48C /* PhoneLocationController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PhoneLocationController.swift; sourceTree = "<group>"; };
 		00F237C285337B5CFA6907E4 /* CompassActivity.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = CompassActivity.entitlements; sourceTree = "<group>"; };
 		014D8AD2FF2B324887AF606C /* CompassDial.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompassDial.swift; sourceTree = "<group>"; };
@@ -234,6 +237,7 @@
 			children = (
 				A1A46DD5AFEAE45BDDC8C05D /* HeadingController.swift */,
 				DE2F63BB5C501FDD96214F95 /* CompassActivityAttributes.swift */,
+				AB1310000000000000000003 /* CompassActivityCard.swift */,
 				220B49D5093197C84DE6C5D3 /* CompassDiagnostics.swift */,
 				CF0000000000000000000003 /* RetiredWidgetData.swift */,
 				517E687B4D6CA25B3C156124 /* AppearanceStore.swift */,
@@ -621,6 +625,7 @@
 			files = (
 				F97CCAF85C23D34073466081 /* CompassActivityWidget.swift in Sources */,
 				7AA75085FC60695A12D26713 /* CompassActivityAttributes.swift in Sources */,
+				AB1310000000000000000001 /* CompassActivityCard.swift in Sources */,
 				391F7E6A591CFB7AB7F572CF /* CompassDiagnostics.swift in Sources */,
 				138E3C277C6E5E7EF2AD4E8A /* AppearanceStore.swift in Sources */,
 				555243C8123747500336AF8A /* CompassDial.swift in Sources */,
@@ -652,6 +657,7 @@
 				35807C85FCA4AFD3E7A5EE80 /* CompassActivityPresenting.swift in Sources */,
 				020F1378FBC3CA202F0BD64E /* TravelLocationSensor.swift in Sources */,
 				A16441B24DE8B285E778387C /* CompassActivityAttributes.swift in Sources */,
+				AB1310000000000000000002 /* CompassActivityCard.swift in Sources */,
 				8F86E7595CF7EB29B0D46DC7 /* CompassActivityController.swift in Sources */,
 				FED695C7626372E86C39FF85 /* CarPlayPresentation.swift in Sources */,
 				C0A000000000000000000001 /* CarPlayCompassTemplate.swift in Sources */,

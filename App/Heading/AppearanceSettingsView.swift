@@ -135,6 +135,12 @@ private struct AppearanceDetailView: View {
           }
         }
         .disabled(!value.hasReadout)
+        if surface != .phone {
+          Section("Last Travel") {
+            timestampPicker("Lock Screen", selection: binding(\.lockScreenTimestamp))
+            timestampPicker("CarPlay / Apple Watch", selection: binding(\.smallActivityTimestamp))
+          }
+        }
         if surface != .activity {
           Section {
             editorLink(.minorTicks)
@@ -169,6 +175,16 @@ private struct AppearanceDetailView: View {
     }
     .navigationTitle(surface?.title ?? "Global Appearance")
     .navigationBarTitleDisplayMode(.inline)
+  }
+
+  private func timestampPicker(
+    _ title: String, selection: Binding<ActivityTimestampMode>
+  ) -> some View {
+    Picker(title, selection: selection) {
+      Text("Hidden").tag(ActivityTimestampMode.hidden)
+      Text("Time").tag(ActivityTimestampMode.time)
+      Text("Elapsed").tag(ActivityTimestampMode.elapsed)
+    }
   }
 
   private func editorLink(_ option: AppearanceOption) -> some View {
@@ -387,27 +403,18 @@ struct AppearancePreview: View {
   let surface: AppearanceSurface?
   let appearance: AppearanceValues
   var reduceMotion = false
+  @State private var sampleTime = Date.now.addingTimeInterval(-12)
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   private var phone: PhoneCompassPresentation {
     PhoneCompassPresentation(appearance: appearance, reduceMotion: reduceMotion)
   }
 
-  private var accessibilityDescription: String {
-    var parts = ["Example"]
-    if surface != .activity {
-      parts.append("Phone, magnetic north")
-      parts.append(phone.showsDial ? "Dial visible" : "Dial hidden")
-      if phone.appearance.showDirection { parts.append("northeast") }
-      if phone.appearance.showDegrees { parts.append("45 degrees") }
-      if !phone.appearance.hasReadout { parts.append("Readout hidden") }
-    }
-    if surface == nil || surface == .activity {
-      let activity = appearance.requiringReadout()
-      parts.append("Travel, true north")
-      if activity.showDirection { parts.append("northeast") }
-      if activity.showDegrees { parts.append("45 degrees") }
-    }
+  private var phoneAccessibilityDescription: String {
+    var parts = ["Phone, magnetic north", phone.showsDial ? "Dial visible" : "Dial hidden"]
+    if phone.appearance.showDirection { parts.append("northeast") }
+    if phone.appearance.showDegrees { parts.append("45 degrees") }
+    if !phone.appearance.hasReadout { parts.append("Readout hidden") }
     return parts.joined(separator: ", ")
   }
 
@@ -434,18 +441,31 @@ struct AppearancePreview: View {
         }
         .padding().frame(maxWidth: 260)
         .background(.background, in: RoundedRectangle(cornerRadius: 20))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(phoneAccessibilityDescription)
       }
       if surface == nil || surface == .activity {
-        VStack(spacing: 8) {
-          CompassReadout(bearing: 45, appearance: appearance.requiringReadout())
-          Text("Travel · True North").font(.caption2).foregroundStyle(.secondary)
-        }
-        .padding(24).frame(maxWidth: 300)
-        .background(.background, in: RoundedRectangle(cornerRadius: 20))
+        activityExample("Lock Screen", small: false)
+        activityExample("CarPlay / Apple Watch", small: true)
       }
     }
-    .accessibilityElement(children: .ignore)
-    .accessibilityLabel(accessibilityDescription)
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel("Example")
+  }
+
+  private func activityExample(_ title: String, small: Bool) -> some View {
+    VStack(spacing: 8) {
+      Text(title).font(.caption).foregroundStyle(.secondary)
+      CompassActivityCard(
+        state: .init(
+          bearing: 45, status: .usable, sampleTime: sampleTime, expiry: nil,
+          appearance: appearance.requiringReadout()),
+        isSmall: small
+      )
+      .frame(maxWidth: 300)
+      .frame(height: small ? 100 : nil)
+      .background(.background, in: RoundedRectangle(cornerRadius: 20))
+    }
   }
 }
 

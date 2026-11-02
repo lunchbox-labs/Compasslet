@@ -252,3 +252,29 @@ import Testing
   #expect(hidden.readoutMode == nil)
   #expect(!hidden.hasReadout)
 }
+
+@Test func legacyActivityTimestampsDefaultToTimeWithoutLosingAppearance() throws {
+  let data = Data(
+    #"{"global":{"showDegrees":false},"activity":{"customTextSize":5,"useSystemTextSize":false}}"#
+      .utf8)
+  let preferences = AppearancePreferences.decode(data)
+  let activity = preferences.effective(for: .activity)
+  #expect(activity.lockScreenTimestamp == .time)
+  #expect(activity.smallActivityTimestamp == .time)
+  #expect(activity.customTextSize == .xxLarge)
+  #expect(!activity.useSystemTextSize)
+  #expect(!preferences.global.showDegrees)
+}
+
+@Test func activityTimestampChoicesPersistIndependently() throws {
+  var preferences = AppearancePreferences()
+  var activity = preferences.effective(for: .activity)
+  activity.lockScreenTimestamp = .hidden
+  activity.smallActivityTimestamp = .elapsed
+  preferences.setOverride(activity, for: .activity)
+  let restored = AppearancePreferences.decode(try JSONEncoder().encode(preferences))
+  #expect(restored.effective(for: .activity).lockScreenTimestamp == .hidden)
+  #expect(restored.effective(for: .activity).smallActivityTimestamp == .elapsed)
+  #expect(restored.global.lockScreenTimestamp == .time)
+  #expect(restored.global.smallActivityTimestamp == .time)
+}

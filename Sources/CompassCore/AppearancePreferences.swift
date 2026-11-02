@@ -56,6 +56,11 @@ public enum ReadoutMode: CaseIterable, Sendable {
   case direction, degrees, both
 }
 
+/// How the last recorded travel sample is dated on a Live Activity.
+public enum ActivityTimestampMode: String, CaseIterable, Codable, Sendable {
+  case hidden, time, elapsed
+}
+
 /// Display-only choices; never contains sensor samples or validity timestamps.
 public struct AppearanceValues: Codable, Hashable, Sendable {
   /// Shows the abbreviated direction in the readout.
@@ -75,18 +80,28 @@ public struct AppearanceValues: Codable, Hashable, Sendable {
   /// Presentation used while the system Reduce Motion setting is on.
   public var reducedMotionDial: ReducedMotionDial = .steadyReadout
 
+  /// Timestamp presentation for the Lock Screen and expanded Dynamic Island.
+  public var lockScreenTimestamp: ActivityTimestampMode = .time
+  /// Timestamp presentation shared by CarPlay and Apple Watch.
+  public var smallActivityTimestamp: ActivityTimestampMode = .time
+
   /// Creates the standard appearance.
   public init() {}
 
   private enum CodingKeys: String, CodingKey {
     case showDirection, showDegrees, useSystemTextSize, customTextSize, minorTicks, labels
-    case rotation, reducedMotionDial
+    case rotation, reducedMotionDial, lockScreenTimestamp, smallActivityTimestamp
   }
 
   /// Decodes saved values, keeping the standard choice for keys an earlier version did not store.
   public init(from decoder: any Decoder) throws {
     let values = try decoder.container(keyedBy: CodingKeys.self)
     let standard = Self()
+    lockScreenTimestamp =
+      try values.decodeIfPresent(ActivityTimestampMode.self, forKey: .lockScreenTimestamp) ?? .time
+    smallActivityTimestamp =
+      try values.decodeIfPresent(ActivityTimestampMode.self, forKey: .smallActivityTimestamp)
+      ?? .time
     showDirection =
       try values.decodeIfPresent(Bool.self, forKey: .showDirection) ?? standard.showDirection
     showDegrees =

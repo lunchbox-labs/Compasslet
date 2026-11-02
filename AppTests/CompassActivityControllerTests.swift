@@ -48,6 +48,8 @@ struct CompassActivityControllerTests {
     let original = try #require(system.handle.updates.last)
     var appearance = AppearanceValues()
     appearance.showDegrees = false
+    appearance.lockScreenTimestamp = .hidden
+    appearance.smallActivityTimestamp = .elapsed
     time = time.addingTimeInterval(0.5)
     await controller.updateAppearance(appearance)?.value
     let changed = try #require(system.handle.updates.last)
@@ -55,6 +57,8 @@ struct CompassActivityControllerTests {
     #expect(changed.sampleTime == original.sampleTime)
     #expect(changed.expiry == original.expiry)
     #expect(changed.appearance?.showDegrees == false)
+    #expect(changed.appearance?.lockScreenTimestamp == .hidden)
+    #expect(changed.appearance?.smallActivityTimestamp == .elapsed)
     time = time.addingTimeInterval(6)
     appearance.showDegrees = true
     await controller.updateAppearance(appearance)?.value
