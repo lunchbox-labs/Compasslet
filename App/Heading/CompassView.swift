@@ -108,11 +108,11 @@ struct CompassView: View {
         location.stop()
         return
       }
+      // The phone readouts don't depend on ending leftover Live Activities, so the sensors
+      // start without waiting for it. Cleanup still runs if this task is already cancelled.
+      async let activation: Void = drive.phoneBecameActive()
       guard !Task.isCancelled else { return }
       compass.setReducedMotion(stepsHeading)
-      // The phone readouts don't depend on ending leftover Live Activities, so the sensors
-      // start without waiting for it.
-      async let activation: Void = drive.phoneBecameActive()
       async let heading: Void = compass.run()
       async let phoneLocation: Void = location.run()
       while !Task.isCancelled {
