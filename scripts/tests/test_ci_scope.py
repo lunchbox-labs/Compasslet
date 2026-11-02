@@ -16,7 +16,7 @@ DOCUMENTATION = ["README.md", "AGENTS.md", ".github/CODEOWNERS",
 CODE = ["App/Heading/CompassView.swift", "Tests/CompassCoreTests/CompassCoreTests.swift",
         "Package.swift", "Compass.xcodeproj/project.pbxproj", ".github/workflows/check.yml",
         "scripts/test-ios", ".swift-format", "docs-site/index.md", "README.md.bak",
-        ".github/workflows/website.yml"]
+        ".github/workflows/pages.yml"]
 
 
 class ClassificationTests(unittest.TestCase):

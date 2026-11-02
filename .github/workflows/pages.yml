@@ -1,19 +1,19 @@
-name: Website
+name: Pages
 on:
   pull_request:
     paths:
       - "website/**"
-      - ".github/workflows/website.yml"
+      - ".github/workflows/pages.yml"
   push:
     branches: [main]
     paths:
       - "website/**"
-      - ".github/workflows/website.yml"
+      - ".github/workflows/pages.yml"
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: website-${{ github.ref }}
+  group: pages-${{ github.ref }}
   cancel-in-progress: false
 jobs:
   build:
