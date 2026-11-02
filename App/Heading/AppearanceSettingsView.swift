@@ -140,7 +140,7 @@ struct AppearanceDetailView: View {
         if surface != .phone {
           Section("Last Updated") {
             timestampPicker("Lock Screen", selection: binding(\.lockScreenTimestamp))
-            timestampPicker("CarPlay", selection: binding(\.carPlayActivityTimestamp))
+            timestampPicker("CarPlay / Apple Watch", selection: binding(\.carPlayActivityTimestamp))
           }
         }
         if surface != .activity {
@@ -454,9 +454,9 @@ struct AppearancePreview: View {
         .accessibilityLabel(phoneAccessibilityDescription)
       }
       if surface == nil || surface == .activity {
-        // Only the Lock Screen card is shown. CarPlay's card has the same layout at a smaller
-        // size and follows the CarPlay Last Updated setting; the live-activity screenshot shows
-        // both.
+        // Only the Lock Screen card is shown. The CarPlay and Apple Watch card has the same layout
+        // at a smaller size and follows the CarPlay / Apple Watch Last Updated setting; the
+        // live-activity screenshot shows both.
         LiveActivityExample(
           presentation: .lockScreen, state: activityState,
           title: surface == nil ? "Live Activity" : nil)
