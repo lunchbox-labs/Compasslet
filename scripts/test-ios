@@ -16,7 +16,7 @@ sys.exit("No available iOS 27+ iPhone simulator")
 ')"
 mkdir -p .build
 result_directory="$(mktemp -d .build/test-results.XXXXXX)"
-# Exclude unused simulator slices on ARM hosts, including embedded Watch targets.
+# Exclude unused simulator slices on ARM hosts, when building and testing the app.
 bash scripts/simulator-xcodebuild -project Compass.xcodeproj -scheme Compass \
   -destination "platform=iOS Simulator,id=$destination" \
   -derivedDataPath .build/xcode -resultBundlePath "$result_directory/CompassTests.xcresult" \
