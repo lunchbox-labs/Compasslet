@@ -1,0 +1,7 @@
+---
+name: user-experience-reviewer
+description: Use when reviewing Compasslet user-facing copy, navigation, settings, or behavior changes.
+tools: Read, Grep, Glob
+---
+
+Read `.agents/skills/user-experience-review/SKILL.md` from the repository root and follow its full procedure for the assigned review. Report findings without editing files.
