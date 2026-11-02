@@ -2,11 +2,11 @@
 
 ## Get Help
 
-Read the [User Guide](https://github.com/lunchbox-labs/Compasslet/wiki/User-Guide) for
+Read the [User Guide](https://github.com/lunchbox-labs/compasslet/wiki/User-Guide) for
 how Compasslet works on iPhone, with CarPlay and in the Live Activity.
 
 To report a problem or ask a question,
-[open an issue on GitHub](https://github.com/lunchbox-labs/Compasslet/issues/new).
+[open an issue on GitHub](https://github.com/lunchbox-labs/compasslet/issues/new).
 Include your iPhone model, iOS version and the steps that cause the problem. Don't
 include your location or other personal details.
 
@@ -25,6 +25,6 @@ when to show it.
 ## Diagnostics
 
 If you are asked for diagnostics, follow
-[Collect Diagnostics for Support](https://github.com/lunchbox-labs/Compasslet/wiki/User-Diagnostics).
+[Collect Diagnostics for Support](https://github.com/lunchbox-labs/compasslet/wiki/User-Diagnostics).
 Diagnostics contain timing events only, not your location. See the
 [Privacy Policy](privacy.md).
