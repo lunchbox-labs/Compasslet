@@ -249,7 +249,9 @@ class MetadataTests(unittest.TestCase):
 
     def test_app_info_and_listing_urls_patch_the_editable_records_and_repeat_is_noop(self):
         self.write_listing_identity()
+        (self.locale / 'what-to-test.txt').write_text('Test this build')
         self.sync()
+        self.assertEqual([p[0] for p in self.apple.patches][-1], '/v1/appInfoLocalizations/infoloc1')
         patches = dict(self.apple.patches)
         self.assertEqual(patches['/v1/appInfoLocalizations/infoloc1']['attributes'],
                          {'name': 'Compasslet', 'subtitle': 'A new subtitle',
@@ -277,6 +279,41 @@ class MetadataTests(unittest.TestCase):
         with self.assertRaises(metadata.MetadataError): self.sync()
         self.assertEqual(self.apple.patches, [])
 
+    def test_optional_urls_patch_when_supplied_and_rejected_app_info_is_editable(self):
+        (self.locale / 'marketing-url.txt').write_text('https://example.com/\n')
+        (self.locale / 'privacy-choices-url.txt').write_text('https://example.com/choices\n')
+        self.apple.info['attributes']['state'] = 'REJECTED'
+        self.sync()
+        self.assertEqual(self.apple.store['attributes']['marketingUrl'], 'https://example.com/')
+        self.assertEqual(self.apple.info_copy['attributes']['privacyChoicesUrl'],
+                         'https://example.com/choices')
+
+    def test_app_info_is_not_written_unless_the_uploaded_version_is_editable(self):
+        self.write_listing_identity()
+        for change in ('version', 'state', 'later'):
+            with self.subTest(change=change):
+                self.apple = FakeApple()
+                self.client = metadata.Client(lambda: 'fake-token', opener=self.apple)
+                if change == 'version':
+                    self.apple.overrides['/v1/apps/app1/appStoreVersions'] = {'data': []}
+                if change == 'state':
+                    self.apple.version['attributes']['appVersionState'] = 'READY_FOR_DISTRIBUTION'
+                if change == 'later':
+                    changed = copy.deepcopy(self.apple.version)
+                    changed['attributes']['appVersionState'] = 'WAITING_FOR_REVIEW'
+                    self.apple.overrides['/v1/appStoreVersions/version1'] = {'data': changed}
+                self.sync()
+                self.assertFalse(any('appInfoLocalizations' in p[0] for p in self.apple.patches))
+                self.assertEqual(self.apple.info_copy['attributes']['name'], 'Old name')
+
+    def test_missing_app_info_locale_is_skipped_without_creating_it(self):
+        self.write_listing_identity()
+        self.apple.info_copy['attributes']['locale'] = 'fr-FR'
+        self.sync()
+        self.assertFalse(any('appInfoLocalizations' in p[0] for p in self.apple.patches))
+        self.assertFalse(any(m == 'POST' for m, _, _ in self.apple.calls))
+        self.assertTrue(any('SKIP App info en-US' in m for m in self.messages))
+
     def test_app_info_becoming_noneditable_before_patch_is_not_updated(self):
         self.write_listing_identity()
         changed = copy.deepcopy(self.apple.info)
@@ -287,13 +324,15 @@ class MetadataTests(unittest.TestCase):
         self.assertTrue(any('SKIP App info en-US' in m for m in self.messages))
 
     def test_listing_identity_files_are_validated_before_any_request(self):
-        cases = {'name.txt': 'N' * 31, 'subtitle.txt': 'S' * 31,
-                 'support-url.txt': 'http://example.com/support',
-                 'marketing-url.txt': 'https://example.com/a page',
-                 'privacy-policy-url.txt': 'https://user:secret@example.com/privacy',
-                 'privacy-choices-url.txt': 'example.com/choices'}
-        for filename, value in cases.items():
-            with self.subTest(filename=filename):
+        cases = [('name.txt', 'N' * 31), ('subtitle.txt', 'S' * 31),
+                 ('support-url.txt', 'http://example.com/support'),
+                 ('support-url.txt', 'https://[example'),
+                 ('marketing-url.txt', 'https://example.com/a page'),
+                 ('marketing-url.txt', 'https://example.com:port/'),
+                 ('privacy-policy-url.txt', 'https://user:secret@example.com/privacy'),
+                 ('privacy-choices-url.txt', 'example.com/choices')]
+        for filename, value in cases:
+            with self.subTest(filename=filename, value=value):
                 path = self.locale / filename
                 path.write_text(value)
                 with self.assertRaises(metadata.MetadataError): metadata.read_copy(self.root)

@@ -85,7 +85,11 @@ def read_copy(root):
 
 
 def listing_url(value):
-    parsed = urlsplit(value)
+    try:
+        parsed = urlsplit(value)
+        parsed.port
+    except ValueError:
+        return False
     return (parsed.scheme == 'https' and '.' in (parsed.hostname or '') and not parsed.username
             and not parsed.password and not re.search(r'\s', value))
 
@@ -303,7 +307,51 @@ def sync(client, copy, bundle_id, marketing_version, build_number, report=print,
             return
         plans.append((kind, identifier(target['id']), changes, label + ' ' + locale, guard))
 
-    if any(set(fields) & FIELDS['appInfoLocalizations'] for fields in copy.values()):
+    if any('description' in fields for fields in copy.values()):
+        rows, _ = client.collection('/v1/apps/' + app_id + '/betaAppLocalizations', {'limit': 200})
+        for locale, fields in copy.items():
+            if 'description' in fields:
+                plan('betaAppLocalizations', rows, locale, {'description': fields['description']}, 'TestFlight app')
+
+    wants_version = any(set(fields) & FIELDS['appStoreVersionLocalizations'] for fields in copy.values())
+    wants_info = any(set(fields) & FIELDS['appInfoLocalizations'] for fields in copy.values())
+    version_still_editable = None
+    if wants_version or wants_info:
+        versions, _ = client.collection('/v1/apps/' + app_id + '/appStoreVersions', {
+            'filter[platform]': 'IOS', 'filter[versionString]': marketing_version, 'limit': 200})
+        version = exact_one(versions, lambda r: is_version(r, marketing_version),
+                            'iOS marketing version', optional=True)
+        if not version or not editable(version):
+            report('SKIP App Store version ' + marketing_version + ': absent or not editable; no live-version fallback.')
+        else:
+            version_id = identifier(version['id'])
+
+            def version_still_editable():
+                current = client.request('GET', '/v1/appStoreVersions/' + version_id).get('data', {})
+                return is_version(current, marketing_version) and editable(current)
+
+            if wants_version:
+                rows, _ = client.collection('/v1/appStoreVersions/' + version_id + '/appStoreVersionLocalizations', {'limit': 200})
+                for locale, fields in copy.items():
+                    desired = {k: v for k, v in fields.items() if k in FIELDS['appStoreVersionLocalizations']}
+                    if desired:
+                        plan('appStoreVersionLocalizations', rows, locale, desired, 'App Store version',
+                             version_still_editable)
+
+    if any('whatToTest' in fields for fields in copy.values()):
+        build_id = processed_build(client, app_id, marketing_version, build_number, attempts, sleep)
+        rows, _ = client.collection('/v1/builds/' + build_id + '/betaBuildLocalizations', {'limit': 200})
+        for locale, fields in copy.items():
+            if 'whatToTest' in fields:
+                plan('betaBuildLocalizations', rows, locale, {'whatsNew': fields['whatToTest']}, 'TestFlight build')
+    else:
+        report('SKIP TestFlight build notes: no what-to-test.txt supplied.')
+
+    # App info has no version relationship, so it is edited only while the uploaded version is
+    # editable, and written last so a rejected name cannot block the build's own notes.
+    if wants_info and not version_still_editable:
+        report('SKIP app info: the uploaded version is absent or not editable; name, subtitle and privacy URLs unchanged.')
+    elif wants_info:
         infos, _ = client.collection('/v1/apps/' + app_id + '/appInfos', {'limit': 200})
         info = exact_one(infos, lambda r: r.get('type') == 'appInfos' and editable_info(r),
                          'editable app info', optional=True)
@@ -315,48 +363,13 @@ def sync(client, copy, bundle_id, marketing_version, build_number, report=print,
 
             def info_still_editable():
                 current = client.request('GET', '/v1/appInfos/' + info_id).get('data', {})
-                return current.get('type') == 'appInfos' and editable_info(current)
+                return (current.get('type') == 'appInfos' and editable_info(current)
+                        and version_still_editable())
 
             for locale, fields in copy.items():
                 desired = {k: v for k, v in fields.items() if k in FIELDS['appInfoLocalizations']}
                 if desired:
                     plan('appInfoLocalizations', rows, locale, desired, 'App info', info_still_editable)
-
-    if any('description' in fields for fields in copy.values()):
-        rows, _ = client.collection('/v1/apps/' + app_id + '/betaAppLocalizations', {'limit': 200})
-        for locale, fields in copy.items():
-            if 'description' in fields:
-                plan('betaAppLocalizations', rows, locale, {'description': fields['description']}, 'TestFlight app')
-
-    if any(set(fields) & FIELDS['appStoreVersionLocalizations'] for fields in copy.values()):
-        versions, _ = client.collection('/v1/apps/' + app_id + '/appStoreVersions', {
-            'filter[platform]': 'IOS', 'filter[versionString]': marketing_version, 'limit': 200})
-        version = exact_one(versions, lambda r: is_version(r, marketing_version),
-                            'iOS marketing version', optional=True)
-        if not version or not editable(version):
-            report('SKIP App Store version ' + marketing_version + ': absent or not editable; no live-version fallback.')
-        else:
-            version_id = identifier(version['id'])
-            rows, _ = client.collection('/v1/appStoreVersions/' + version_id + '/appStoreVersionLocalizations', {'limit': 200})
-
-            def version_still_editable():
-                current = client.request('GET', '/v1/appStoreVersions/' + version_id).get('data', {})
-                return is_version(current, marketing_version) and editable(current)
-
-            for locale, fields in copy.items():
-                desired = {k: v for k, v in fields.items() if k in FIELDS['appStoreVersionLocalizations']}
-                if desired:
-                    plan('appStoreVersionLocalizations', rows, locale, desired, 'App Store version',
-                         version_still_editable)
-
-    if any('whatToTest' in fields for fields in copy.values()):
-        build_id = processed_build(client, app_id, marketing_version, build_number, attempts, sleep)
-        rows, _ = client.collection('/v1/builds/' + build_id + '/betaBuildLocalizations', {'limit': 200})
-        for locale, fields in copy.items():
-            if 'whatToTest' in fields:
-                plan('betaBuildLocalizations', rows, locale, {'whatsNew': fields['whatToTest']}, 'TestFlight build')
-    else:
-        report('SKIP TestFlight build notes: no what-to-test.txt supplied.')
 
     for kind, resource_id, changes, label, guard in plans:
         if guard and not guard():
