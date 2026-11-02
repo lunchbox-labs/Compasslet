@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
   name: "CompassCore",
-  platforms: [.iOS("27.0"), .watchOS("27.0")],
+  platforms: [.iOS("27.0")],
   products: [.library(name: "CompassCore", targets: ["CompassCore"])],
   targets: [
     .target(name: "CompassCore", swiftSettings: [.treatAllWarnings(as: .error)]),

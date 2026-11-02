@@ -14,9 +14,6 @@ true north, including reverse movement, rather than where a stationary car point
 CarPlay readings are sampled; iOS controls when the Live Activity is displayed.
 Ordinary Home Screen and Lock Screen widgets are not included.
 
-Apple Watch support is experimental: runtime and device validation are incomplete,
-and it may not work as expected.
-
 ## Documentation
 
 - [User guide and CarPlay setup](https://github.com/lunchbox-labs/Compasslet/wiki/User-Guide)
