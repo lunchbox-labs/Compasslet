@@ -23,7 +23,6 @@ struct CompassSettingsView: View {
         Section {
           if let url = URL(string: "https://github.com/lunchbox-labs/compasslet") {
             Link("View Source on GitHub", destination: url)
-              .accessibilityHint("Opens the Compasslet repository in Safari")
           }
         } header: {
           Text("About")
