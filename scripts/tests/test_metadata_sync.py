@@ -34,6 +34,10 @@ class FakeApple:
             'app': {'data': {'type': 'apps', 'id': 'app1'}},
             'preReleaseVersion': {'data': {'type': 'preReleaseVersions', 'id': 'pre1'}}}
         self.pre = resource('preReleaseVersions', 'pre1', version='1.2.3', platform='IOS')
+        self.live_info = resource('appInfos', 'info0', state='READY_FOR_DISTRIBUTION')
+        self.info = resource('appInfos', 'info1', state='PREPARE_FOR_SUBMISSION')
+        self.info_copy = resource('appInfoLocalizations', 'infoloc1', locale='en-US',
+                                  name='Old name', subtitle='Old subtitle')
         self.calls = []
         self.patches = []
         self.overrides = {}
@@ -52,7 +56,8 @@ class FakeApple:
         if request.method == 'PATCH':
             payload = json.loads(request.data)['data']
             self.patches.append((path, copy.deepcopy(payload)))
-            target = {'beta1': self.beta, 'store1': self.store, 'notes1': self.notes}[payload['id']]
+            target = {'beta1': self.beta, 'store1': self.store, 'notes1': self.notes,
+                      'infoloc1': self.info_copy}[payload['id']]
             target['attributes'].update(payload['attributes'])
             return io.BytesIO(json.dumps({'data': target}).encode())
         values = {
@@ -62,6 +67,9 @@ class FakeApple:
             '/v1/appStoreVersions/version1': self.version,
             '/v1/appStoreVersions/version1/appStoreVersionLocalizations': [self.store],
             '/v1/builds/build1/betaBuildLocalizations': [self.notes],
+            '/v1/apps/app1/appInfos': [self.live_info, self.info],
+            '/v1/appInfos/info1': self.info,
+            '/v1/appInfos/info1/appInfoLocalizations': [self.info_copy],
         }
         if path == '/v1/builds':
             build = copy.deepcopy(self.build)
@@ -232,6 +240,68 @@ class MetadataTests(unittest.TestCase):
         self.assertEqual(metadata.read_copy(self.root)['en-US']['keywords'], 'é' * 50)
         (self.locale / 'keywords.txt').write_text('é' * 51, encoding='utf-8')
         with self.assertRaises(metadata.MetadataError): metadata.read_copy(self.root)
+
+    def write_listing_identity(self):
+        (self.locale / 'name.txt').write_text('Compasslet\n')
+        (self.locale / 'subtitle.txt').write_text('A new subtitle\n')
+        (self.locale / 'privacy-policy-url.txt').write_text('https://example.com/privacy\n')
+        (self.locale / 'support-url.txt').write_text('https://example.com/support\n')
+
+    def test_app_info_and_listing_urls_patch_the_editable_records_and_repeat_is_noop(self):
+        self.write_listing_identity()
+        self.sync()
+        patches = dict(self.apple.patches)
+        self.assertEqual(patches['/v1/appInfoLocalizations/infoloc1']['attributes'],
+                         {'name': 'Compasslet', 'subtitle': 'A new subtitle',
+                          'privacyPolicyUrl': 'https://example.com/privacy'})
+        self.assertEqual(patches['/v1/appStoreVersionLocalizations/store1']['attributes'],
+                         {'description': 'New description', 'promotionalText': 'New promo',
+                          'supportUrl': 'https://example.com/support'})
+        self.assertNotIn('marketingUrl', self.apple.store['attributes'])
+        self.assertNotIn('privacyChoicesUrl', self.apple.info_copy['attributes'])
+        self.assertFalse(any('info0' in path for _, path, _ in self.apple.calls))
+        self.apple.patches.clear()
+        self.sync()
+        self.assertEqual(self.apple.patches, [])
+
+    def test_app_info_is_skipped_without_one_editable_record(self):
+        self.write_listing_identity()
+        self.apple.info['attributes']['state'] = 'READY_FOR_DISTRIBUTION'
+        self.sync()
+        self.assertFalse(any('appInfoLocalizations' in p[0] for p in self.apple.patches))
+        self.assertTrue(any(p[0] == '/v1/appStoreVersionLocalizations/store1' for p in self.apple.patches))
+        self.assertTrue(any('SKIP' in m and 'app info' in m for m in self.messages))
+        self.apple = FakeApple()
+        self.client = metadata.Client(lambda: 'fake-token', opener=self.apple)
+        self.apple.live_info['attributes']['state'] = 'PREPARE_FOR_SUBMISSION'
+        with self.assertRaises(metadata.MetadataError): self.sync()
+        self.assertEqual(self.apple.patches, [])
+
+    def test_app_info_becoming_noneditable_before_patch_is_not_updated(self):
+        self.write_listing_identity()
+        changed = copy.deepcopy(self.apple.info)
+        changed['attributes']['state'] = 'WAITING_FOR_REVIEW'
+        self.apple.overrides['/v1/appInfos/info1'] = {'data': changed}
+        self.sync()
+        self.assertFalse(any('appInfoLocalizations' in p[0] for p in self.apple.patches))
+        self.assertTrue(any('SKIP App info en-US' in m for m in self.messages))
+
+    def test_listing_identity_files_are_validated_before_any_request(self):
+        cases = {'name.txt': 'N' * 31, 'subtitle.txt': 'S' * 31,
+                 'support-url.txt': 'http://example.com/support',
+                 'marketing-url.txt': 'https://example.com/a page',
+                 'privacy-policy-url.txt': 'https://user:secret@example.com/privacy',
+                 'privacy-choices-url.txt': 'example.com/choices'}
+        for filename, value in cases.items():
+            with self.subTest(filename=filename):
+                path = self.locale / filename
+                path.write_text(value)
+                with self.assertRaises(metadata.MetadataError): metadata.read_copy(self.root)
+                path.unlink()
+        (self.locale / 'name.txt').write_text('N' * 30)
+        self.assertEqual(metadata.read_copy(self.root)['en-US']['name'], 'N' * 30)
+        with self.assertRaises(metadata.MetadataError):
+            self.client.patch('appInfoLocalizations', 'infoloc1', {'privacyPolicyText': 'Text'})
 
 
 class IdentityAndAuthenticationTests(unittest.TestCase):
