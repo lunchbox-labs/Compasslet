@@ -11,3 +11,6 @@
 /AGENTS.md @lunchbox-labs/trusted-developers
 /.agents/ @lunchbox-labs/trusted-developers
 /.github/CODEOWNERS @lunchbox-labs/trusted-developers
+
+# App Store listing metadata.
+/app-store/ @lunchbox-labs/release-app-store
