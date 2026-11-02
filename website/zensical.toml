@@ -2,6 +2,8 @@
 site_name = "Compasslet"
 site_description = "Compass for iPhone and CarPlay."
 site_url = "https://compasslet.lunchbox-labs.dev/"
+repo_url = "https://github.com/lunchbox-labs/compasslet"
+repo_name = "lunchbox-labs/compasslet"
 docs_dir = "docs"
 site_dir = "site"
 nav = [
