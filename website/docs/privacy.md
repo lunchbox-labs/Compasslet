@@ -30,9 +30,9 @@ receive it.
 
 ## Settings and Diagnostics
 
-Your display choices, and a summary of your car's CarPlay screen (its display scale and light or
-dark appearance), are stored on your device. They are included in your device backups
-and deleted when you delete the app.
+Your display choices, and a summary of your car's CarPlay screen (its display scale,
+image size limit and light or dark appearance), are stored on your device. They are
+included in your device backups and deleted when you delete the app.
 
 Debug Mode is off unless you turn it on. While it is on, Compasslet records timing
 events, with dates and times, for the Live Activity and CarPlay display on your device.
