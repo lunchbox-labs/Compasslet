@@ -39,10 +39,20 @@ events, with dates and times, for the Live Activity and CarPlay display on your 
 These events do not include coordinates or directions. Turning Debug Mode off deletes them. They leave your
 device only if you export them and choose where to share them.
 
+## Support Requests
+
+The [support page](support.md) shows a support form hosted by Google Forms. When you
+open that page, your browser loads the form from Google, and Google handles it under
+[Google's Privacy Policy](https://policies.google.com/privacy). If you send the form,
+Lunchbox Labs receives what you submit, including any contact details you choose to
+give, and uses it only to answer your request. If you open an issue on GitHub instead,
+it is public and handled under GitHub's terms.
+
 ## Changes
 
 If this policy changes, the updated version will be posted on this page with a new date.
 
 ## Contact
 
-For privacy questions, see [Compasslet Support](support.md).
+For privacy questions, use the support form on the
+[Compasslet Support](support.md) page.
