@@ -1,0 +1,1 @@
+heading,bearing,direction,north,magnetic,degrees,dial,car,driving,travel,course,orientation,azimuth
