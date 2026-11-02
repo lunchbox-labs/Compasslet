@@ -1,1 +1,1 @@
-https://lunchbox-labs.github.io/compasslet/support/
+https://compasslet.lunchbox-labs.dev/support/

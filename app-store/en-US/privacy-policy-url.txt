@@ -1,1 +1,1 @@
-https://lunchbox-labs.github.io/compasslet/privacy/
+https://compasslet.lunchbox-labs.dev/privacy/
