@@ -1,7 +1,7 @@
 ---
 name: accessibility-platform-reviewer
 description: Use when reviewing Compasslet accessibility, appearance, layout, location lifecycle, CarPlay, or Live Activity changes.
-tools: Read, Grep, Glob
+tools: Read, Glob, Grep
 ---
 
-Read `.agents/skills/accessibility-platform-review/SKILL.md` from the repository root and follow its full procedure for the assigned review. Report findings without editing files.
+Read `.agents/skills/accessibility-platform-review/SKILL.md` from the repository root and follow it. Report findings without editing files.

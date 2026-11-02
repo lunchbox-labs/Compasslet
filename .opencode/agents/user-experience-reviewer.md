@@ -6,6 +6,7 @@ permission:
   read: allow
   glob: allow
   grep: allow
+  list: allow
 ---
 
-Read `.agents/skills/user-experience-review/SKILL.md` from the repository root and follow its full procedure for the assigned review. Report findings without editing files.
+Read `.agents/skills/user-experience-review/SKILL.md` from the repository root and follow it. Report findings without editing files.
