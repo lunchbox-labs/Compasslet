@@ -1,7 +1,7 @@
 [project]
 site_name = "Compasslet"
 site_description = "Compass for iPhone and CarPlay."
-site_url = "https://compasslet.lunchbox-labs.dev/"
+site_url = "https://lunchbox-labs.dev/compasslet/"
 docs_dir = "docs"
 site_dir = "site"
 nav = [
