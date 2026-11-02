@@ -51,6 +51,13 @@ give, and uses it only to answer your request. Lunchbox Labs keeps a request onl
 long as needed to answer it. To have your request deleted, ask through the support form.
 If you open an issue on GitHub instead, it is public and handled under GitHub's terms.
 
+## This Website
+
+Each page of this website links to Compasslet's source code on GitHub and shows details
+such as the repository's star and fork counts. Your browser loads those details from
+GitHub, which handles the request under
+[GitHub's Privacy Statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).
+
 ## Changes
 
 If this policy changes, the updated version will be posted on this page with a new date.
