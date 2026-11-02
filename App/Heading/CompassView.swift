@@ -108,9 +108,10 @@ struct CompassView: View {
         location.stop()
         return
       }
+      guard !Task.isCancelled else { return }
       compass.setReducedMotion(stepsHeading)
-      // The phone readouts depend on neither ending leftover Live Activities nor the
-      // location permission request, so the sensors start without waiting for them.
+      // The phone readouts don't depend on ending leftover Live Activities, so the sensors
+      // start without waiting for it.
       async let activation: Void = drive.phoneBecameActive()
       async let heading: Void = compass.run()
       async let phoneLocation: Void = location.run()
