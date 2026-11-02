@@ -6,8 +6,8 @@ Read the [User Guide](https://github.com/lunchbox-labs/compasslet/wiki/User-Guid
 how Compasslet works on iPhone, with CarPlay and in the Live Activity.
 
 To report a problem or ask a question, use the form below. Include your iPhone model,
-iOS version and the steps that cause the problem. Don't include your location or other
-personal details.
+iOS version and the steps that cause the problem. Don't include your location, and add
+contact details only if you want a reply.
 
 <iframe src="https://docs.google.com/forms/d/e/1FAIpQLSdm_-ezEnesViGFDT-tKzeOgBHUKvJyT9bpWGR2u5wkBNRYbw/viewform?embedded=true" title="Compasslet support form" width="640" height="1076" loading="lazy" style="display: block; width: 100%; max-width: 640px; border: 0;">Loading…</iframe>
 
@@ -15,7 +15,7 @@ If the form doesn't load, open the
 [support form on Google Forms](https://forms.gle/sMXcbVbQs6vn1XZj7). If you have a
 GitHub account, you can also
 [open an issue on GitHub](https://github.com/lunchbox-labs/compasslet/issues/new).
-GitHub issues are public.
+GitHub issues are public, so don't include your location or other personal details there.
 
 ## Common Questions
 

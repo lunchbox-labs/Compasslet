@@ -2,8 +2,10 @@
 
 _Last updated November 2, 2026_
 
-Compasslet does not collect personal information. It has no account, advertising,
-analytics or tracking, and the app sends no data to Lunchbox Labs.
+The Compasslet app does not collect personal information. It has no account,
+advertising, analytics or tracking, and the app sends no data to Lunchbox Labs. Lunchbox
+Labs receives personal information only if you send it through the support form, as
+described under [Support Requests](#support-requests).
 
 ## Location
 
@@ -45,8 +47,10 @@ The [support page](support.md) shows a support form hosted by Google Forms. When
 open that page, your browser loads the form from Google, and Google handles it under
 [Google's Privacy Policy](https://policies.google.com/privacy). If you send the form,
 Lunchbox Labs receives what you submit, including any contact details you choose to
-give, and uses it only to answer your request. If you open an issue on GitHub instead,
-it is public and handled under GitHub's terms.
+give, and uses it only to answer your request. Lunchbox Labs keeps a request only as
+long as needed to answer it, then deletes it. To have a request deleted sooner, ask
+through the support form. If you open an issue on GitHub instead, it is public and
+handled under GitHub's terms.
 
 ## Changes
 
