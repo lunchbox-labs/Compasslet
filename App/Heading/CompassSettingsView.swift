@@ -20,6 +20,15 @@ struct CompassSettingsView: View {
           }
         }
         DiagnosticsSettingsSection()
+        Section {
+          if let url = URL(string: "https://github.com/lunchbox-labs/compasslet") {
+            Link("View Source on GitHub", destination: url)
+          }
+        } header: {
+          Text("About")
+        } footer: {
+          Text("Compasslet is open source under the MIT License.")
+        }
       }
       .navigationTitle("Settings")
       .navigationBarTitleDisplayMode(.inline)
