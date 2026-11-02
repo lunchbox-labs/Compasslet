@@ -108,7 +108,9 @@ struct CompassView: View {
         location.stop()
         return
       }
-      await drive.phoneBecameActive()
+      // The phone readouts don't depend on ending leftover Live Activities, so the sensors
+      // start without waiting for it. Cleanup still runs if this task is already cancelled.
+      async let activation: Void = drive.phoneBecameActive()
       guard !Task.isCancelled else { return }
       compass.setReducedMotion(stepsHeading)
       async let heading: Void = compass.run()
@@ -117,6 +119,7 @@ struct CompassView: View {
         debugEnabled = (try? CompassDiagnostics.shared?.isEnabled()) ?? false
         do { try await Task.sleep(for: .seconds(1)) } catch { break }
       }
+      _ = await activation
       _ = await heading
       _ = await phoneLocation
     }
