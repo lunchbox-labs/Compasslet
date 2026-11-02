@@ -8,14 +8,15 @@ analytics or tracking, and the app sends no data to Lunchbox Labs.
 ## Location
 
 Compasslet asks for location access while you use it. On iPhone, location shows your
-heading, coordinates, elevation and nearest city while the app is visible. During a
+coordinates, elevation and nearest city while the app is visible. The compass heading
+comes from the phone's compass sensor and does not need location access. During a
 CarPlay drive, location gives your travel direction, including while another app is
 visible.
 
-Location is used on your device as it arrives. Compasslet does not save location or
-route history. The Live Activity keeps only your last travel direction, when it was
-recorded and your display choices, and it is removed when the drive ends or you dismiss
-it.
+Apart from the nearest-city lookup below, location is used only on your device as it
+arrives. Compasslet does not save location or route history. The Live Activity shows
+your last travel direction, when it was recorded and your display choices, and it is
+removed when the drive ends or you dismiss it.
 
 You can change or turn off location access at any time in the Settings app under
 Privacy & Security › Location Services.
@@ -29,11 +30,13 @@ receive it.
 
 ## Settings and Diagnostics
 
-Your display choices are stored on your device and are deleted when you delete the app.
+Your display choices, and a summary of your car's CarPlay screen (its display scale and light or
+dark appearance), are stored on your device. They are included in your device backups
+and deleted when you delete the app.
 
 Debug Mode is off unless you turn it on. While it is on, Compasslet records timing
-events for the Live Activity and CarPlay display on your device. These events do not
-include coordinates or directions. Turning Debug Mode off deletes them. They leave your
+events, with dates and times, for the Live Activity and CarPlay display on your device.
+These events do not include coordinates or directions. Turning Debug Mode off deletes them. They leave your
 device only if you export them and choose where to share them.
 
 ## Changes

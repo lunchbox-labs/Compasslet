@@ -20,11 +20,12 @@ on iPhone, then open Compasslet from the CarPlay launcher. CarPlay shows the dir
 you are travelling, so it updates once the car is moving.
 
 **The Live Activity doesn't appear.** It appears during a CarPlay drive, and iOS decides
-when to show it.
+when to show it. Make sure Live Activities are allowed for Compasslet in the Settings
+app.
 
 ## Diagnostics
 
 If you are asked for diagnostics, follow
 [Collect Diagnostics for Support](https://github.com/lunchbox-labs/compasslet/wiki/User-Diagnostics).
-Diagnostics contain timing events only, not your location. See the
+Diagnostics contain timing events with dates and times, not your location. See the
 [Privacy Policy](privacy.md).

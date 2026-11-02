@@ -9,3 +9,6 @@ nav = [
   "support.md",
   "privacy.md",
 ]
+
+[project.theme]
+font = false
