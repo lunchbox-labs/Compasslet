@@ -1,0 +1,11 @@
+[project]
+site_name = "Compasslet"
+site_description = "Compass for iPhone and CarPlay."
+site_url = "https://lunchbox-labs.github.io/Compasslet/"
+docs_dir = "docs"
+site_dir = "site"
+nav = [
+  "index.md",
+  "support.md",
+  "privacy.md",
+]
