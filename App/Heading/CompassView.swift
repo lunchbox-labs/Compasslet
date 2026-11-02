@@ -135,6 +135,7 @@ struct CompassView: View {
     HStack {
       Button(action: { openSettings() }) {
         Image(systemName: "line.3.horizontal").frame(width: 44, height: 44)
+          .foregroundStyle(Color.primary)
           .contentShape(Rectangle())
       }
       .accessibilityLabel("Settings")

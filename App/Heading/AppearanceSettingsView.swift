@@ -357,7 +357,7 @@ struct AppearanceOptionEditor: View {
       } label: {
         HStack {
           Text(choiceTitle(choice, keyPath: keyPath))
-            .foregroundStyle(.primary)
+            .foregroundStyle(Color.primary)
           Spacer()
           if selected {
             Image(systemName: "checkmark").accessibilityHidden(true)
