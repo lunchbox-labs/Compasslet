@@ -138,7 +138,7 @@ private struct AppearanceDetailView: View {
         if surface != .phone {
           Section("Last Travel") {
             timestampPicker("Lock Screen", selection: binding(\.lockScreenTimestamp))
-            timestampPicker("CarPlay", selection: binding(\.smallActivityTimestamp))
+            timestampPicker("CarPlay / Apple Watch", selection: binding(\.smallActivityTimestamp))
           }
         }
         if surface != .activity {
@@ -446,7 +446,7 @@ struct AppearancePreview: View {
       }
       if surface == nil || surface == .activity {
         activityExample("Lock Screen", small: false)
-        activityExample("CarPlay", small: true)
+        activityExample("CarPlay / Apple Watch", small: true)
       }
     }
     .accessibilityElement(children: .contain)

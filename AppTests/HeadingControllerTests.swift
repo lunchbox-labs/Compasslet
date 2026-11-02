@@ -1,6 +1,10 @@
 import CompassCore
 import XCTest
-@testable import Compass
+#if os(watchOS)
+  @testable import CompassWatch
+#else
+  @testable import Compass
+#endif
 
 @MainActor
 final class HeadingControllerTests: XCTestCase {

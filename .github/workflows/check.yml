@@ -66,3 +66,40 @@ jobs:
         # DEVELOPER_DIR pins the toolchain, and the test build compiles the arm64 products
         # the simulator runs, so neither a toolchain probe nor a separate build is needed.
         run: bash scripts/test-ios
+  watch:
+    needs: scope
+    if: ${{ !cancelled() && (needs.scope.result != 'success' || needs.scope.outputs.simulators == 'true') }}
+    runs-on: xcode-27
+    # Runtime cleanup, the build, the test step budget and the result upload.
+    timeout-minutes: 55
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Remove duplicate simulator runtimes
+        # The image registers the watchOS runtime twice and later unmounts the booted copy
+        # while cleaning up the duplicate. Delete the unusable record before anything boots.
+        timeout-minutes: 8
+        run: python3 scripts/remove-duplicate-runtimes
+      - name: Build unsigned Watch app
+        # Produces the app the warm-up installs before XCTest; the wrapper excludes
+        # the unused x86_64 slice on ARM hosts.
+        run: >-
+          bash scripts/simulator-xcodebuild -project Compass.xcodeproj -scheme CompassWatch
+          -destination 'generic/platform=watchOS Simulator'
+          -derivedDataPath .build/watch CODE_SIGNING_ALLOWED=NO build
+      - name: Test on an available Watch simulator
+        # Bound the step rather than the job so a hung test run can still upload results.
+        # Discovery, two boots, the warm-up and the test run add up to just under this at
+        # their own bounds, so a slow run fails with a script's message, not the step's.
+        timeout-minutes: 35
+        run: bash scripts/test-watch
+      - name: Preserve failed Watch test results
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: watch-test-results
+          path: .build/watch-test-results.*
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 7
