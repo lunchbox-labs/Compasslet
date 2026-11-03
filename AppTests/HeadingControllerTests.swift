@@ -80,7 +80,7 @@ final class HeadingControllerTests: XCTestCase {
     XCTAssertEqual(controller.sample?.angle.degrees, 180)
   }
 
-  func testReducedMotionHoldsSmallChangesAndStepsOnLargerOnes() {
+  func testReducedMotionHoldsSmallChangeAcrossNorthWithNewestMetadata() {
     let sensor = Sensor()
     var time = Date(timeIntervalSince1970: 1_000)
     let controller = HeadingController(sensor: sensor, now: { time })
@@ -88,7 +88,6 @@ final class HeadingControllerTests: XCTestCase {
     controller.start()
     sensor.receive?(.reading(degrees: 358, accuracy: 1, timestamp: time))
     XCTAssertEqual(controller.sample?.angle.degrees, 358)
-    // A three-degree change across north is held, but the newest metadata is kept.
     time = time.addingTimeInterval(1)
     sensor.receive?(.reading(degrees: 1, accuracy: 2, timestamp: time))
     XCTAssertEqual(controller.sample?.angle.degrees, 358)
@@ -97,17 +96,40 @@ final class HeadingControllerTests: XCTestCase {
     time = time.addingTimeInterval(4.5)
     controller.tick()
     XCTAssertEqual(controller.status, .live)
-    // A change of at least the step is shown directly, without smoothing toward it.
+  }
+
+  func testReducedMotionShowsChangeOfAtLeastOneStepDirectly() {
+    let sensor = Sensor()
+    let time = Date(timeIntervalSince1970: 1_000)
+    let controller = HeadingController(sensor: sensor, now: { time })
+    controller.setReducedMotion(true)
+    controller.start()
+    sensor.receive?(.reading(degrees: 358, accuracy: 1, timestamp: time))
     sensor.receive?(.reading(degrees: 3, accuracy: 1, timestamp: time))
     XCTAssertEqual(controller.sample?.angle.degrees, 3)
     sensor.receive?(.reading(degrees: 359, accuracy: 1, timestamp: time))
     XCTAssertEqual(controller.sample?.angle.degrees, 359)
-    // An older-timestamped sample is adopted raw rather than held, so a hold never carries a
-    // timestamp older than the reading it keeps.
+  }
+
+  func testReducedMotionAdoptsOlderTimestampedSampleInsteadOfHoldingIt() {
+    let sensor = Sensor()
+    let time = Date(timeIntervalSince1970: 1_000)
+    let controller = HeadingController(sensor: sensor, now: { time })
+    controller.setReducedMotion(true)
+    controller.start()
+    sensor.receive?(.reading(degrees: 359, accuracy: 1, timestamp: time))
     sensor.receive?(.reading(degrees: 1, accuracy: 1, timestamp: time.addingTimeInterval(-1)))
     XCTAssertEqual(controller.sample?.angle.degrees, 1)
     XCTAssertEqual(controller.sample?.timestamp, time.addingTimeInterval(-1))
-    // Turning Reduce Motion off resumes smoothing from the next reading.
+  }
+
+  func testTurningReducedMotionOffResumesSmoothingFromNextReading() {
+    let sensor = Sensor()
+    let time = Date(timeIntervalSince1970: 1_000)
+    let controller = HeadingController(sensor: sensor, now: { time })
+    controller.setReducedMotion(true)
+    controller.start()
+    sensor.receive?(.reading(degrees: 1, accuracy: 1, timestamp: time))
     controller.setReducedMotion(false)
     sensor.receive?(.reading(degrees: 11, accuracy: 1, timestamp: time))
     XCTAssertEqual(controller.sample?.angle.degrees, 11)

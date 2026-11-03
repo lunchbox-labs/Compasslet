@@ -92,18 +92,28 @@ private func sample(
   #expect(CompassSmoother(fraction: 0.5, fullTrackingDelta: .infinity) == nil)
 }
 
-@Test func fullTrackingDeltaFollowsLargeChangesAndDampsSmallOnes() throws {
+@Test func smallChangeKeepsConfiguredFractionAsFloor() throws {
   var smoother = try #require(CompassSmoother(fraction: 0.5, fullTrackingDelta: 10))
   #expect(smoother.update(sample(0), now: instant, maximumAge: 5)?.angle.degrees == 0)
-  // A 3-degree change is below the floor's reach, so the configured fraction applies.
   #expect(smoother.update(sample(3), now: instant, maximumAge: 5)?.angle.degrees == 1.5)
-  // A change at or beyond the full-tracking size is adopted outright.
-  #expect(smoother.update(sample(21.5), now: instant, maximumAge: 5)?.angle.degrees == 21.5)
-  // A 7.5-degree change scales to three quarters, between the floor and full tracking.
-  #expect(smoother.update(sample(14), now: instant, maximumAge: 5)?.angle.degrees == 15.875)
-  smoother.reset()
+}
+
+@Test func changeOfAtLeastFullTrackingDeltaIsAdoptedOutright() throws {
+  var smoother = try #require(CompassSmoother(fraction: 0.5, fullTrackingDelta: 10))
+  _ = smoother.update(sample(0), now: instant, maximumAge: 5)
+  #expect(smoother.update(sample(10), now: instant, maximumAge: 5)?.angle.degrees == 10)
+  #expect(smoother.update(sample(30), now: instant, maximumAge: 5)?.angle.degrees == 30)
+}
+
+@Test func midSizedChangeScalesFractionWithItsSize() throws {
+  var smoother = try #require(CompassSmoother(fraction: 0.5, fullTrackingDelta: 10))
+  _ = smoother.update(sample(0), now: instant, maximumAge: 5)
+  #expect(smoother.update(sample(7.5), now: instant, maximumAge: 5)?.angle.degrees == 5.625)
+}
+
+@Test func scaledChangeCrossesNorthByShortestRotation() throws {
+  var smoother = try #require(CompassSmoother(fraction: 0.5, fullTrackingDelta: 10))
   _ = smoother.update(sample(2), now: instant, maximumAge: 5)
-  // The scaled step crosses north by the shortest rotation.
   #expect(smoother.update(sample(354.5), now: instant, maximumAge: 5)?.angle.degrees == 356.375)
 }
 

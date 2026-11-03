@@ -97,21 +97,34 @@ struct TravelCourseTests {
     #expect(result.sample?.timestamp == time.addingTimeInterval(1))
   }
 
-  @Test func turnsAreFollowedPromptlyWhileSmallChangesAreDamped() {
+  @Test func halfOfATurnSizedChangeAdoptsHalfOfIt() {
     var filter = TravelCourseFilter()
     _ = filter.update(reading(course: 90), now: time)
-    // Ten degrees is half a turn-sized change, so half of it is adopted.
     #expect(
       filter.update(reading(course: 100, offset: 1), now: time.addingTimeInterval(1))
         .sample?.angle.degrees == 95)
-    // A 20-degree or larger change is adopted outright.
+  }
+
+  @Test func turnSizedChangeIsAdoptedOutright() {
+    var filter = TravelCourseFilter()
+    _ = filter.update(reading(course: 90), now: time)
     #expect(
-      filter.update(reading(course: 180, offset: 2), now: time.addingTimeInterval(2))
-        .sample?.angle.degrees == 180)
-    // Jitter of a couple of degrees keeps the quarter fraction.
+      filter.update(reading(course: 110, offset: 1), now: time.addingTimeInterval(1))
+        .sample?.angle.degrees == 110)
     #expect(
-      filter.update(reading(course: 182, offset: 3), now: time.addingTimeInterval(3))
+      filter.update(reading(course: 200, offset: 2), now: time.addingTimeInterval(2))
+        .sample?.angle.degrees == 200)
+  }
+
+  @Test func jitterOfAFewDegreesKeepsTheQuarterFraction() {
+    var filter = TravelCourseFilter()
+    _ = filter.update(reading(course: 180), now: time)
+    #expect(
+      filter.update(reading(course: 182, offset: 1), now: time.addingTimeInterval(1))
         .sample?.angle.degrees == 180.5)
+  }
+
+  @Test func smoothingCrossesNorthByShortestRotation() {
     var northward = TravelCourseFilter()
     _ = northward.update(reading(course: 5), now: time)
     #expect(
