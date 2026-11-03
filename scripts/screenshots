@@ -119,6 +119,7 @@ class ScreenshotResponder(threading.Thread):
         self.udid, self.requests, self.output = udid, requests, output
         self.label, self.appearance = label, appearance
         self.captured = []
+        self.failed = []
         self.stopping = threading.Event()
 
     def run(self):
@@ -127,10 +128,12 @@ class ScreenshotResponder(threading.Thread):
                 screen = request.stem
                 request.unlink()
                 name = image_name(self.label, self.appearance, screen)
-                subprocess.run(["xcrun", "simctl", "io", self.udid, "screenshot",
-                                str(self.output / name)], check=False)
-                if (self.output / name).exists():
+                result = subprocess.run(["xcrun", "simctl", "io", self.udid, "screenshot",
+                                         str(self.output / name)], check=False)
+                if result.returncode == 0 and (self.output / name).exists():
                     self.captured.append({"screen": screen, "file": name})
+                else:
+                    self.failed.append(name)
                 (self.requests / (screen + ".done")).touch()
             time.sleep(0.1)
 
@@ -188,18 +191,33 @@ def capture(arguments):
                                   "-only-testing:CompassTests/ScreenshotTests",
                                   "test-without-building"], env=environment, check=False)
                 responder.stop()
-            failed = failed or result.returncode != 0
+            failed = failed or result.returncode != 0 or bool(responder.failed)
+            for name in responder.failed:
+                print("No screenshot was saved for " + name, file=sys.stderr)
             manifest += [dict(item, device=device["name"], label=device["label"],
                               appearance=appearance) for item in responder.captured]
         subprocess.run(["xcrun", "simctl", "shutdown", udid], check=False)
     (output / MANIFEST).write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     print("Captured " + str(len(manifest)) + " screenshots in " + str(output))
     if failed or not manifest:
-        raise SystemExit("The screenshot test failed or captured nothing")
+        raise SystemExit("The screenshot test failed, a screenshot is missing, or nothing was "
+                         "captured")
 
 
 def gh(arguments, **options):
     return run(["gh"] + arguments, capture_output=True, **options).stdout
+
+
+def version(tag):
+    match = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", tag)
+    return tuple(int(part) for part in match.groups()) if match else None
+
+
+def is_newest(tag, releases):
+    """Whether no published release has a higher version than the tag."""
+    published = [version(item["tag_name"]) for page in releases for item in page
+                 if not item["draft"]]
+    return all(other is None or other < version(tag) for other in published)
 
 
 def release(arguments):
@@ -208,6 +226,8 @@ def release(arguments):
     Published releases are immutable, so every asset goes on a draft first and the draft is
     published only once all of them have uploaded. A rerun finishes an existing draft.
     """
+    if version(arguments.tag) is None:
+        raise SystemExit(arguments.tag + " isn't a version tag like v1.2.0")
     directory = Path(arguments.directory)
     manifest = json.loads((directory / MANIFEST).read_text(encoding="utf-8"))
     if not manifest:
@@ -226,7 +246,11 @@ def release(arguments):
             "--draft", "--title", arguments.tag, "--generate-notes"])
     files = [str(directory / item["file"]) for item in manifest] + [str(directory / MANIFEST)]
     gh(["release", "upload", arguments.tag, "--repo", arguments.repository, "--clobber"] + files)
-    gh(["release", "edit", arguments.tag, "--repo", arguments.repository, "--draft=false"])
+    # An older version released afterwards must not take over releases/latest, which the wiki
+    # page and its images follow.
+    latest = "--latest" if is_newest(arguments.tag, releases) else "--latest=false"
+    gh(["release", "edit", arguments.tag, "--repo", arguments.repository, "--draft=false",
+        latest])
     print("Published " + arguments.tag + " with " + str(len(files)) + " files")
 
 

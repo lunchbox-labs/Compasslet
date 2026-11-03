@@ -116,7 +116,7 @@ class MetadataCLITests(unittest.TestCase):
 
     def test_pushed_version_tag_must_match_archived_version(self):
         event = self.root / 'event.json'
-        event.write_text(json.dumps({'ref': 'refs/tags/v1.2.3', 'deleted': False}))
+        event.write_text(json.dumps({'ref': 'refs/tags/v1.2.3', 'created': True, 'deleted': False}))
         self.env.update(GITHUB_EVENT_NAME='push', GITHUB_REF='refs/tags/v1.2.3', GITHUB_EVENT_PATH=str(event))
         self.assertEqual(self.run_cli()[0], 0)
         self.apple.calls.clear()
@@ -124,12 +124,14 @@ class MetadataCLITests(unittest.TestCase):
         self.assertEqual(self.run_cli()[0], 1)
         self.assertEqual(self.apple.calls, [])
 
-    def test_deleted_tags_branch_pushes_and_releases_never_sync(self):
+    def test_deleted_or_moved_tags_branch_pushes_and_releases_never_sync(self):
         event = self.root / 'event.json'
         for name, ref, payload in [
-                ('push', 'refs/tags/v1.2.3', {'ref': 'refs/tags/v1.2.3', 'deleted': True}),
-                ('push', 'refs/heads/main', {'ref': 'refs/heads/main', 'deleted': False}),
-                ('push', 'refs/tags/v1.2.3', {'ref': 'refs/tags/v1.2.4', 'deleted': False}),
+                ('push', 'refs/tags/v1.2.3', {'ref': 'refs/tags/v1.2.3', 'created': False, 'deleted': True}),
+                ('push', 'refs/tags/v1.2.3', {'ref': 'refs/tags/v1.2.3', 'created': False,
+                                              'deleted': False}),
+                ('push', 'refs/heads/main', {'ref': 'refs/heads/main', 'created': True, 'deleted': False}),
+                ('push', 'refs/tags/v1.2.3', {'ref': 'refs/tags/v1.2.4', 'created': True, 'deleted': False}),
                 ('release', 'refs/tags/v1.2.3', {'action': 'published', 'release': {
                     'draft': False, 'prerelease': False, 'tag_name': 'v1.2.3'}})]:
             with self.subTest(name=name, payload=payload):

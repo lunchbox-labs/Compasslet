@@ -26,12 +26,22 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
         run: |
+          if [[ "$GITHUB_REF" != refs/heads/main ]]; then
+            echo "::error::Run Release from main"
+            exit 1
+          fi
           if [[ ! "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
             echo "::error::$TAG isn't a version tag like v1.2.0"
             exit 1
           fi
           if ! gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --silent; then
             echo "::error::$TAG doesn't exist; push the tag first, which also sends it to TestFlight"
+            exit 1
+          fi
+          # The capture runs the tag's own screenshot test and script.
+          if ! gh api "repos/$GITHUB_REPOSITORY/contents/scripts/screenshots?ref=refs/tags/$TAG" \
+            --silent; then
+            echo "::error::$TAG predates the screenshot workflow, so it can't be captured"
             exit 1
           fi
           # Only published releases are found by tag. A published one can't change, so a rerun
@@ -77,30 +87,38 @@ jobs:
   wiki:
     needs: [check, release]
     if: >-
-      always() && needs.check.result == 'success' &&
-      (needs.release.result == 'success' || needs.release.result == 'skipped')
+      !cancelled() && needs.check.result == 'success' &&
+      (needs.check.outputs.published == 'true' || needs.release.result == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    concurrency:
+      group: release-wiki
+      cancel-in-progress: false
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
-      # The page embeds the latest release's assets, so it follows the latest release even when
-      # an older version is released afterwards.
+      # The page embeds the latest release's assets, so it is built from that release's list,
+      # whichever tag this run released.
       - name: Update the Release Screenshots wiki page
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if ! gh release download --repo "$GITHUB_REPOSITORY" --pattern screenshots.json \
-            --dir "$RUNNER_TEMP"; then
+          latest="$(gh release view --repo "$GITHUB_REPOSITORY" --json assets \
+            --jq 'any(.assets[]; .name == "screenshots.json")')"
+          if [[ "$latest" != true ]]; then
             echo "::notice::The latest release has no screenshots; the wiki page is unchanged"
             exit 0
           fi
+          gh release download --repo "$GITHUB_REPOSITORY" --pattern screenshots.json \
+            --dir "$RUNNER_TEMP"
           wiki="$RUNNER_TEMP/wiki"
-          git clone --depth 1 \
-            "https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY.wiki.git" "$wiki"
+          # The token goes in a header for these commands only, never into the clone's config.
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c http.extraheader="$auth" clone --depth 1 \
+            "https://github.com/$GITHUB_REPOSITORY.wiki.git" "$wiki"
           python3 scripts/screenshots wiki-page --manifest "$RUNNER_TEMP/screenshots.json" \
             --repository "$GITHUB_REPOSITORY" --wiki "$wiki"
           cd "$wiki"
@@ -111,4 +129,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add Release-Screenshots.md
           git commit -m "Show the latest release's screenshots"
-          git push origin HEAD
+          git -c http.extraheader="$auth" push origin HEAD

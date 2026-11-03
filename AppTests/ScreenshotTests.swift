@@ -234,6 +234,7 @@ private final class FixedTravelSensor: TravelLocationSensor {
 @MainActor
 private final class IdleActivity: CompassActivityPresenting {
   var onDismiss: (() -> Void)?
+  var isEnabled: Bool { true }
   func start() async throws {}
   func update(_ presentation: TravelPresentation) async {}
   func end() async {}

@@ -106,7 +106,9 @@ jobs:
         run: >-
           python3 scripts/screenshots capture --devices "$DEVICES" --appearances "$APPEARANCES"
           --filter "$SCREEN_FILTER" --output "$RUNNER_TEMP/screenshots"
+      # A failed run still uploads what it captured, to show what went wrong.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
         with:
           name: ${{ steps.source.outputs.artifact }}
           path: ${{ runner.temp }}/screenshots
@@ -136,7 +138,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?name=screenshots-main" \
-            --jq ".artifacts[] | select(.workflow_run.id != $GITHUB_RUN_ID) | .id" |
+            --jq ".artifacts[] | select(.workflow_run.id != $GITHUB_RUN_ID and (.expired | not)) | .id" |
             while read -r artifact; do
               gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact"
             done

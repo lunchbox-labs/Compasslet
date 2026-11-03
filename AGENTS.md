@@ -54,7 +54,9 @@ Every merge to `main` keeps one current set as the `screenshots-main` artifact.
 ## Releases
 
 Pushing a version tag such as `v1.2.0` runs Publish, which uploads that build to TestFlight,
-ready to submit for App Store review. Once Apple approves it, run the Release workflow with the tag. It captures
-every screen at the tag, publishes the tag's GitHub Release with the images and generated
-notes, and points the Release Screenshots wiki page at the latest release. Releases are
-immutable, so the workflow attaches everything to a draft before publishing it.
+ready to submit for App Store review. Once Apple approves it, run the Release workflow from
+`main` with the tag. It captures every screen at the tag, publishes the tag's GitHub Release
+with the images and generated notes, and points the Release Screenshots wiki page at the
+latest release. Releases are immutable, so the workflow attaches everything to a draft before
+publishing it, and a release for an older version never becomes the latest. Tags from before
+the Screenshots workflow existed can't be captured.

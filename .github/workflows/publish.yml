@@ -15,7 +15,7 @@ jobs:
   publish:
     if: >-
       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'push' && github.ref_type == 'tag' && !github.event.deleted)
+      (github.event_name == 'push' && github.ref_type == 'tag' && github.event.created && !github.event.deleted)
     outputs:
       marketing_version: ${{ steps.upload.outputs.marketing_version }}
       build_number: ${{ steps.upload.outputs.build_number }}
@@ -51,7 +51,7 @@ jobs:
     if: >-
       needs.publish.result == 'success' &&
       ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'push' && github.ref_type == 'tag' && !github.event.deleted))
+      (github.event_name == 'push' && github.ref_type == 'tag' && github.event.created && !github.event.deleted))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: app-store-metadata

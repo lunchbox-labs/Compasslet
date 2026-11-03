@@ -5,6 +5,7 @@ import json
 import plistlib
 import runpy
 import tempfile
+import time
 import subprocess
 import unittest
 from unittest.mock import patch
@@ -111,10 +112,47 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(self.calls, [["api", "--paginate"], ["release", "upload"],
                                       ["release", "edit"]])
 
+    def test_an_older_version_never_becomes_the_latest_release(self):
+        self.publish([{"tag_name": "v1.10.0", "draft": False}])
+        self.assertIn("--latest=false", self.arguments[3])
+        self.arguments.clear()
+        self.publish([{"tag_name": "v1.2.2", "draft": False}, {"tag_name": "v2.0.0", "draft": True}])
+        self.assertIn("--latest", self.arguments[3])
+        self.assertNotIn("--latest=false", self.arguments[3])
+
     def test_a_published_release_is_never_changed(self):
         with self.assertRaises(SystemExit):
             self.publish([{"tag_name": "v1.2.3", "draft": False}])
         self.assertEqual(self.calls, [["api", "--paginate"]])
+
+
+class ResponderTests(unittest.TestCase):
+    def test_a_screenshot_that_wasnt_saved_is_reported_and_still_answered(self):
+        with tempfile.TemporaryDirectory() as requests, tempfile.TemporaryDirectory() as output:
+            requests, output = Path(requests), Path(output)
+            (requests / "compass.request").touch()
+            (requests / "settings.request").touch()
+
+            def screenshot(arguments, **options):
+                path = Path(arguments[-1])
+                if "compass" in path.name:
+                    path.write_bytes(b"png")
+                    return subprocess.CompletedProcess(arguments, 0)
+                return subprocess.CompletedProcess(arguments, 1)
+
+            responder = MODULE["ScreenshotResponder"]("id", requests, output, "largest", "dark")
+            with patch("subprocess.run", side_effect=screenshot):
+                responder.start()
+                for _ in range(100):
+                    if (requests / "settings.done").exists():
+                        break
+                    time.sleep(0.05)
+                responder.stop()
+            self.assertEqual(responder.captured,
+                             [{"screen": "compass", "file": "largest-dark-compass.png"}])
+            self.assertEqual(responder.failed, ["largest-dark-settings.png"])
+            self.assertTrue((requests / "compass.done").exists())
+            self.assertTrue((requests / "settings.done").exists())
 
 
 class WikiPageTests(unittest.TestCase):

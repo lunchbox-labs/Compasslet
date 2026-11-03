@@ -409,7 +409,7 @@ def workflow_identity():
         ref = event.get('ref', '')
         tag = ref[len('refs/tags/'):] if ref.startswith('refs/tags/') else ''
         match = re.fullmatch(r'v?((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))', tag)
-        require(event.get('deleted') is False and match and env.get('GITHUB_REF') == ref
+        require(event.get('created') is True and event.get('deleted') is False and match and env.get('GITHUB_REF') == ref
                 and match.group(1) == version,
                 'Metadata tag must match the pushed version tag and archived version.')
     else:
