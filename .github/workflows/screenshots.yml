@@ -119,7 +119,7 @@ jobs:
           # merges. Other captures are for reviewing a change.
           retention-days: ${{ github.event_name == 'push' && 90 || 14 }}
       - name: Print the images as base64
-        if: inputs.log-images || github.event_name == 'pull_request'
+        if: inputs.log-images
         run: |
           for image in "$RUNNER_TEMP"/screenshots/*.png; do
             echo "SCREENSHOT-BEGIN $(basename "$image")"
