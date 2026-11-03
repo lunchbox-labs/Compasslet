@@ -139,12 +139,17 @@ struct CompassActivityControllerTests {
     let system = TestActivitySystem()
     let controller = CompassActivityController(system: system)
     try await controller.start()
-    system.handle.onDismiss?()
+    let dismissed = system.handle
+    dismissed.onDismiss?()
+    let fresh = TestActivityHandle()
+    system.handle = fresh
     try await controller.start()
     #expect(system.requests == 2)
     await controller.update(.init(sample: nil, status: .slow))
-    #expect(system.handle.updates.last?.status == .slow)
+    #expect(fresh.updates.last?.status == .slow)
+    #expect(!dismissed.updates.contains { $0.status == .slow })
     await controller.end()
+    #expect(fresh.ends == 1)
   }
 
   @Test func cancelledStartupDisposesItsResult() async throws {
@@ -497,7 +502,7 @@ struct CompassActivityControllerTests {
   var requests = 0
   var cleanups = 0
   var finalState: CompassActivityAttributes.ContentState?
-  let handle = TestActivityHandle()
+  var handle = TestActivityHandle()
   func request(_ state: CompassActivityAttributes.ContentState) async throws
     -> any CompassActivityHandle
   {

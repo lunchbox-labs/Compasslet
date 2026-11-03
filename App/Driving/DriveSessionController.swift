@@ -13,6 +13,9 @@ final class DriveSessionController: ObservableObject {
   @Published private(set) var isDriving = false
   @Published private(set) var setupStatus: SetupStatus = .ready
   @Published private(set) var compactStatus: CompactStatus = .inactive
+  /// A drive started from the phone without an active CarPlay scene. Nothing else would end
+  /// it, so it ends with its Live Activity. CarPlay activation adopts it as a CarPlay drive.
+  @Published private(set) var startedOnPhone = false
 
   private let sensor: any TravelLocationSensor
   private let activity: any CompassActivityPresenting
@@ -79,11 +82,12 @@ final class DriveSessionController: ObservableObject {
     active = true
     await prepare()
     refreshSetupStatus()
+    if active, isDriving { startedOnPhone = false }
     guard active, !suppressed, !isDriving else { return }
     guard setupStatus == .ready else {
       return
     }
-    await beginDrive()
+    await beginDrive(onPhone: false)
   }
 
   /// The phone fallback for when the automatic CarPlay start doesn't produce a Live Activity.
@@ -95,15 +99,23 @@ final class DriveSessionController: ObservableObject {
     refreshSetupStatus()
     guard setupStatus == .ready else { return }
     guard isDriving else {
-      await beginDrive()
+      // Without CarPlay the drive exists only for the Live Activity, so don't acquire
+      // location when the system won't show one.
+      guard active || activity.isEnabled else {
+        compactStatus = .unavailable
+        return
+      }
+      await beginDrive(onPhone: !active)
       return
     }
     guard compactStatus == .dismissed || compactStatus == .unavailable else { return }
     compactStatus = .starting
+    // A new activity has no retained reading to invalidate.
+    pendingActivityInvalidation = false
     await startActivity(generation: generation).value
   }
 
-  private func beginDrive() async {
+  private func beginDrive(onPhone: Bool) async {
     let token = UUID()
     generation = token
     sensor.receive = { [weak self] event in self?.receive(event, generation: token) }
@@ -114,6 +126,7 @@ final class DriveSessionController: ObservableObject {
       return
     }
     isDriving = true
+    startedOnPhone = onPhone
     startedAt = now()
     filter.reset()
     lastReading = nil
@@ -128,8 +141,12 @@ final class DriveSessionController: ObservableObject {
       guard let self, self.isDriving, self.generation == token else { return }
       activity.onDismiss = { [weak self] in
         guard let self, self.isDriving, self.generation == token else { return }
-        // ActivityKit ends activities on its own, so losing the compact card only ends its
-        // updates. The drive keeps running until CarPlay disconnects or the user ends it.
+        // ActivityKit ends activities on its own, so during a CarPlay drive losing the
+        // compact card only ends its updates until CarPlay disconnects or the user ends it.
+        guard !self.startedOnPhone else {
+          _ = self.stopDrive()
+          return
+        }
         self.compactStatus = .dismissed
       }
       do {
@@ -148,6 +165,7 @@ final class DriveSessionController: ObservableObject {
         await activity.update(self.presentation)
       } catch {
         guard self.isDriving, self.generation == token else { return }
+        if self.startedOnPhone { _ = self.stopDrive() }
         self.compactStatus = .unavailable
       }
     }
@@ -270,6 +288,7 @@ final class DriveSessionController: ObservableObject {
     pendingPresentation = nil
     drainGeneration = nil
     isDriving = false
+    startedOnPhone = false
     try? CompassDiagnostics.shared?.observe(.activity, active: false)
     ticker?.cancel()
     ticker = nil

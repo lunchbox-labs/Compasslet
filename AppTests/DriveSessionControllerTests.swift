@@ -24,6 +24,7 @@ final class DriveSessionControllerTests: XCTestCase {
   enum Failure: Error { case unavailable }
   final class Activity: CompassActivityPresenting {
     var onDismiss: (() -> Void)?
+    var isEnabled = true
     var starts = 0
     var invalidations = 0
     func invalidateReading() async { invalidations += 1 }
@@ -483,7 +484,7 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertEqual(controller.compactStatus, .active)
     XCTAssertEqual(sensor.starts, 1)
     XCTAssertEqual(activity.starts, 2)
-    XCTAssertEqual(activity.invalidations, 1)
+    XCTAssertEqual(activity.invalidations, 0)
     XCTAssertEqual(activity.updates.count, delivered + 1)
     XCTAssertEqual(activity.updates.last?.sample?.angle.degrees, 180)
     activity.onDismiss?()
@@ -508,13 +509,19 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertEqual(activity.starts, 3)
   }
 
-  func testCarPlayJoinsAHandStartedDriveAndDisconnectEndsIt() async {
+  func testCarPlayAdoptsAPhoneStartedDriveAndDisconnectEndsIt() async {
     let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
     await controller.startLiveActivity()
+    XCTAssertTrue(controller.startedOnPhone)
     await controller.carPlayActivated()
+    XCTAssertFalse(controller.startedOnPhone)
     XCTAssertEqual(sensor.starts, 1)
     XCTAssertEqual(activity.starts, 1)
     XCTAssertEqual(controller.compactStatus, .active)
+    activity.onDismiss?()
+    await controller.waitForPendingOperations()
+    XCTAssertTrue(controller.isDriving)
+    XCTAssertEqual(controller.compactStatus, .dismissed)
     await controller.carPlayDisconnected()
     XCTAssertFalse(controller.isDriving)
     XCTAssertEqual(sensor.stops, 1)
@@ -533,12 +540,70 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertEqual(activity.starts, 2)
   }
 
-  func testRepeatedManualStartDuringActivityStartupStartsOnce() async {
+  func testDismissingAPhoneStartedActivityEndsTheDrive() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    await controller.startLiveActivity()
+    activity.onDismiss?()
+    await controller.waitForPendingOperations()
+    XCTAssertFalse(controller.isDriving)
+    XCTAssertFalse(controller.startedOnPhone)
+    XCTAssertEqual(controller.compactStatus, .inactive)
+    XCTAssertEqual(sensor.stops, 1)
+    XCTAssertEqual(activity.ends, 2)
+  }
+
+  func testPhoneStartWithLiveActivitiesOffNeverAcquiresLocation() async {
+    let sensor = Sensor(), activity = Activity()
+    activity.isEnabled = false
+    let controller = make(sensor, activity)
+    await controller.startLiveActivity()
+    XCTAssertFalse(controller.isDriving)
+    XCTAssertEqual(controller.compactStatus, .unavailable)
+    XCTAssertEqual(sensor.starts, 0)
+    XCTAssertEqual(activity.starts, 0)
+    activity.isEnabled = true
+    await controller.startLiveActivity()
+    XCTAssertTrue(controller.isDriving)
+    XCTAssertEqual(controller.compactStatus, .active)
+  }
+
+  func testPhoneStartedActivityFailureEndsTheDrive() async {
+    let sensor = Sensor(), activity = Activity()
+    activity.fails = true
+    let controller = make(sensor, activity)
+    await controller.startLiveActivity()
+    await controller.waitForPendingOperations()
+    XCTAssertFalse(controller.isDriving)
+    XCTAssertEqual(controller.compactStatus, .unavailable)
+    XCTAssertEqual(sensor.starts, 1)
+    XCTAssertEqual(sensor.stops, 1)
+  }
+
+  func testEndingDuringAnActivityRestartLeavesTheDriveEnded() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    await controller.carPlayActivated()
+    activity.onDismiss?()
+    activity.pauseStart = true
+    let restart = Task { await controller.startLiveActivity() }
+    while activity.startContinuation == nil { await Task.yield() }
+    let ending = Task { await controller.endDrive() }
+    while controller.isDriving { await Task.yield() }
+    activity.startContinuation?.resume()
+    await restart.value
+    await ending.value
+    XCTAssertFalse(controller.isDriving)
+    XCTAssertEqual(controller.compactStatus, .inactive)
+    XCTAssertEqual(activity.starts, 2)
+    XCTAssertEqual(activity.ends, 2)
+  }
+
+  func testRepeatedStartsDuringActivityStartupStartOnce() async {
     let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
     activity.pauseStart = true
     let first = Task { await controller.startLiveActivity() }
     while activity.startContinuation == nil { await Task.yield() }
     await controller.startLiveActivity()
+    await controller.carPlayActivated()
     XCTAssertEqual(controller.compactStatus, .starting)
     activity.startContinuation?.resume()
     await first.value

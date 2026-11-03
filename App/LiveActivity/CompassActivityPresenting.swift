@@ -4,6 +4,8 @@ import CompassCore
 @MainActor
 protocol CompassActivityPresenting: AnyObject {
   var onDismiss: (() -> Void)? { get set }
+  /// Whether the system currently allows this app to start Live Activities.
+  var isEnabled: Bool { get }
   func start() async throws
   func update(_ presentation: TravelPresentation) async
   /// Clears a retained reading after explicit acquisition failure, without ending the activity.

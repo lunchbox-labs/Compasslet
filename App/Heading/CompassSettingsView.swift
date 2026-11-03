@@ -21,11 +21,16 @@ struct CompassSettingsView: View {
         }
         Section {
           if canStartLiveActivity {
-            Button("Start Live Activity") { Task { await drive.startLiveActivity() } }
+            Button("Start Live Activity", action: startLiveActivity)
               .disabled(drive.setupStatus != .ready)
           }
           if drive.isDriving {
-            Button("End Live Activity") { Task { await drive.endDrive() } }
+            Button("End Live Activity", action: endLiveActivity)
+          }
+          if drive.compactStatus == .unavailable,
+            let url = URL(string: UIApplication.openSettingsURLString)
+          {
+            Link("Open Settings", destination: url)
           }
         } header: {
           Text("Live Activity")
@@ -71,22 +76,53 @@ struct CompassSettingsView: View {
       switch drive.setupStatus {
       case .ready: break
       case .unavailable: return "The Live Activity is unavailable on this device."
-      default: return "Allow precise location access to start the Live Activity."
+      default: return "Start Live Activity needs precise location. See Location above."
+      }
+      if drive.compactStatus == .unavailable {
+        return
+          "The Live Activity couldn’t start, so Compasslet isn’t using location for it. Allow Live Activities for Compasslet in the Settings app, then tap Start Live Activity."
       }
       return
-        "Compasslet starts the Live Activity when you open it on CarPlay and ends it when CarPlay disconnects. If it doesn’t, start or end it here."
+        "Compasslet starts the Live Activity when you open it on CarPlay and ends it when CarPlay disconnects. If it doesn’t start, tap Start Live Activity."
     }
     switch drive.compactStatus {
     case .inactive, .starting: return "The Live Activity is starting."
+    case .active where drive.startedOnPhone:
+      return
+        "Compasslet is using location to show your travel direction. Tap End Live Activity or dismiss the Live Activity to stop."
     case .active:
       return
-        "The Live Activity shows your travel direction until CarPlay disconnects or you end it here."
+        "Compasslet is using location to show your travel direction until CarPlay disconnects. End Live Activity also stops travel direction on CarPlay until you reopen Compasslet there."
     case .dismissed:
       return
-        "The Live Activity was dismissed, but Compasslet is still using location for travel direction. Start it again, or end it to stop."
+        "The Live Activity was dismissed, but travel direction continues on CarPlay. Tap Start Live Activity to show it again, or End Live Activity to stop using location."
     case .unavailable:
       return
-        "The Live Activity couldn’t start. Make sure Live Activities are allowed for Compasslet in the Settings app, then try again."
+        "The Live Activity couldn’t start, but travel direction continues on CarPlay. Allow Live Activities for Compasslet in the Settings app, then tap Start Live Activity, or tap End Live Activity to stop using location."
+    }
+  }
+
+  /// The tapped button leaves the form, so VoiceOver hears the outcome instead.
+  private var liveActivityOutcome: String {
+    if drive.compactStatus == .unavailable { return "Live Activity couldn’t start" }
+    guard drive.isDriving else { return "Live Activity ended" }
+    switch drive.compactStatus {
+    case .active: return "Live Activity started"
+    case .inactive, .starting, .dismissed, .unavailable: return "Live Activity ended"
+    }
+  }
+
+  private func startLiveActivity() {
+    Task {
+      await drive.startLiveActivity()
+      AccessibilityNotification.Announcement(liveActivityOutcome).post()
+    }
+  }
+
+  private func endLiveActivity() {
+    Task {
+      await drive.endDrive()
+      AccessibilityNotification.Announcement(liveActivityOutcome).post()
     }
   }
 
@@ -100,15 +136,15 @@ struct CompassSettingsView: View {
   private var locationDetail: String {
     switch drive.setupStatus {
     case .ready:
-      "Precise location is enabled for phone coordinates, elevation, and CarPlay travel direction."
+      "Precise location is enabled for phone coordinates, elevation, and travel direction."
     case .permissionRequired: "Location permission has not been granted yet."
     case .denied:
-      "Allow location while using the app for phone location details and CarPlay travel direction."
+      "Allow location while using the app for phone location details and travel direction."
     case .restricted: "Location access is restricted by this device’s settings or management."
     case .servicesDisabled:
       "Location Services is off. Turn it on in iPhone Settings under Privacy & Security."
     case .preciseLocationRequired:
-      "Location is allowed, but CarPlay travel direction needs Precise Location."
+      "Location is allowed, but travel direction needs Precise Location."
     case .unavailable: "Travel direction is unavailable on this device."
     }
   }
