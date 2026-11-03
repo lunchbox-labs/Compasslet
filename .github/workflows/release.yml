@@ -1,0 +1,114 @@
+name: Release
+# Run once Apple approves a version. Pushing the version tag already sent the build to
+# TestFlight; this publishes the tag's GitHub Release with every screen attached and points the
+# Release Screenshots wiki page at it.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The approved version tag, such as v1.2.0
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      published: ${{ steps.state.outputs.published }}
+    steps:
+      - name: Check the tag and its release
+        id: state
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          if [[ ! "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::$TAG isn't a version tag like v1.2.0"
+            exit 1
+          fi
+          if ! gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --silent; then
+            echo "::error::$TAG doesn't exist; push the tag first, which also sends it to TestFlight"
+            exit 1
+          fi
+          # Only published releases are found by tag. A published one can't change, so a rerun
+          # only refreshes the wiki page.
+          if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --silent 2>/dev/null; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+  capture:
+    needs: check
+    if: needs.check.outputs.published == 'false'
+    # The called workflow's main-only cleanup job needs actions: write, even though it is
+    # skipped here.
+    permissions:
+      contents: read
+      actions: write
+    uses: ./.github/workflows/screenshots.yml
+    with:
+      ref: refs/tags/${{ inputs.tag }}
+  release:
+    needs: [check, capture]
+    if: needs.check.outputs.published == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.capture.outputs.artifact }}
+          path: ${{ runner.temp }}/screenshots
+      - name: Publish the release with the screenshots attached
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: >-
+          python3 scripts/screenshots release --tag "$TAG" --repository "$GITHUB_REPOSITORY"
+          --directory "$RUNNER_TEMP/screenshots"
+  wiki:
+    needs: [check, release]
+    if: >-
+      always() && needs.check.result == 'success' &&
+      (needs.release.result == 'success' || needs.release.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      # The page embeds the latest release's assets, so it follows the latest release even when
+      # an older version is released afterwards.
+      - name: Update the Release Screenshots wiki page
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release download --repo "$GITHUB_REPOSITORY" --pattern screenshots.json \
+            --dir "$RUNNER_TEMP"; then
+            echo "::notice::The latest release has no screenshots; the wiki page is unchanged"
+            exit 0
+          fi
+          wiki="$RUNNER_TEMP/wiki"
+          git clone --depth 1 \
+            "https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY.wiki.git" "$wiki"
+          python3 scripts/screenshots wiki-page --manifest "$RUNNER_TEMP/screenshots.json" \
+            --repository "$GITHUB_REPOSITORY" --wiki "$wiki"
+          cd "$wiki"
+          if [[ -z "$(git status --porcelain)" ]]; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Release-Screenshots.md
+          git commit -m "Show the latest release's screenshots"
+          git push origin HEAD

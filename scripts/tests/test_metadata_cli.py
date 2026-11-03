@@ -114,16 +114,29 @@ class MetadataCLITests(unittest.TestCase):
                 self.env[field] = saved
                 self.assertEqual(self.apple.calls, [])
 
-    def test_stable_release_tag_must_match_archived_version(self):
+    def test_pushed_version_tag_must_match_archived_version(self):
         event = self.root / 'event.json'
-        event.write_text(json.dumps({'action': 'published', 'release': {
-            'draft': False, 'prerelease': False, 'tag_name': 'v1.2.3'}}))
-        self.env.update(GITHUB_EVENT_NAME='release', GITHUB_REF='refs/tags/v1.2.3', GITHUB_EVENT_PATH=str(event))
+        event.write_text(json.dumps({'ref': 'refs/tags/v1.2.3', 'deleted': False}))
+        self.env.update(GITHUB_EVENT_NAME='push', GITHUB_REF='refs/tags/v1.2.3', GITHUB_EVENT_PATH=str(event))
         self.assertEqual(self.run_cli()[0], 0)
         self.apple.calls.clear()
         self.env['METADATA_MARKETING_VERSION'] = '1.2.4'
         self.assertEqual(self.run_cli()[0], 1)
         self.assertEqual(self.apple.calls, [])
+
+    def test_deleted_tags_branch_pushes_and_releases_never_sync(self):
+        event = self.root / 'event.json'
+        for name, ref, payload in [
+                ('push', 'refs/tags/v1.2.3', {'ref': 'refs/tags/v1.2.3', 'deleted': True}),
+                ('push', 'refs/heads/main', {'ref': 'refs/heads/main', 'deleted': False}),
+                ('push', 'refs/tags/v1.2.3', {'ref': 'refs/tags/v1.2.4', 'deleted': False}),
+                ('release', 'refs/tags/v1.2.3', {'action': 'published', 'release': {
+                    'draft': False, 'prerelease': False, 'tag_name': 'v1.2.3'}})]:
+            with self.subTest(name=name, payload=payload):
+                event.write_text(json.dumps(payload))
+                self.env.update(GITHUB_EVENT_NAME=name, GITHUB_REF=ref, GITHUB_EVENT_PATH=str(event))
+                self.assertEqual(self.run_cli()[0], 1)
+                self.assertEqual(self.apple.calls, [])
 
     def test_key_is_removed_on_http_failure_and_private_error_not_printed(self):
         from urllib.error import HTTPError

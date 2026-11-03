@@ -4,7 +4,7 @@
 capture     Build the app once, then run ScreenshotTests on each device and appearance. The
             test shows one screen at a time and asks for a screenshot by writing a request
             file; this script answers with a full simulator screenshot and a done file.
-release     Attach a capture to a draft release, creating the draft when needed.
+release     Publish the release for an existing version tag with a capture attached.
 wiki-page   Write the wiki page that shows the latest release's screenshots.
 """
 import argparse
@@ -203,22 +203,31 @@ def gh(arguments, **options):
 
 
 def release(arguments):
-    """Attach the capture to the draft release for a tag; published releases are immutable."""
+    """Publish the tag's release with the capture attached.
+
+    Published releases are immutable, so every asset goes on a draft first and the draft is
+    published only once all of them have uploaded. A rerun finishes an existing draft.
+    """
     directory = Path(arguments.directory)
     manifest = json.loads((directory / MANIFEST).read_text(encoding="utf-8"))
+    if not manifest:
+        raise SystemExit("The capture has no screenshots")
     releases = json.loads(gh(["api", "--paginate", "--slurp",
                               "repos/" + arguments.repository + "/releases"]))
     existing = [item for page in releases for item in page
                 if item["tag_name"] == arguments.tag]
     if any(not item["draft"] for item in existing):
-        raise SystemExit(arguments.tag + " is already published; attach screenshots before "
-                         "publishing, while the release is a draft")
+        raise SystemExit(arguments.tag + " is already published, and published releases can't "
+                         "change")
+    if len(existing) > 1:
+        raise SystemExit(arguments.tag + " has more than one draft release; delete the extras")
     if not existing:
-        gh(["release", "create", arguments.tag, "--repo", arguments.repository, "--draft",
-            "--target", arguments.target, "--title", arguments.tag, "--generate-notes"])
+        gh(["release", "create", arguments.tag, "--repo", arguments.repository, "--verify-tag",
+            "--draft", "--title", arguments.tag, "--generate-notes"])
     files = [str(directory / item["file"]) for item in manifest] + [str(directory / MANIFEST)]
     gh(["release", "upload", arguments.tag, "--repo", arguments.repository, "--clobber"] + files)
-    print("Attached " + str(len(files)) + " files to the draft release " + arguments.tag)
+    gh(["release", "edit", arguments.tag, "--repo", arguments.repository, "--draft=false"])
+    print("Published " + arguments.tag + " with " + str(len(files)) + " files")
 
 
 def wiki_page(manifest, repository):
@@ -270,7 +279,6 @@ def main(argv=None):
     capture_parser.set_defaults(handler=capture)
     release_parser = commands.add_parser("release")
     release_parser.add_argument("--tag", required=True)
-    release_parser.add_argument("--target", required=True, help="commit the draft tags")
     release_parser.add_argument("--repository", required=True)
     release_parser.add_argument("--directory", required=True)
     release_parser.set_defaults(handler=release)

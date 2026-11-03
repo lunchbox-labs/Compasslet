@@ -3,6 +3,7 @@ import contextlib
 import importlib.machinery
 import importlib.util
 import io
+import json
 import os
 from pathlib import Path
 import tempfile
@@ -40,6 +41,36 @@ class PublishIdentityTests(unittest.TestCase):
                         self.assertEqual(output.read_text(), 'marketing_version=1.2.3\nbuild_number=17.2\n')
                 self.assertEqual(operations, ['Apple validation'] if failed_operation == 'Apple validation'
                                  else ['Apple validation', 'upload'])
+
+    def test_only_manual_main_runs_and_pushed_version_tags_reach_the_build(self):
+        accepted = 'Workflow build number'
+        cases = [
+            ({'GITHUB_EVENT_NAME': 'workflow_dispatch', 'GITHUB_REF': 'refs/heads/main'}, None, accepted),
+            ({'GITHUB_EVENT_NAME': 'workflow_dispatch', 'GITHUB_REF': 'refs/heads/feature'}, None, 'main'),
+            ({'GITHUB_EVENT_NAME': 'push', 'GITHUB_REF': 'refs/tags/v1.2.3'},
+             {'ref': 'refs/tags/v1.2.3', 'deleted': False}, accepted),
+            ({'GITHUB_EVENT_NAME': 'push', 'GITHUB_REF': 'refs/tags/v1.2.3'},
+             {'ref': 'refs/tags/v1.2.3', 'deleted': True}, 'version tag'),
+            ({'GITHUB_EVENT_NAME': 'push', 'GITHUB_REF': 'refs/heads/main'},
+             {'ref': 'refs/heads/main', 'deleted': False}, 'version tag'),
+            ({'GITHUB_EVENT_NAME': 'push', 'GITHUB_REF': 'refs/tags/v1.2.3-beta'},
+             {'ref': 'refs/tags/v1.2.3-beta', 'deleted': False}, 'X.Y.Z'),
+            ({'GITHUB_EVENT_NAME': 'push', 'GITHUB_REF': 'refs/tags/v1.2.4'},
+             {'ref': 'refs/tags/v1.2.3', 'deleted': False}, 'X.Y.Z'),
+            ({'GITHUB_EVENT_NAME': 'release', 'GITHUB_REF': 'refs/tags/v1.2.3'},
+             {'action': 'published', 'release': {'tag_name': 'v1.2.3'}}, 'Only manual main'),
+        ]
+        for environment, payload, expected in cases:
+            with self.subTest(environment=environment, payload=payload), \
+                    tempfile.TemporaryDirectory() as temp:
+                event = Path(temp) / 'event.json'
+                event.write_text(json.dumps(payload or {}))
+                environment = dict(environment, GITHUB_ACTIONS='true', GITHUB_EVENT_PATH=str(event),
+                                   BUILD_NUMBER='')
+                with patch.dict(os.environ, environment), patch.object(testflight, 'read_copy'), \
+                        self.assertRaises(testflight.SigningError) as raised:
+                    testflight.publish()
+                self.assertIn(expected, str(raised.exception))
 
     def test_publish_failure_still_cleans_signing_material_and_reports_safe_error(self):
         error = testflight.MetadataError('Archived app does not match the uploaded bundle and build.')

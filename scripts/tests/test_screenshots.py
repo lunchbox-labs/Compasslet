@@ -1,9 +1,13 @@
-"""Exercise simulator selection and the release wiki page of the screenshot script."""
+"""Exercise simulator selection, releases and the wiki page of the screenshot script."""
+import contextlib
+import io
 import json
 import plistlib
 import runpy
 import tempfile
+import subprocess
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parents[1]
@@ -70,6 +74,47 @@ class DeviceSelectionTests(unittest.TestCase):
         with self.assertRaises(SystemExit) as raised:
             MODULE["select_devices"](["iPhone 99"], self.phones())
         self.assertIn("iPhone 17 Pro Max", str(raised.exception))
+
+
+class ReleaseTests(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.directory = Path(directory.name)
+        (self.directory / "largest-light-compass.png").write_bytes(b"png")
+        (self.directory / "screenshots.json").write_text(json.dumps(
+            [{"screen": "compass", "file": "largest-light-compass.png"}]), encoding="utf-8")
+        self.calls = []
+        self.arguments = []
+
+    def publish(self, releases):
+        def run(arguments, **options):
+            self.calls.append(arguments[1:3])
+            self.arguments.append(arguments)
+            output = json.dumps([releases]) if arguments[1] == "api" else ""
+            return subprocess.CompletedProcess(arguments, 0, output, "")
+        with patch("subprocess.run", side_effect=run), contextlib.redirect_stdout(io.StringIO()):
+            MODULE["main"](["release", "--tag", "v1.2.3", "--repository", "o/r",
+                            "--directory", str(self.directory)])
+
+    def test_a_new_release_is_drafted_from_the_tag_and_published_after_its_assets(self):
+        self.publish([{"tag_name": "v1.2.2", "draft": False}])
+        self.assertEqual(self.calls, [["api", "--paginate"], ["release", "create"],
+                                      ["release", "upload"], ["release", "edit"]])
+        self.assertIn("--verify-tag", self.arguments[1])
+        self.assertIn("--draft", self.arguments[1])
+        self.assertIn(str(self.directory / "screenshots.json"), self.arguments[2])
+        self.assertIn("--draft=false", self.arguments[3])
+
+    def test_an_existing_draft_is_finished(self):
+        self.publish([{"tag_name": "v1.2.3", "draft": True}])
+        self.assertEqual(self.calls, [["api", "--paginate"], ["release", "upload"],
+                                      ["release", "edit"]])
+
+    def test_a_published_release_is_never_changed(self):
+        with self.assertRaises(SystemExit):
+            self.publish([{"tag_name": "v1.2.3", "draft": False}])
+        self.assertEqual(self.calls, [["api", "--paginate"]])
 
 
 class WikiPageTests(unittest.TestCase):

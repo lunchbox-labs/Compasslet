@@ -40,16 +40,12 @@ final class ScreenshotTests: XCTestCase {
     Screen(name: "settings-appearance-live-activity") {
       AnyView(NavigationStack { AppearanceDetailView(surface: .activity) })
     },
+    Screen(name: "settings-appearance-minor-ticks") { ScreenshotTests.editor(.minorTicks) },
+    Screen(name: "settings-appearance-cardinal-labels") { ScreenshotTests.editor(.labels) },
+    Screen(name: "settings-appearance-rotation") { ScreenshotTests.editor(.rotation) },
+    Screen(name: "settings-appearance-reduce-motion") { ScreenshotTests.editor(.reduceMotion) },
+    Screen(name: "live-activity") { AnyView(LiveActivityScreen()) },
   ]
-    + AppearanceOption.allCases.map { option in
-      Screen(name: "settings-appearance-\(option.screenName)") {
-        AnyView(
-          NavigationStack {
-            AppearanceOptionEditor(surface: nil, option: option, store: .shared)
-          })
-      }
-    }
-    + [Screen(name: "live-activity") { AnyView(LiveActivityScreen()) }]
 
   private var directory: URL?
   private var nameFilter: [String] = []
@@ -128,21 +124,15 @@ final class ScreenshotTests: XCTestCase {
     AnyView(CompassSettingsView(drive: drive(location: .allowed), close: {}))
   }
 
+  private static func editor(_ option: AppearanceOption) -> AnyView {
+    AnyView(
+      NavigationStack { AppearanceOptionEditor(surface: nil, option: option, store: .shared) })
+  }
+
   private static func drive(location: FixedTravelSensor.Access) -> DriveSessionController {
     DriveSessionController(
       sensor: FixedTravelSensor(access: location), activity: IdleActivity(),
       automaticTick: false)
-  }
-}
-
-extension AppearanceOption {
-  fileprivate var screenName: String {
-    switch self {
-    case .minorTicks: "minor-ticks"
-    case .labels: "cardinal-labels"
-    case .rotation: "rotation"
-    case .reduceMotion: "reduce-motion"
-    }
   }
 }
 
