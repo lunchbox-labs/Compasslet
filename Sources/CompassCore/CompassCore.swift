@@ -2,7 +2,6 @@ import Foundation
 
 /// A finite clockwise angle normalized into the half-open range 0..<360 degrees.
 public struct CompassAngle: Sendable, Equatable {
-  /// The normalized angle in degrees.
   public let degrees: Double
 
   /// Creates an angle, rejecting nonfinite input.
@@ -24,17 +23,13 @@ public struct CompassAngle: Sendable, Equatable {
 
 /// The physical quantity represented by a compass sample.
 public enum CompassSource: Sendable, Equatable {
-  /// The orientation of the device.
   case deviceHeading
   /// The vehicle's direction of travel, which is distinct from device orientation.
   case vehicleCourse
 }
 
-/// The north reference used by a sample.
 public enum NorthReference: Sendable, Equatable {
-  /// Magnetic north.
   case magnetic
-  /// Geographic true north.
   case trueNorth
 }
 
@@ -42,13 +37,10 @@ public enum NorthReference: Sendable, Equatable {
 public struct CompassSample: Sendable, Equatable {
   /// The measured or smoothed direction.
   public let angle: CompassAngle
-  /// The physical source of the direction.
   public let source: CompassSource
-  /// The north reference used for the direction.
   public let reference: NorthReference
   /// The nonnegative sensor uncertainty in degrees.
   public let accuracy: Double
-  /// The sensor acquisition time.
   public let timestamp: Date
 
   /// Creates a sensor sample, rejecting sentinel angles, invalid accuracy, and invalid timestamps.
@@ -113,7 +105,6 @@ public struct CompassSmoother: Sendable {
     self.fullTrackingDelta = fullTrackingDelta
   }
 
-  /// Discards accumulated smoothing state.
   public mutating func reset() {
     previous = nil
   }

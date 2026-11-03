@@ -47,7 +47,6 @@ public enum ReadoutTextSize: Int, CaseIterable, Codable, Sendable {
   case xSmall, small, medium, large, xLarge, xxLarge, xxxLarge
   case accessibility1, accessibility2, accessibility3, accessibility4, accessibility5
 
-  /// Whether this is one of the system's accessibility text size categories.
   public var isAccessibilitySize: Bool { rawValue > Self.xxxLarge.rawValue }
 }
 
@@ -63,21 +62,15 @@ public enum ActivityTimestampMode: String, CaseIterable, Codable, Sendable {
 
 /// Display-only choices; never contains sensor samples or validity timestamps.
 public struct AppearanceValues: Codable, Hashable, Sendable {
-  /// Shows the abbreviated direction in the readout.
   public var showDirection = true
-  /// Shows numerical degrees in the readout.
   public var showDegrees = true
   /// Follows the presentation environment's Dynamic Type category when enabled.
   public var useSystemTextSize = true
   /// Readout-only category used when system sizing is disabled.
   public var customTextSize: ReadoutTextSize = .large
-  /// Interior tick density in each quarter.
   public var minorTicks: MinorTicks = .seventeen
-  /// Cardinal rim-label placement.
   public var labels: CardinalLabels = .inside
-  /// Rotating dial or rotating arrow.
   public var rotation: DialRotation = .dial
-  /// Presentation used while the system Reduce Motion setting is on.
   public var reducedMotionDial: ReducedMotionDial = .steadyReadout
 
   /// Timestamp presentation for the Lock Screen and expanded Dynamic Island.
@@ -85,7 +78,6 @@ public struct AppearanceValues: Codable, Hashable, Sendable {
   /// Timestamp presentation for the compact CarPlay Live Activity.
   public var smallActivityTimestamp: ActivityTimestampMode = .time
 
-  /// Creates the standard appearance.
   public init() {}
 
   private enum CodingKeys: String, CodingKey {
@@ -121,7 +113,6 @@ public struct AppearanceValues: Codable, Hashable, Sendable {
       ?? standard.reducedMotionDial
   }
 
-  /// Whether any central reading is visible.
   public var hasReadout: Bool { showDirection || showDegrees }
 
   /// A hidden legacy phone readout has no selected visible mode.
@@ -157,7 +148,6 @@ public struct AppearancePreferences: Codable, Hashable, Sendable {
   private var phone: AppearanceValues?
   private var activity: AppearanceValues?
 
-  /// Creates the standard appearance.
   public init() {}
 
   private enum CodingKeys: String, CodingKey { case global, phone, activity, theme }
@@ -172,7 +162,6 @@ public struct AppearancePreferences: Codable, Hashable, Sendable {
     theme = storedTheme.flatMap(AppTheme.init(rawValue:)) ?? .system
   }
 
-  /// Whether a surface follows subsequent global changes.
   public func usesGlobal(for surface: AppearanceSurface) -> Bool {
     override(for: surface) == nil
   }
@@ -190,7 +179,6 @@ public struct AppearancePreferences: Codable, Hashable, Sendable {
 
   /// Discards the override, or starts a fresh copy of the current global values.
   public mutating func setUsesGlobal(_ usesGlobal: Bool, for surface: AppearanceSurface) {
-    // Starting a new customization always copies today's global values.
     set(usesGlobal ? nil : global.requiringReadout(), for: surface)
   }
 

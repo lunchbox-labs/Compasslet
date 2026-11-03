@@ -42,6 +42,5 @@ final class AppearanceStore: ObservableObject {
     guard updated != preferences, let data = try? JSONEncoder().encode(updated) else { return }
     defaults?.set(data, forKey: Self.key)
     preferences = updated
-    // Preferences do not change any sensor timestamp.
   }
 }

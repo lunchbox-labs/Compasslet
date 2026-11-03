@@ -12,10 +12,8 @@ public struct TravelReading: Sendable, Equatable {
   public let speedAccuracy: Double
   /// Horizontal position uncertainty in metres; no position is retained.
   public let horizontalAccuracy: Double
-  /// Acquisition time of these measurements.
   public let timestamp: Date
 
-  /// Creates travel measurements for validation by the filter.
   public init(
     course: Double, courseAccuracy: Double, speed: Double, speedAccuracy: Double,
     horizontalAccuracy: Double, timestamp: Date
@@ -38,10 +36,8 @@ public enum TravelStatus: Sendable, Equatable {
 public struct TravelPresentation: Sendable, Equatable {
   /// The usable smoothed direction, or nil when unavailable.
   public let sample: CompassSample?
-  /// The current travel measurement status.
   public let status: TravelStatus
 
-  /// Creates the current bearing and status presentation.
   public init(sample: CompassSample?, status: TravelStatus) {
     self.sample = sample
     self.status = status
@@ -53,8 +49,6 @@ public struct TravelCourseFilter: Sendable {
   private var smoother: CompassSmoother
   private var previousTimestamp: Date?
 
-  /// Creates an empty travel-course smoothing sequence.
-  ///
   /// Location course arrives about once a second and is already filtered by the hardware, so
   /// small changes are damped while a turn-sized change of 20 degrees or more is adopted at once.
   public init() {
@@ -64,7 +58,6 @@ public struct TravelCourseFilter: Sendable {
     self.smoother = smoother
   }
 
-  /// Discards the current smoothing sequence.
   public mutating func reset() {
     smoother.reset()
     previousTimestamp = nil
