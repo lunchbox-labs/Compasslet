@@ -164,7 +164,9 @@ struct CompassView: View {
     }
     .onChange(of: stepsHeading) { _, value in compass.setReducedMotion(value) }
     .onChange(of: onboarding.isTouring) { _, touring in
-      if !touring { drive.requestPhoneAuthorization(isForeground: scenePhase == .active) }
+      guard !touring else { return }
+      menuFocused = true
+      drive.requestPhoneAuthorization(isForeground: scenePhase == .active)
     }
   }
 

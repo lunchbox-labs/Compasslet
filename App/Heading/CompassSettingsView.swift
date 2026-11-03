@@ -20,14 +20,8 @@ struct CompassSettingsView: View {
             Link("Open Settings", destination: url)
           }
         }
-        Section {
+        Section("Help") {
           Button("Show Welcome Tour", action: showTour)
-        } header: {
-          Text("Help")
-        } footer: {
-          Text(
-            "Also shows the tip for the Live Activity button again the next time it appears on CarPlay."
-          )
         }
         DiagnosticsSettingsSection()
         Section {

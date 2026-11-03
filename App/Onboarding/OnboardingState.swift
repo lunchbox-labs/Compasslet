@@ -37,9 +37,10 @@ final class OnboardingState: ObservableObject {
   /// Ends the tour for good. A tour finished during a CarPlay drive has already pointed out the
   /// button, so the tip for it isn't shown as well.
   func finish(carPlayConnected: Bool) {
+    let showedButton = (step?.rawValue ?? -1) >= Step.liveActivity.rawValue
     step = nil
     defaults.set(true, forKey: Self.tourCompletedKey)
-    if carPlayConnected { liveActivityTip.invalidate(reason: .actionPerformed) }
+    if carPlayConnected, showedButton { liveActivityTip.invalidate(reason: .actionPerformed) }
   }
 
   /// Starts the tour again and lets the button tip show again. TipKit can only reset its whole
@@ -63,6 +64,5 @@ struct LiveActivityButtonTip: Tip {
       "It starts on its own when Compasslet opens on CarPlay. Tap here to end it, or to start it again if it’s gone."
     )
   }
-  var image: Image? { Image(systemName: "play.circle") }
   var options: [any TipOption] { [Tips.MaxDisplayCount(1)] }
 }

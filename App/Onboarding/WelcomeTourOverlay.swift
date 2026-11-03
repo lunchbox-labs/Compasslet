@@ -16,6 +16,7 @@ struct WelcomeTourOverlay: View {
   /// The button's frame in this view's coordinates, while the button is on screen.
   let buttonFrame: CGRect?
   let carPlayConnected: Bool
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @AccessibilityFocusState private var titleFocused: Bool
 
   var body: some View {
@@ -50,7 +51,7 @@ struct WelcomeTourOverlay: View {
       }
       .accessibilityElement(children: .contain)
       .accessibilityAddTraits(.isModal)
-      .accessibilityAction(.escape) { onboarding.finish(carPlayConnected: carPlayConnected) }
+      .accessibilityAction(.escape) { finish() }
       .onAppear { titleFocused = true }
       .onChange(of: onboarding.step) { titleFocused = true }
     }
@@ -91,7 +92,6 @@ struct WelcomeTourOverlay: View {
         .accessibilityAddTraits(.isHeader)
         .accessibilityFocused($titleFocused)
       Text(message(step))
-        .foregroundStyle(.secondary)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .fixedSize(horizontal: false, vertical: true)
@@ -118,16 +118,17 @@ struct WelcomeTourOverlay: View {
     let isLast = step == OnboardingState.Step.allCases.last
     let position = Text("\(step.rawValue + 1) of \(OnboardingState.Step.allCases.count)")
       .font(.footnote).foregroundStyle(.secondary)
-    let skip = Button("Skip") { onboarding.finish(carPlayConnected: carPlayConnected) }
-      .frame(minHeight: 44)
-      .opacity(isLast ? 0 : 1)
-      .disabled(isLast)
-      .accessibilityHidden(isLast)
+    let skip = Button(action: finish) {
+      Text("Skip").frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+    }
+    .opacity(isLast ? 0 : 1)
+    .disabled(isLast)
+    .accessibilityHidden(isLast)
     let next = Button(isLast ? "Done" : "Next") {
-      onboarding.advance(carPlayConnected: carPlayConnected)
+      animated { onboarding.advance(carPlayConnected: carPlayConnected) }
     }
     .buttonStyle(.borderedProminent)
-    .frame(minHeight: 44)
+    .controlSize(.large)
     return ViewThatFits(in: .horizontal) {
       HStack {
         skip
@@ -142,6 +143,15 @@ struct WelcomeTourOverlay: View {
         if !isLast { skip }
       }
     }
+  }
+
+  private func finish() {
+    animated { onboarding.finish(carPlayConnected: carPlayConnected) }
+  }
+
+  /// Animates the compass screen too, which gains or loses the button between steps.
+  private func animated(_ change: () -> Void) {
+    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25), change)
   }
 
   private func title(_ step: OnboardingState.Step) -> String {
@@ -159,11 +169,11 @@ struct WelcomeTourOverlay: View {
         "Compasslet shows your heading from magnetic north on iPhone, and your travel direction on CarPlay."
     case .liveActivity:
       let shown =
-        "This button appears here only while Compasslet is open on CarPlay. Tap it to start or end the Live Activity that shows your travel direction on the Lock Screen and in the Dynamic Island. The Live Activity also starts on its own when you open Compasslet on CarPlay."
-      return carPlayConnected ? shown : shown + " Until then, the button stays hidden."
+        "When you open Compasslet on CarPlay, the Live Activity starts on its own and shows your travel direction on the Lock Screen and in the Dynamic Island. Until CarPlay disconnects, this button appears in the bottom-right corner so you can end it or start it again."
+      return carPlayConnected ? shown : shown + " You’re seeing a preview. It hides when you tap Next."
     case .shortcuts:
       return
-        "Start Live Activity and End Live Activity are in the Shortcuts app too, so an automation can run them when CarPlay connects. You can also ask Siri to “Start Compasslet Live Activity.” A Live Activity started this way ends after a minute unless you open Compasslet on CarPlay."
+        "Start Live Activity and End Live Activity are also in the Shortcuts app for your automations, and you can ask Siri to “Start Compasslet Live Activity”. Starting it this way opens Compasslet on iPhone, so do it while parked. It ends after a minute unless you open Compasslet on CarPlay."
     }
   }
 }
