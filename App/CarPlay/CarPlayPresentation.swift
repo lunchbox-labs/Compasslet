@@ -79,12 +79,12 @@ struct CarPlayUpdateGate {
 final class CarPlayLifecycleBridge {
   private let onActivate: () async -> Void
   private let onResign: () -> Void
-  private let onDisconnect: () async -> Void
+  private let onDisconnect: () -> Void
   private var generation = UUID()
 
   init(
     activate: @escaping () async -> Void, resign: @escaping () -> Void,
-    disconnect: @escaping () async -> Void
+    disconnect: @escaping () -> Void
   ) {
     onActivate = activate
     onResign = resign
@@ -95,7 +95,7 @@ final class CarPlayLifecycleBridge {
     self.init(
       activate: { await drive.carPlayActivated() },
       resign: { drive.carPlayResignedActive() },
-      disconnect: { await drive.carPlayDisconnected() })
+      disconnect: { drive.carPlayDisconnected() })
   }
 
   func activate() {
@@ -114,6 +114,6 @@ final class CarPlayLifecycleBridge {
 
   func disconnect() {
     resign()
-    Task { await onDisconnect() }
+    onDisconnect()
   }
 }

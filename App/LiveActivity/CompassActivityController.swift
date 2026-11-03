@@ -18,7 +18,7 @@ protocol CompassActivitySystem: AnyObject {
   func endSurvivors(_ finalState: CompassActivityAttributes.ContentState) async
 }
 
-/// Owns only the current compact presentation. Call start from eligible CarPlay activation.
+/// Owns only the current compact presentation. Call start from an eligible drive start.
 @MainActor
 final class CompassActivityController: CompassActivityPresenting {
   enum Failure: Error { case unavailable, cancelled }
@@ -34,6 +34,8 @@ final class CompassActivityController: CompassActivityPresenting {
   private var appearance: AppearanceValues
   private var appearanceObservation: AnyCancellable?
   private var lastContent: CompassActivityAttributes.ContentState?
+
+  var isEnabled: Bool { system.enabled }
 
   init(
     system: any CompassActivitySystem = LocalCompassActivitySystem(),

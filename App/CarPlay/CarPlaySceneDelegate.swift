@@ -19,6 +19,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
   ) {
     let coordinator = CompassAppDelegate.sharedDrive
     drive = coordinator
+    coordinator.carPlayConnected()
     bridge = CarPlayLifecycleBridge(drive: coordinator)
     self.interfaceController = interfaceController
     CarPlayDisplayInfo.record(interfaceController.carTraitCollection)

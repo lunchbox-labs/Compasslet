@@ -22,7 +22,9 @@ struct CompassView: View {
   @State private var showingSettings = false
   @State private var showingHeadingStatus = false
   @State private var debugEnabled = false
+  @State private var showingLiveActivityFailure = false
   @ScaledMetric(relativeTo: .body) private var compactStatusSize = 17
+  @ScaledMetric(relativeTo: .body) private var liveActivityDiameter: CGFloat = 52
   @AccessibilityFocusState private var menuFocused: Bool
 
   private var storedAppearance: AppearanceValues {
@@ -83,6 +85,7 @@ struct CompassView: View {
             .padding(.horizontal, 24)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
           }
+          liveActivityControl(compact: geometry.size.height < 700)
         }
         .allowsHitTesting(!showingSettings)
         .accessibilityHidden(showingSettings)
@@ -157,6 +160,81 @@ struct CompassView: View {
       Color.clear.frame(width: 44, height: 44).accessibilityHidden(true)
     }
     .padding(.horizontal, 16).padding(.vertical, 8)
+  }
+
+  /// The manual fallback for the automatic CarPlay start, shown only while CarPlay is connected.
+  /// An icon-only circle in the bottom-right corner, a little smaller on short screens.
+  @ViewBuilder private func liveActivityControl(compact: Bool) -> some View {
+    if drive.isCarPlayConnected, drive.setupStatus == .ready {
+      let diameter = max(44, min(compact ? liveActivityDiameter - 8 : liveActivityDiameter, 80))
+      HStack {
+        Spacer(minLength: 0)
+        Button(action: toggleLiveActivity) {
+          Image(systemName: liveActivitySymbol)
+            .font(.system(size: diameter * 0.36, weight: .semibold))
+            .foregroundStyle(.primary)
+            .frame(width: diameter, height: diameter)
+            .glassEffect(.regular.interactive(), in: Circle())
+            .overlay { Circle().strokeBorder(Color.secondary, lineWidth: 1) }
+            .background {
+              Circle().fill(Color(uiColor: .systemBackground))
+                .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+            }
+            .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(liveActivityAction)
+        .accessibilityHint(liveActivityHint)
+        .accessibilityShowsLargeContentViewer {
+          Label(liveActivityAction, systemImage: liveActivitySymbol)
+        }
+        .alert("Live Activity Couldn’t Start", isPresented: $showingLiveActivityFailure) {
+          if let url = URL(string: UIApplication.openSettingsURLString) {
+            Button("Open Settings") { openURL(url) }
+          }
+          Button("OK", role: .cancel) {}
+        } message: {
+          Text("Make sure Live Activities are allowed for Compasslet in the Settings app.")
+        }
+      }
+      .padding(.horizontal, 16).padding(.bottom, 8)
+    }
+  }
+
+  /// A drive whose Live Activity was dismissed or couldn't start offers to start it again.
+  private var liveActivityRunning: Bool {
+    drive.isDriving && drive.compactStatus != .dismissed && drive.compactStatus != .unavailable
+  }
+
+  private var liveActivityAction: String {
+    liveActivityRunning ? "End Live Activity" : "Start Live Activity"
+  }
+
+  private var liveActivitySymbol: String { liveActivityRunning ? "stop.fill" : "play.fill" }
+
+  private var liveActivityHint: String {
+    guard liveActivityRunning else { return "Shows your travel direction on the Lock Screen" }
+    return
+      "Stops travel direction and location use until you start it again or reopen Compasslet on CarPlay"
+  }
+
+  private func toggleLiveActivity() {
+    let running = liveActivityRunning
+    Task {
+      if running {
+        await drive.endLiveActivity()
+        AccessibilityNotification.Announcement("Live Activity ended").post()
+      } else {
+        await drive.startLiveActivity()
+        guard drive.isDriving else { return }
+        switch drive.compactStatus {
+        case .unavailable: showingLiveActivityFailure = true
+        case .active: AccessibilityNotification.Announcement("Live Activity started").post()
+        case .starting: AccessibilityNotification.Announcement("Live Activity starting").post()
+        case .inactive, .dismissed: break
+        }
+      }
+    }
   }
 
   private func information(details: Bool) -> some View {

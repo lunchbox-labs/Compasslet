@@ -26,9 +26,15 @@ away from magnets, metal and electronics, and follow any calibration prompt.
 on iPhone, then open Compasslet from the CarPlay launcher. CarPlay shows the direction
 you are travelling, so it updates once the car is moving.
 
-**The Live Activity doesn't appear.** It appears during a CarPlay drive, and iOS decides
-when to show it. Make sure Live Activities are allowed for Compasslet in the Settings
-app.
+**The Live Activity doesn't appear or doesn't end.** It starts when you open Compasslet on
+CarPlay and ends a minute after CarPlay disconnects, and iOS decides when to show it.
+Make sure Live Activities are allowed for Compasslet in the Settings app. After you open
+Compasslet on CarPlay, and until CarPlay disconnects, you can also start or end it
+yourself with the round play or stop button (Start Live Activity or End Live Activity) at
+the bottom right of the compass screen on iPhone. The same actions are in the Shortcuts app,
+and you can ask Siri to "Start Compasslet Live Activity". Starting it this way opens
+Compasslet on iPhone, so unlock the phone first, while parked. A Live Activity started from
+Shortcuts or Siri ends after a minute unless you open Compasslet on CarPlay.
 
 ## Diagnostics
 
