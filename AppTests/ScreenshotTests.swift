@@ -169,10 +169,13 @@ final class ScreenshotTests: XCTestCase {
   }
 
   /// TipKit remembers a shown tip across runs on the same simulator, so each screen gets a tip
-  /// it hasn't shown yet, in defaults of its own.
+  /// id it hasn't shown. Separate defaults keep the tour state off the app host's.
   private static func onboarding(at step: OnboardingState.Step?) -> OnboardingState {
-    let suite = "screenshots.onboarding.\(UUID().uuidString)"
-    let defaults = UserDefaults(suiteName: suite) ?? .standard
+    let suite = "screenshots.onboarding"
+    guard let defaults = UserDefaults(suiteName: suite) else {
+      preconditionFailure("No defaults suite named \(suite)")
+    }
+    defaults.removePersistentDomain(forName: suite)
     defaults.set(step == nil, forKey: OnboardingState.tourCompletedKey)
     defaults.set(Int.random(in: 1...Int(Int32.max)), forKey: OnboardingState.tipGenerationKey)
     let onboarding = OnboardingState(defaults: defaults)

@@ -32,8 +32,8 @@ final class OnboardingState: ObservableObject {
     }
   }
 
-  /// A tour finished during a CarPlay drive has already pointed out the button, so its tip isn't
-  /// shown as well.
+  /// A tour finished while CarPlay is connected has already pointed out the button, so its tip
+  /// isn't shown as well.
   func finish(carPlayConnected: Bool) {
     let showedButton = (step?.rawValue ?? -1) >= Step.liveActivity.rawValue
     step = nil

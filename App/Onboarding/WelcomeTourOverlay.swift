@@ -127,10 +127,11 @@ struct WelcomeTourOverlay: View {
     .buttonStyle(.borderedProminent)
     .controlSize(.large)
     return ViewThatFits(in: .horizontal) {
+      // Fixed sizes make the row fall back to the stack rather than
+      // wrap "Next" at large text sizes.
       HStack {
         skip
         Spacer(minLength: 8)
-        // Keeps the row from squeezing "Next" onto two lines at large text sizes.
         position.fixedSize()
         Spacer(minLength: 8)
         next.fixedSize()
