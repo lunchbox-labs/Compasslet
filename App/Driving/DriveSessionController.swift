@@ -64,14 +64,14 @@ final class DriveSessionController: ObservableObject {
   }
 
   /// Refresh on return from Settings; permission alone never starts travel acquisition.
-  func phoneBecameActive() async {
+  func phoneBecameActive(requestingPermission: Bool = true) async {
     await prepare()
     guard !Task.isCancelled else { return }
     refreshSetupStatus()
     if setupStatus != .ready { _ = stopDrive() }
     // A failed phone start shouldn't keep asking for a setting the user has since changed.
     if !isDriving, compactStatus == .unavailable, activity.isEnabled { compactStatus = .inactive }
-    requestPhoneAuthorization(isForeground: true)
+    if requestingPermission { requestPhoneAuthorization(isForeground: true) }
   }
 
   func requestPhoneAuthorization(isForeground: Bool) {

@@ -106,6 +106,17 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertEqual(sensor.requests, 1)
   }
 
+  func testPhoneActivationCanHoldTheLocationPromptUntilAsked() async {
+    let sensor = Sensor(), activity = Activity()
+    sensor.authorization = .notDetermined
+    let controller = make(sensor, activity)
+    await controller.phoneBecameActive(requestingPermission: false)
+    XCTAssertEqual(controller.setupStatus, .permissionRequired)
+    XCTAssertEqual(sensor.requests, 0)
+    controller.requestPhoneAuthorization(isForeground: true)
+    XCTAssertEqual(sensor.requests, 1)
+  }
+
   func testForegroundRefreshReflectsSettingsWithoutStartingTravel() async {
     let sensor = Sensor(), activity = Activity()
     sensor.authorization = .denied

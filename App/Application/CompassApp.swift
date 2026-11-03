@@ -1,10 +1,17 @@
 import CompassCore
 import SwiftUI
+import TipKit
 import UIKit
 
 @main
 struct CompassApp: App {
   @UIApplicationDelegateAdaptor(CompassAppDelegate.self) private var appDelegate
+
+  init() {
+    // Without a datastore, the Live Activity button tip never shows; the app works without it.
+    try? Tips.configure()
+  }
+
   var body: some Scene {
     WindowGroup {
       CompassView(drive: appDelegate.drive)

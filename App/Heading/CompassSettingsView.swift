@@ -4,6 +4,7 @@ import UIKit
 struct CompassSettingsView: View {
   @ObservedObject var drive: DriveSessionController
   let close: () -> Void
+  let showTour: () -> Void
   @AccessibilityFocusState private var closeFocused: Bool
 
   var body: some View {
@@ -18,6 +19,15 @@ struct CompassSettingsView: View {
           if canOpenSettings, let url = URL(string: UIApplication.openSettingsURLString) {
             Link("Open Settings", destination: url)
           }
+        }
+        Section {
+          Button("Show Welcome Tour", action: showTour)
+        } header: {
+          Text("Help")
+        } footer: {
+          Text(
+            "Also shows the tip for the Live Activity button again the next time it appears on CarPlay."
+          )
         }
         DiagnosticsSettingsSection()
         Section {
