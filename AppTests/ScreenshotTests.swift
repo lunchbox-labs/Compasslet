@@ -88,7 +88,10 @@ final class ScreenshotTests: XCTestCase {
     let window = UIWindow(windowScene: scene)
     window.overrideUserInterfaceStyle = interfaceStyle
     window.windowLevel = .alert + 1
-    window.rootViewController = UIHostingController(rootView: view)
+    // A window outside the app's SwiftUI scene reports itself inactive, which pauses the
+    // compass, so the screens render as the active app does.
+    window.rootViewController = UIHostingController(
+      rootView: view.environment(\.scenePhase, .active))
     window.makeKeyAndVisible()
     return window
   }
