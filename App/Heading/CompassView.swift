@@ -160,13 +160,19 @@ struct CompassView: View {
         Spacer(minLength: 0)
         Button(action: toggleLiveActivity) {
           Label(liveActivityAction, systemImage: liveActivitySymbol)
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(.primary)
             .multilineTextAlignment(.trailing)
             .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
             .frame(minHeight: 44)
-            .contentShape(Rectangle())
+            .glassEffect(.regular.interactive(), in: liveActivityShape)
+            .overlay(liveActivityShape.strokeBorder(Color.secondary.opacity(0.4), lineWidth: 1))
+            .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+            .contentShape(liveActivityShape)
         }
-        .font(.subheadline)
-        .foregroundStyle(.secondary)
+        .buttonStyle(.plain)
         .accessibilityHint(liveActivityHint)
         .alert("Live Activity Couldn’t Start", isPresented: $showingLiveActivityFailure) {
           if let url = URL(string: UIApplication.openSettingsURLString) {
@@ -188,6 +194,10 @@ struct CompassView: View {
 
   private var liveActivityAction: String {
     liveActivityRunning ? "End Live Activity" : "Start Live Activity"
+  }
+
+  private var liveActivityShape: RoundedRectangle {
+    RoundedRectangle(cornerRadius: 22, style: .continuous)
   }
 
   private var liveActivitySymbol: String { liveActivityRunning ? "stop.circle" : "play.circle" }
