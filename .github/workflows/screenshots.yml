@@ -1,0 +1,126 @@
+name: Screenshots
+on:
+  pull_request:
+    paths:
+      - "AppTests/ScreenshotTests.swift"
+      - "scripts/screenshots"
+      - ".github/workflows/screenshots.yml"
+  push:
+    branches: [main]
+    # Documentation never changes what the app shows, so the newest set stays current.
+    paths-ignore:
+      - "README.md"
+      - "AGENTS.md"
+      - ".github/CODEOWNERS"
+      - "docs/**"
+      - "app-store/**"
+      - "website/**"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag, commit or pull request number to capture (empty for this run's branch)
+        required: false
+        default: ""
+      devices:
+        description: Simulators, as largest, smallest or exact names, separated by commas
+        required: false
+        default: largest,smallest
+      appearances:
+        description: Appearances to capture
+        type: choice
+        options: [light and dark, light, dark]
+        default: light and dark
+      filter:
+        description: Screen name prefixes, separated by commas (empty for every screen)
+        required: false
+        default: ""
+      log-images:
+        description: Also print the images into the log as base64, for clients that can't download artifacts
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  # Pull requests keep only their newest run. Main pushes queue, so the newest set is kept last.
+  group: >-
+    screenshots-${{ github.event_name == 'workflow_dispatch' && github.run_id ||
+    github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  capture:
+    runs-on: xcode-27
+    # A full run takes about 30 minutes on hosted runners, mostly simulator boots and captures.
+    timeout-minutes: 75
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      - name: Choose what to check out
+        id: target
+        env:
+          REF_INPUT: ${{ inputs.ref }}
+        run: |
+          if [[ "$REF_INPUT" =~ ^[0-9]+$ ]]; then
+            echo "ref=refs/pull/$REF_INPUT/head" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=$REF_INPUT" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ steps.target.outputs.ref }}
+          persist-credentials: false
+      - name: Name the capture
+        id: source
+        env:
+          EVENT: ${{ github.event_name }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+        run: |
+          case "$EVENT" in
+            push) echo "artifact=screenshots-main" >> "$GITHUB_OUTPUT" ;;
+            pull_request) echo "artifact=screenshots-pr-$PULL_REQUEST" >> "$GITHUB_OUTPUT" ;;
+            *) echo "artifact=screenshots-run-$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT" ;;
+          esac
+      - name: Capture every screen on each simulator and appearance
+        env:
+          DEVICES: ${{ inputs.devices || 'largest,smallest' }}
+          APPEARANCES: ${{ inputs.appearances == 'light' && 'light' || inputs.appearances == 'dark' && 'dark' || 'light,dark' }}
+          SCREEN_FILTER: ${{ inputs.filter }}
+        run: >-
+          python3 scripts/screenshots capture --devices "$DEVICES" --appearances "$APPEARANCES"
+          --filter "$SCREEN_FILTER" --output "$RUNNER_TEMP/screenshots"
+      # A failed run still uploads what it captured, to show what went wrong, except on main,
+      # whose one set must stay complete.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() && (success() || github.event_name != 'push') }}
+        with:
+          name: ${{ steps.source.outputs.artifact }}
+          path: ${{ runner.temp }}/screenshots
+          if-no-files-found: error
+          # Main keeps one set, replaced by every merge; the longest retention keeps it between
+          # merges. Other captures are for reviewing a change.
+          retention-days: ${{ github.event_name == 'push' && 90 || 14 }}
+      - name: Print the images as base64
+        if: inputs.log-images
+        run: |
+          for image in "$RUNNER_TEMP"/screenshots/*.png; do
+            echo "SCREENSHOT-BEGIN $(basename "$image")"
+            base64 -i "$image" | tr -d '\n' | fold -w 4000
+            echo
+            echo "SCREENSHOT-END $(basename "$image")"
+          done
+  keep-latest:
+    needs: capture
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Delete earlier main screenshot sets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?name=screenshots-main" \
+            --jq ".artifacts[] | select(.workflow_run.id != $GITHUB_RUN_ID and (.expired | not)) | .id" |
+            while read -r artifact; do
+              gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact"
+            done

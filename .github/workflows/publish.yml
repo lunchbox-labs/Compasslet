@@ -1,8 +1,8 @@
 name: Publish
 on:
+  # Run by hand from main. Releases and tags are made by hand after Apple approves a version,
+  # and never start an upload.
   workflow_dispatch:
-  release:
-    types: [published]
 permissions:
   contents: read
 concurrency:
@@ -10,9 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   publish:
-    if: >-
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'release' && !github.event.release.prerelease && !github.event.release.draft)
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     outputs:
       marketing_version: ${{ steps.upload.outputs.marketing_version }}
       build_number: ${{ steps.upload.outputs.build_number }}
@@ -47,8 +45,7 @@ jobs:
     needs: publish
     if: >-
       needs.publish.result == 'success' &&
-      ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'release' && !github.event.release.prerelease && !github.event.release.draft))
+      github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: app-store-metadata

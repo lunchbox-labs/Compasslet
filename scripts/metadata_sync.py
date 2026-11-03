@@ -404,17 +404,8 @@ def workflow_identity():
             'Metadata checkout does not match the uploaded source.')
     if env.get('GITHUB_EVENT_NAME') == 'workflow_dispatch':
         require(env.get('GITHUB_REF') == 'refs/heads/main', 'Manual metadata sync requires main.')
-    elif env.get('GITHUB_EVENT_NAME') == 'release':
-        event = json.loads(Path(env['GITHUB_EVENT_PATH']).read_text())
-        release = event.get('release', {})
-        tag = release.get('tag_name', '')
-        match = re.fullmatch(r'v?((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))', tag)
-        require(event.get('action') == 'published' and release.get('draft') is False
-                and release.get('prerelease') is False and match
-                and env.get('GITHUB_REF') == 'refs/tags/' + tag and match.group(1) == version,
-                'Metadata release must match the published stable tag and archived version.')
     else:
-        raise MetadataError('Only manual main builds or published stable releases can sync metadata.')
+        raise MetadataError('Only manual builds from main can sync metadata.')
     return version, build
 
 

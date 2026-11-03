@@ -1,0 +1,222 @@
+#!/usr/bin/env python3
+"""Capture every app screen on iPhone simulators.
+
+capture     Build the app once, then run ScreenshotTests on each device and appearance. The
+            test shows one screen at a time and asks for a screenshot by writing a request
+            file; this script answers with a full simulator screenshot and a done file.
+"""
+import argparse
+import json
+import os
+import plistlib
+import re
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+from pathlib import Path
+
+ALIASES = ("largest", "smallest")
+APPEARANCES = ("light", "dark")
+BUNDLE_IDENTIFIER = "dev.lunchbox-labs.carplay-compass"
+MANIFEST = "screenshots.json"
+MINIMUM_IOS = 27
+
+
+def split_list(value):
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def run(arguments, **options):
+    print("+ " + " ".join(arguments), flush=True)
+    return subprocess.run(arguments, check=True, text=True, **options)
+
+
+def screen_points(device_type):
+    """The primary display's size in points from the device type's capabilities, or None."""
+    capabilities = Path(device_type.get("bundlePath", "")) / "Contents/Resources/capabilities.plist"
+    try:
+        with capabilities.open("rb") as file:
+            display = plistlib.load(file)["capabilities"]["displays"][0]
+        return display["width"] / display["scale"], display["height"] / display["scale"]
+    except (OSError, KeyError, IndexError, TypeError, ZeroDivisionError,
+            plistlib.InvalidFileException):
+        return None
+
+
+def available_iphones(devices_by_runtime, device_types):
+    """Available iPhones on iOS MINIMUM_IOS or later, each name once on its newest runtime."""
+    types = {item["identifier"]: item for item in device_types}
+    phones = {}
+    for runtime, devices in sorted(devices_by_runtime.items(), key=runtime_order, reverse=True):
+        version = runtime_version(runtime)
+        if version is None or version[0] < MINIMUM_IOS:
+            continue
+        for device in devices:
+            if (not device.get("isAvailable") or not device["name"].startswith("iPhone")
+                    or device["name"] in phones):
+                continue
+            device_type = types.get(device.get("deviceTypeIdentifier"), {})
+            phones[device["name"]] = {"udid": device["udid"], "name": device["name"],
+                                      "points": screen_points(device_type)}
+    return list(phones.values())
+
+
+def runtime_version(runtime):
+    match = re.search(r"\.iOS-(\d+)-(\d+)", runtime)
+    return (int(match.group(1)), int(match.group(2))) if match else None
+
+
+def runtime_order(item):
+    return runtime_version(item[0]) or (0, 0)
+
+
+def alias_order(phone):
+    """Largest has the most screen area; smallest is the narrowest, then the shortest."""
+    width, height = phone["points"]
+    return width * height, width, height
+
+
+def select_devices(requested, phones):
+    """Resolve each requested alias or exact simulator name to a device and a file label."""
+    selected = []
+    for request in requested:
+        if request in ALIASES:
+            sized = [phone for phone in phones if phone["points"]]
+            if not sized:
+                raise SystemExit("No simulator reports a screen size for " + request)
+            if request == "largest":
+                phone = max(sized, key=alias_order)
+            else:
+                phone = min(sized, key=lambda phone: alias_order(phone)[1:])
+            label = request
+        else:
+            matches = [phone for phone in phones if phone["name"] == request]
+            if not matches:
+                names = ", ".join(sorted(phone["name"] for phone in phones))
+                raise SystemExit("No available simulator named " + request + "; found " + names)
+            phone = matches[0]
+            label = re.sub(r"[^a-z0-9]+", "-", request.lower()).strip("-")
+        if any(item["udid"] == phone["udid"] for item in selected):
+            continue
+        selected.append(dict(phone, label=label))
+    return selected
+
+
+def image_name(label, appearance, screen):
+    return label + "-" + appearance + "-" + screen + ".png"
+
+
+class ScreenshotResponder(threading.Thread):
+    """Takes a simulator screenshot for each request file the test writes."""
+
+    def __init__(self, udid, requests, output, label, appearance):
+        super().__init__(daemon=True)
+        self.udid, self.requests, self.output = udid, requests, output
+        self.label, self.appearance = label, appearance
+        self.captured = []
+        self.failed = []
+        self.stopping = threading.Event()
+
+    def run(self):
+        while not self.stopping.is_set():
+            for request in sorted(self.requests.glob("*.request")):
+                screen = request.stem
+                request.unlink()
+                name = image_name(self.label, self.appearance, screen)
+                result = subprocess.run(["xcrun", "simctl", "io", self.udid, "screenshot",
+                                         str(self.output / name)], check=False)
+                if result.returncode == 0 and (self.output / name).exists():
+                    self.captured.append({"screen": screen, "file": name})
+                else:
+                    self.failed.append(name)
+                (self.requests / (screen + ".done")).touch()
+            time.sleep(0.1)
+
+    def stop(self):
+        self.stopping.set()
+        self.join()
+
+
+def capture(arguments):
+    output = Path(arguments.output).resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    appearances = split_list(arguments.appearances)
+    for appearance in appearances:
+        if appearance not in APPEARANCES:
+            raise SystemExit("Unknown appearance " + appearance + "; use light or dark")
+    listing = json.loads(run(["xcrun", "simctl", "list", "--json", "devices", "available"],
+                             capture_output=True).stdout)
+    types = json.loads(run(["xcrun", "simctl", "list", "--json", "devicetypes"],
+                           capture_output=True).stdout)
+    devices = select_devices(split_list(arguments.devices),
+                             available_iphones(listing["devices"], types["devicetypes"]))
+    if not devices:
+        raise SystemExit("No devices requested")
+    derived_data = Path(arguments.derived_data).resolve()
+    xcodebuild = ["bash", "scripts/simulator-xcodebuild", "-project", "Compass.xcodeproj",
+                  "-scheme", "Compass", "-derivedDataPath", str(derived_data),
+                  "CODE_SIGNING_ALLOWED=NO"]
+    # Build once before any simulator boots, so a boot never competes with the compile.
+    run(xcodebuild + ["-destination", "generic/platform=iOS Simulator", "build-for-testing"])
+    app = derived_data / "Build/Products/Debug-iphonesimulator/Compass.app"
+    manifest = []
+    failed = False
+    for device in devices:
+        udid = device["udid"]
+        subprocess.run(["xcrun", "simctl", "boot", udid], check=False)
+        run(["xcrun", "simctl", "bootstatus", udid, "-b"])
+        run(["xcrun", "simctl", "status_bar", udid, "override", "--time", "9:41",
+             "--dataNetwork", "wifi", "--wifiMode", "active", "--wifiBars", "3",
+             "--cellularMode", "active", "--cellularBars", "4",
+             "--batteryState", "charged", "--batteryLevel", "100"])
+        # Granting location first keeps the host app's permission prompt off the screenshots.
+        run(["xcrun", "simctl", "install", udid, str(app)])
+        run(["xcrun", "simctl", "privacy", udid, "grant", "location", BUNDLE_IDENTIFIER])
+        for appearance in appearances:
+            run(["xcrun", "simctl", "ui", udid, "appearance", appearance])
+            with tempfile.TemporaryDirectory() as requests:
+                responder = ScreenshotResponder(udid, Path(requests), output, device["label"],
+                                                appearance)
+                responder.start()
+                environment = dict(os.environ, TEST_RUNNER_SCREENSHOT_DIRECTORY=requests,
+                                   TEST_RUNNER_SCREENSHOT_APPEARANCE=appearance,
+                                   TEST_RUNNER_SCREENSHOT_FILTER=arguments.filter)
+                result = subprocess.run(
+                    xcodebuild + ["-destination", "platform=iOS Simulator,id=" + udid,
+                                  "-only-testing:CompassTests/ScreenshotTests",
+                                  "test-without-building"], env=environment, check=False)
+                responder.stop()
+            failed = failed or result.returncode != 0 or bool(responder.failed)
+            for name in responder.failed:
+                print("No screenshot was saved for " + name, file=sys.stderr)
+            manifest += [dict(item, device=device["name"], label=device["label"],
+                              appearance=appearance) for item in responder.captured]
+        subprocess.run(["xcrun", "simctl", "shutdown", udid], check=False)
+    (output / MANIFEST).write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    print("Captured " + str(len(manifest)) + " screenshots in " + str(output))
+    if failed or not manifest:
+        raise SystemExit("The screenshot test failed, a screenshot is missing, or nothing was "
+                         "captured")
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    commands = parser.add_subparsers(dest="command", required=True)
+    capture_parser = commands.add_parser("capture")
+    capture_parser.add_argument("--devices", default="largest,smallest",
+                                help="aliases (largest, smallest) or exact simulator names")
+    capture_parser.add_argument("--appearances", default="light,dark")
+    capture_parser.add_argument("--filter", default="",
+                                help="comma-separated screen name prefixes; empty for all")
+    capture_parser.add_argument("--output", default=".build/screenshots")
+    capture_parser.add_argument("--derived-data", default=".build/xcode")
+    capture_parser.set_defaults(handler=capture)
+    arguments = parser.parse_args(argv)
+    arguments.handler(arguments)
+
+
+if __name__ == "__main__":
+    main()

@@ -41,6 +41,22 @@ class PublishIdentityTests(unittest.TestCase):
                 self.assertEqual(operations, ['Apple validation'] if failed_operation == 'Apple validation'
                                  else ['Apple validation', 'upload'])
 
+    def test_only_manual_runs_from_main_reach_the_build(self):
+        cases = [
+            ({'GITHUB_EVENT_NAME': 'workflow_dispatch', 'GITHUB_REF': 'refs/heads/main'}, 'Workflow build number'),
+            ({'GITHUB_EVENT_NAME': 'workflow_dispatch', 'GITHUB_REF': 'refs/heads/feature'}, 'main'),
+            ({'GITHUB_EVENT_NAME': 'push', 'GITHUB_REF': 'refs/tags/v1.2.3'}, 'Only manual builds'),
+            ({'GITHUB_EVENT_NAME': 'push', 'GITHUB_REF': 'refs/heads/main'}, 'Only manual builds'),
+            ({'GITHUB_EVENT_NAME': 'release', 'GITHUB_REF': 'refs/tags/v1.2.3'}, 'Only manual builds'),
+        ]
+        for environment, expected in cases:
+            with self.subTest(environment=environment):
+                environment = dict(environment, GITHUB_ACTIONS='true', BUILD_NUMBER='')
+                with patch.dict(os.environ, environment), patch.object(testflight, 'read_copy'), \
+                        self.assertRaises(testflight.SigningError) as raised:
+                    testflight.publish()
+                self.assertIn(expected, str(raised.exception))
+
     def test_publish_failure_still_cleans_signing_material_and_reports_safe_error(self):
         error = testflight.MetadataError('Archived app does not match the uploaded bundle and build.')
         with patch.object(testflight, 'publish', side_effect=error), \
