@@ -75,7 +75,7 @@ public struct AppearanceValues: Codable, Hashable, Sendable {
 
   /// Timestamp presentation for the Lock Screen and expanded Dynamic Island.
   public var lockScreenTimestamp: ActivityTimestampMode = .time
-  /// Timestamp presentation for CarPlay, which the Apple Watch Smart Stack also uses.
+  /// Timestamp presentation for the small Live Activity in CarPlay and the Apple Watch Smart Stack.
   public var carPlayActivityTimestamp: ActivityTimestampMode = .time
 
   public init() {}
