@@ -11,8 +11,8 @@ struct TravelCourseTests {
     offset: Double = 0
   ) -> TravelReading {
     TravelReading(
-      course: course, courseAccuracy: courseAccuracy, speed: speed,
-      speedAccuracy: speedAccuracy, horizontalAccuracy: horizontalAccuracy,
+      courseDegrees: course, courseAccuracyDegrees: courseAccuracy, speedMetersPerSecond: speed,
+      speedAccuracyMetersPerSecond: speedAccuracy, horizontalAccuracyMeters: horizontalAccuracy,
       timestamp: time.addingTimeInterval(offset))
   }
 
@@ -28,7 +28,7 @@ struct TravelCourseTests {
         #expect(result.sample?.angle.degrees == course)
         #expect(result.sample?.source == .vehicleCourse)
         #expect(result.sample?.reference == .trueNorth)
-        #expect(result.sample?.accuracy == 30)
+        #expect(result.sample?.accuracyDegrees == 30)
         #expect(result.sample?.timestamp == time.addingTimeInterval(-age))
       }
     }
@@ -93,7 +93,7 @@ struct TravelCourseTests {
       reading(course: 1, courseAccuracy: 2, offset: 1),
       now: time.addingTimeInterval(1))
     #expect(result.sample?.angle.degrees == 359.5)
-    #expect(result.sample?.accuracy == 2)
+    #expect(result.sample?.accuracyDegrees == 2)
     #expect(result.sample?.timestamp == time.addingTimeInterval(1))
   }
 

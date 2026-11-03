@@ -25,7 +25,7 @@ private func sample(
 ) -> CompassSample? {
   CompassSample(
     degrees: degrees, source: source, reference: reference,
-    accuracy: accuracy, timestamp: timestamp)
+    accuracyDegrees: accuracy, timestamp: timestamp)
 }
 
 @Test func sampleValidityAndMetadata() throws {
@@ -131,7 +131,7 @@ private func sample(
   let result = try #require(updated)
   #expect(result.angle.degrees == 180)
   #expect(result.timestamp == instant)
-  #expect(result.accuracy == 1)
+  #expect(result.accuracyDegrees == 1)
 }
 
 @Test func futureInputClearsSmoothingState() throws {

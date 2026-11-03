@@ -39,8 +39,7 @@ public struct CompassSample: Sendable, Equatable {
   public let angle: CompassAngle
   public let source: CompassSource
   public let reference: NorthReference
-  /// The nonnegative sensor uncertainty in degrees.
-  public let accuracy: Double
+  public let accuracyDegrees: Double
   public let timestamp: Date
 
   /// Creates a sensor sample, rejecting sentinel angles, invalid accuracy, and invalid timestamps.
@@ -49,15 +48,15 @@ public struct CompassSample: Sendable, Equatable {
   /// treated as unavailable sensor sentinels rather than normalized directions.
   public init?(
     degrees: Double, source: CompassSource, reference: NorthReference,
-    accuracy: Double, timestamp: Date
+    accuracyDegrees: Double, timestamp: Date
   ) {
     guard degrees >= 0, degrees <= 360, let angle = CompassAngle(degrees: degrees),
-      accuracy.isFinite, accuracy >= 0, timestamp.timeIntervalSince1970.isFinite
+      accuracyDegrees.isFinite, accuracyDegrees >= 0, timestamp.timeIntervalSince1970.isFinite
     else { return nil }
     self.angle = angle
     self.source = source
     self.reference = reference
-    self.accuracy = accuracy
+    self.accuracyDegrees = accuracyDegrees
     self.timestamp = timestamp
   }
 
@@ -65,7 +64,7 @@ public struct CompassSample: Sendable, Equatable {
     self.angle = angle
     source = sample.source
     reference = sample.reference
-    accuracy = sample.accuracy
+    accuracyDegrees = sample.accuracyDegrees
     timestamp = sample.timestamp
   }
 

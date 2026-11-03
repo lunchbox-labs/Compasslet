@@ -69,20 +69,22 @@ public struct AppearanceValues: Codable, Hashable, Sendable {
   /// Readout-only category used when system sizing is disabled.
   public var customTextSize: ReadoutTextSize = .large
   public var minorTicks: MinorTicks = .seventeen
-  public var labels: CardinalLabels = .inside
+  public var cardinalLabels: CardinalLabels = .inside
   public var rotation: DialRotation = .dial
   public var reducedMotionDial: ReducedMotionDial = .steadyReadout
 
   /// Timestamp presentation for the Lock Screen and expanded Dynamic Island.
   public var lockScreenTimestamp: ActivityTimestampMode = .time
-  /// Timestamp presentation for the compact CarPlay Live Activity.
-  public var smallActivityTimestamp: ActivityTimestampMode = .time
+  /// Timestamp presentation for the small Live Activity in CarPlay and the Apple Watch Smart Stack.
+  public var carPlayActivityTimestamp: ActivityTimestampMode = .time
 
   public init() {}
 
   private enum CodingKeys: String, CodingKey {
-    case showDirection, showDegrees, useSystemTextSize, customTextSize, minorTicks, labels
-    case rotation, reducedMotionDial, lockScreenTimestamp, smallActivityTimestamp
+    case showDirection, showDegrees, useSystemTextSize, customTextSize, minorTicks
+    case cardinalLabels = "labels"
+    case rotation, reducedMotionDial, lockScreenTimestamp
+    case carPlayActivityTimestamp = "smallActivityTimestamp"
   }
 
   /// Decodes saved values, keeping the standard choice for keys an earlier version did not store.
@@ -91,8 +93,8 @@ public struct AppearanceValues: Codable, Hashable, Sendable {
     let standard = Self()
     lockScreenTimestamp =
       try values.decodeIfPresent(ActivityTimestampMode.self, forKey: .lockScreenTimestamp) ?? .time
-    smallActivityTimestamp =
-      try values.decodeIfPresent(ActivityTimestampMode.self, forKey: .smallActivityTimestamp)
+    carPlayActivityTimestamp =
+      try values.decodeIfPresent(ActivityTimestampMode.self, forKey: .carPlayActivityTimestamp)
       ?? .time
     showDirection =
       try values.decodeIfPresent(Bool.self, forKey: .showDirection) ?? standard.showDirection
@@ -106,7 +108,9 @@ public struct AppearanceValues: Codable, Hashable, Sendable {
       ?? standard.customTextSize
     minorTicks =
       try values.decodeIfPresent(MinorTicks.self, forKey: .minorTicks) ?? standard.minorTicks
-    labels = try values.decodeIfPresent(CardinalLabels.self, forKey: .labels) ?? standard.labels
+    cardinalLabels =
+      try values.decodeIfPresent(CardinalLabels.self, forKey: .cardinalLabels)
+      ?? standard.cardinalLabels
     rotation = try values.decodeIfPresent(DialRotation.self, forKey: .rotation) ?? standard.rotation
     reducedMotionDial =
       try values.decodeIfPresent(ReducedMotionDial.self, forKey: .reducedMotionDial)

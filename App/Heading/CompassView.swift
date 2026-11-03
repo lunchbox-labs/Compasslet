@@ -46,7 +46,7 @@ struct CompassView: View {
     guard let sample = compass.sample, let roundedDegrees else { return compass.status.title }
     let direction = CompassPoint(angle: sample.angle).name
     return
-      "\(roundedDegrees) degrees, \(direction), magnetic heading. Accuracy plus or minus \(Int(min(sample.accuracy, 360).rounded())) degrees."
+      "\(roundedDegrees) degrees, \(direction), magnetic heading. Accuracy plus or minus \(Int(min(sample.accuracyDegrees, 360).rounded())) degrees."
   }
 
   var body: some View {
@@ -243,7 +243,7 @@ struct CompassView: View {
         if appearance.hasReadout { phoneReadout }
         // The readout already speaks its accuracy. With both center readouts hidden,
         // this line becomes the single VoiceOver stop for the heading instead.
-        Text("Accuracy ±\(Int(min(sample.accuracy, 360).rounded()))°")
+        Text("Accuracy ±\(Int(min(sample.accuracyDegrees, 360).rounded()))°")
           .font(.subheadline).foregroundStyle(.secondary)
           .accessibilityHidden(appearance.hasReadout)
           .accessibilityLabel(accessibilitySummary)

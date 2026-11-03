@@ -18,7 +18,7 @@ final class CarPlayPresentationTests: XCTestCase {
       presentation: .init(
         sample: CompassSample(
           degrees: 59, source: .deviceHeading, reference: .magnetic,
-          accuracy: 1, timestamp: now), status: .usable),
+          accuracyDegrees: 1, timestamp: now), status: .usable),
       setup: .ready, driving: true, now: now)
     XCTAssertNil(wrongSource.courseDegrees)
   }
@@ -177,7 +177,7 @@ final class CarPlayPresentationTests: XCTestCase {
       presentation: .init(
         sample: CompassSample(
           degrees: degrees, source: .vehicleCourse, reference: .trueNorth,
-          accuracy: 1, timestamp: timestamp), status: .usable),
+          accuracyDegrees: 1, timestamp: timestamp), status: .usable),
       setup: .ready, driving: true, now: now ?? timestamp)
   }
 
@@ -185,7 +185,7 @@ final class CarPlayPresentationTests: XCTestCase {
     let now = Date()
     let sample = CompassSample(
       degrees: 42, source: .vehicleCourse, reference: .trueNorth,
-      accuracy: 1, timestamp: now)
+      accuracyDegrees: 1, timestamp: now)
     for status: TravelStatus in [.waiting, .slow, .unreliable, .unavailable] {
       let value = CarPlayPresentation(
         presentation: .init(sample: sample, status: status),
@@ -207,7 +207,7 @@ final class CarPlayPresentationTests: XCTestCase {
     let now = Date()
     let sample = CompassSample(
       degrees: 359.8, source: .vehicleCourse, reference: .trueNorth,
-      accuracy: 1, timestamp: now)
+      accuracyDegrees: 1, timestamp: now)
     let value = CarPlayPresentation(
       presentation: .init(sample: sample, status: .usable),
       setup: .ready, driving: true, now: now)
@@ -220,13 +220,13 @@ final class CarPlayPresentationTests: XCTestCase {
     for sample in [
       CompassSample(
         degrees: 90, source: .deviceHeading, reference: .magnetic,
-        accuracy: 1, timestamp: now),
+        accuracyDegrees: 1, timestamp: now),
       CompassSample(
         degrees: 90, source: .vehicleCourse, reference: .trueNorth,
-        accuracy: 1, timestamp: now.addingTimeInterval(1)),
+        accuracyDegrees: 1, timestamp: now.addingTimeInterval(1)),
       CompassSample(
         degrees: .infinity, source: .vehicleCourse, reference: .trueNorth,
-        accuracy: 1, timestamp: now),
+        accuracyDegrees: 1, timestamp: now),
     ] {
       let value = CarPlayPresentation(
         presentation: .init(sample: sample, status: .usable),

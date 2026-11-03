@@ -30,7 +30,7 @@ struct SettingsDismissGesture: UIGestureRecognizerRepresentable {
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
       guard let pan = gestureRecognizer as? UIScreenEdgePanGestureRecognizer else { return false }
       let velocity = pan.velocity(in: nil)
-      return swipe.begin(horizontal: velocity.x, vertical: velocity.y)
+      return swipe.begin(horizontalVelocity: velocity.x, verticalVelocity: velocity.y)
     }
 
     func gestureRecognizer(
@@ -58,7 +58,9 @@ struct SettingsDismissGesture: UIGestureRecognizerRepresentable {
       switch recognizer.state {
       case .ended:
         let translation = recognizer.translation(in: nil)
-        if swipe.finish(horizontal: translation.x, vertical: translation.y) { close() }
+        let dismisses = swipe.finish(
+          horizontalTranslation: translation.x, verticalTranslation: translation.y)
+        if dismisses { close() }
       case .cancelled, .failed: swipe.cancel()
       default: break
       }
