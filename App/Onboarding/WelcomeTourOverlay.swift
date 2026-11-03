@@ -170,7 +170,8 @@ struct WelcomeTourOverlay: View {
     case .liveActivity:
       let shown =
         "When you open Compasslet on CarPlay, the Live Activity starts on its own and shows your travel direction on the Lock Screen and in the Dynamic Island. Until CarPlay disconnects, this button appears in the bottom-right corner so you can end it or start it again."
-      return carPlayConnected ? shown : shown + " You’re seeing a preview. It hides when you tap Next."
+      return carPlayConnected
+        ? shown : shown + " You’re seeing a preview. It hides when you move on."
     case .shortcuts:
       return
         "Start Live Activity and End Live Activity are also in the Shortcuts app for your automations, and you can ask Siri to “Start Compasslet Live Activity”. Starting it this way opens Compasslet on iPhone, so do it while parked. It ends after a minute unless you open Compasslet on CarPlay."
