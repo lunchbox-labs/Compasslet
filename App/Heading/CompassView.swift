@@ -168,8 +168,11 @@ struct CompassView: View {
             .padding(.vertical, 10)
             .frame(minHeight: 44)
             .glassEffect(.regular.interactive(), in: liveActivityShape)
-            .overlay(liveActivityShape.strokeBorder(Color.secondary.opacity(0.4), lineWidth: 1))
-            .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+            .overlay { liveActivityShape.strokeBorder(Color.secondary, lineWidth: 1) }
+            .background {
+              liveActivityShape.fill(Color(uiColor: .systemBackground))
+                .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+            }
             .contentShape(liveActivityShape)
         }
         .buttonStyle(.plain)
