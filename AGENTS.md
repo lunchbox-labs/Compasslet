@@ -38,3 +38,18 @@ Give reviewers the diff/base, intended user task, and available screenshots or
 runtime/test evidence. They report findings without editing. The
 [agent tooling conventions](https://github.com/lunchbox-labs/.github/blob/main/agent-guidance/agent-tooling.md)
 cover the file layout, invocation in each tool and reviewer permissions.
+
+## Screenshots
+
+`AppTests/ScreenshotTests.swift` lists the app's screens and states, with fixed heading and
+location input; CarPlay itself is not captured. A pull request that adds or changes a screen adds or updates its entry there,
+and the Screenshots workflow then captures it on that pull request. For a change that doesn't
+touch the list, run the workflow by hand with `ref` set to the branch or pull request number,
+and narrow it with `filter` when only a few screens matter. Use these captures for mock-ups;
+don't push other branches to produce them. Clients that can't download artifacts can set
+`log-images` and read the images from the job log.
+
+Every merge to `main` keeps one current set as the `screenshots-main` artifact. To attach a
+set to a release, run the workflow on `main` with `release-tag` before publishing: releases are
+immutable once published, so the workflow uploads to the draft and leaves publishing to the
+maintainer. Publishing then updates the Release Screenshots wiki page.

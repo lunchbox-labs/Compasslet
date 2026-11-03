@@ -22,7 +22,7 @@ struct AppearanceSettingsView: View {
   }
 }
 
-private struct AppearanceDetailView: View {
+struct AppearanceDetailView: View {
   let surface: AppearanceSurface?
   @ObservedObject private var store = AppearanceStore.shared
 

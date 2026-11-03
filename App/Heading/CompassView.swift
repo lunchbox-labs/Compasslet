@@ -3,13 +3,21 @@ import SwiftUI
 import UIKit
 
 struct CompassView: View {
+  /// The screenshot tests replace these with fixed readings; the app always uses the device.
+  static var makeHeadingController: @MainActor () -> HeadingController = {
+    HeadingController(sensor: DeviceHeadingSensor())
+  }
+  static var makeLocationController: @MainActor () -> PhoneLocationController = {
+    PhoneLocationController()
+  }
+
   @ObservedObject var drive: DriveSessionController
   @Environment(\.scenePhase) private var scenePhase
   @Environment(\.openURL) private var openURL
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-  @StateObject private var compass = HeadingController(sensor: DeviceHeadingSensor())
-  @StateObject private var location = PhoneLocationController()
+  @StateObject private var compass = CompassView.makeHeadingController()
+  @StateObject private var location = CompassView.makeLocationController()
   @ObservedObject private var appearanceStore = AppearanceStore.shared
   @State private var showingSettings = false
   @State private var showingHeadingStatus = false
