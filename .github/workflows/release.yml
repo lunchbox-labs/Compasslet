@@ -116,7 +116,9 @@ jobs:
             --dir "$RUNNER_TEMP"
           wiki="$RUNNER_TEMP/wiki"
           # The token goes in a header for these commands only, never into the clone's config.
-          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          credentials="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          echo "::add-mask::$credentials"
+          auth="AUTHORIZATION: basic $credentials"
           git -c http.extraheader="$auth" clone --depth 1 \
             "https://github.com/$GITHUB_REPOSITORY.wiki.git" "$wiki"
           python3 scripts/screenshots wiki-page --manifest "$RUNNER_TEMP/screenshots.json" \

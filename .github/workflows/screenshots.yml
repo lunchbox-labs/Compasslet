@@ -106,9 +106,10 @@ jobs:
         run: >-
           python3 scripts/screenshots capture --devices "$DEVICES" --appearances "$APPEARANCES"
           --filter "$SCREEN_FILTER" --output "$RUNNER_TEMP/screenshots"
-      # A failed run still uploads what it captured, to show what went wrong.
+      # A failed run still uploads what it captured, to show what went wrong, except on main,
+      # whose one set must stay complete.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && (success() || github.event_name != 'push') }}
         with:
           name: ${{ steps.source.outputs.artifact }}
           path: ${{ runner.temp }}/screenshots
