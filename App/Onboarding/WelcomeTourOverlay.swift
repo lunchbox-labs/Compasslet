@@ -133,12 +133,11 @@ struct WelcomeTourOverlay: View {
       HStack {
         skip
         Spacer(minLength: 8)
-        position
+        // Keeps the row from squeezing "Next" onto two lines at large text sizes.
+        position.fixedSize()
         Spacer(minLength: 8)
-        next
+        next.fixedSize()
       }
-      // Without this, the row squeezes "Next" onto two lines at large text sizes.
-      .fixedSize(horizontal: true, vertical: false)
       VStack(alignment: .leading, spacing: 8) {
         position
         next
