@@ -15,9 +15,9 @@ comes from the phone's compass sensor and does not need location access. During 
 drive, location gives your travel direction, including while another app is visible. A
 drive starts when you open Compasslet on CarPlay, or when you tap Start Live Activity in
 Settings in the Compasslet app. It ends when CarPlay disconnects, when you tap End Live
-Activity, when location access is turned off, or after eight hours. A drive started from
-Settings without CarPlay also ends when you dismiss its Live Activity. During a CarPlay
-drive, dismissing the Live Activity doesn't end the drive.
+Activity, when location access or Precise Location is turned off, or after eight hours. A
+drive started from Settings without CarPlay also ends when you dismiss its Live Activity or
+it can't start. During a CarPlay drive, dismissing the Live Activity doesn't end the drive.
 
 Apart from the nearest-city lookup below, location is used only on your device as it
 arrives. Compasslet does not save location or route history. The Live Activity shows

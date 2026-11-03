@@ -140,6 +140,9 @@ struct CompassActivityControllerTests {
     let controller = CompassActivityController(system: system)
     try await controller.start()
     let dismissed = system.handle
+    await controller.update(.init(sample: nil, status: .unreliable))
+    let delivered = dismissed.updates.count
+    #expect(delivered > 0)
     dismissed.onDismiss?()
     let fresh = TestActivityHandle()
     system.handle = fresh
@@ -147,7 +150,7 @@ struct CompassActivityControllerTests {
     #expect(system.requests == 2)
     await controller.update(.init(sample: nil, status: .slow))
     #expect(fresh.updates.last?.status == .slow)
-    #expect(!dismissed.updates.contains { $0.status == .slow })
+    #expect(dismissed.updates.count == delivered)
     await controller.end()
     #expect(fresh.ends == 1)
   }

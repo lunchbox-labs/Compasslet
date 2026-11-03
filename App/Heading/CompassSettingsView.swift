@@ -27,7 +27,7 @@ struct CompassSettingsView: View {
           if drive.isDriving {
             Button("End Live Activity", action: endLiveActivity)
           }
-          if drive.compactStatus == .unavailable,
+          if drive.compactStatus == .unavailable, drive.setupStatus == .ready,
             let url = URL(string: UIApplication.openSettingsURLString)
           {
             Link("Open Settings", destination: url)
@@ -108,7 +108,8 @@ struct CompassSettingsView: View {
     guard drive.isDriving else { return "Live Activity ended" }
     switch drive.compactStatus {
     case .active: return "Live Activity started"
-    case .inactive, .starting, .dismissed, .unavailable: return "Live Activity ended"
+    case .starting: return "Live Activity starting"
+    case .inactive, .dismissed, .unavailable: return "Live Activity couldn’t start"
     }
   }
 

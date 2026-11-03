@@ -561,7 +561,11 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertEqual(controller.compactStatus, .unavailable)
     XCTAssertEqual(sensor.starts, 0)
     XCTAssertEqual(activity.starts, 0)
+    await controller.phoneBecameActive()
+    XCTAssertEqual(controller.compactStatus, .unavailable)
     activity.isEnabled = true
+    await controller.phoneBecameActive()
+    XCTAssertEqual(controller.compactStatus, .inactive)
     await controller.startLiveActivity()
     XCTAssertTrue(controller.isDriving)
     XCTAssertEqual(controller.compactStatus, .active)
