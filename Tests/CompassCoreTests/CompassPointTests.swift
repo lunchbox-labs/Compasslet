@@ -23,7 +23,6 @@ import Testing
 }
 
 @Test func compassPointLabelsAndSpokenNamesIdentifyEachDirection() {
-  // The abbreviation is what dials and readouts show; the name is what VoiceOver speaks.
   #expect(CompassPoint(degrees: 0)?.abbreviation == "N")
   #expect(CompassPoint(degrees: 0)?.name == "north")
   #expect(CompassPoint(degrees: 45)?.abbreviation == "NE")
