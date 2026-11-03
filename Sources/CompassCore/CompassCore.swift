@@ -28,7 +28,6 @@ public enum CompassSource: Sendable, Equatable {
   case vehicleCourse
 }
 
-/// The north reference used by a sample.
 public enum NorthReference: Sendable, Equatable {
   case magnetic
   case trueNorth
