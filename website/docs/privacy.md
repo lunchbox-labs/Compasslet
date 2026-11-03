@@ -14,8 +14,12 @@ coordinates, elevation and nearest city while the app is visible. The compass he
 comes from the phone's compass sensor and does not need location access. During a
 drive, location gives your travel direction, including while another app is visible. A
 drive starts when you open Compasslet on CarPlay, or when you start the Live Activity in
-the Compasslet app or from Shortcuts. It ends when you end the Live Activity, a minute
-after CarPlay disconnects, or after a minute if Compasslet never connects on CarPlay.
+the Compasslet app or from Shortcuts. It ends when you tap or run End Live Activity, a
+minute after CarPlay disconnects, a minute after it starts from Shortcuts if you don't
+open Compasslet on CarPlay, when location access or Precise Location is turned off, or
+after eight hours. Dismissing the Live Activity ends the drive unless Compasslet is
+connected on CarPlay, where travel direction continues until CarPlay disconnects or you
+end it.
 
 Apart from the nearest-city lookup below, location is used only on your device as it
 arrives. Compasslet does not save location or route history. The Live Activity shows

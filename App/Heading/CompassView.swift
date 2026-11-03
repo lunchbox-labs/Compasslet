@@ -166,6 +166,7 @@ struct CompassView: View {
             .contentShape(Rectangle())
         }
         .font(.subheadline)
+        .foregroundStyle(.secondary)
         .accessibilityHint(liveActivityHint)
         .alert("Live Activity Couldn’t Start", isPresented: $showingLiveActivityFailure) {
           if let url = URL(string: UIApplication.openSettingsURLString) {
@@ -193,7 +194,8 @@ struct CompassView: View {
 
   private var liveActivityHint: String {
     guard liveActivityRunning else { return "Shows your travel direction on the Lock Screen" }
-    return "Stops travel direction until you start it again or reopen Compasslet on CarPlay"
+    return
+      "Stops travel direction and location use until you start it again or reopen Compasslet on CarPlay"
   }
 
   private func toggleLiveActivity() {
@@ -204,10 +206,12 @@ struct CompassView: View {
         AccessibilityNotification.Announcement("Live Activity ended").post()
       } else {
         await drive.startLiveActivity()
-        if drive.compactStatus == .unavailable {
-          showingLiveActivityFailure = true
-        } else if drive.isDriving {
-          AccessibilityNotification.Announcement("Live Activity started").post()
+        guard drive.isDriving else { return }
+        switch drive.compactStatus {
+        case .unavailable: showingLiveActivityFailure = true
+        case .active: AccessibilityNotification.Announcement("Live Activity started").post()
+        case .starting: AccessibilityNotification.Announcement("Live Activity starting").post()
+        case .inactive, .dismissed: break
         }
       }
     }
