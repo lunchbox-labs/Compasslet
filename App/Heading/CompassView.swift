@@ -14,6 +14,7 @@ struct CompassView: View {
   @State private var showingSettings = false
   @State private var showingHeadingStatus = false
   @State private var debugEnabled = false
+  @State private var showingLiveActivityFailure = false
   @ScaledMetric(relativeTo: .body) private var compactStatusSize = 17
   @AccessibilityFocusState private var menuFocused: Bool
 
@@ -75,6 +76,7 @@ struct CompassView: View {
             .padding(.horizontal, 24)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
           }
+          liveActivityControl
         }
         .allowsHitTesting(!showingSettings)
         .accessibilityHidden(showingSettings)
@@ -149,6 +151,66 @@ struct CompassView: View {
       Color.clear.frame(width: 44, height: 44).accessibilityHidden(true)
     }
     .padding(.horizontal, 16).padding(.vertical, 8)
+  }
+
+  /// The manual fallback for the automatic CarPlay start, shown only while CarPlay is connected.
+  @ViewBuilder private var liveActivityControl: some View {
+    if drive.isCarPlayConnected, drive.setupStatus == .ready {
+      HStack {
+        Spacer(minLength: 0)
+        Button(action: toggleLiveActivity) {
+          Label(liveActivityAction, systemImage: liveActivitySymbol)
+            .multilineTextAlignment(.trailing)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .font(.subheadline)
+        .accessibilityHint(liveActivityHint)
+        .alert("Live Activity Couldn’t Start", isPresented: $showingLiveActivityFailure) {
+          if let url = URL(string: UIApplication.openSettingsURLString) {
+            Button("Open Settings") { openURL(url) }
+          }
+          Button("OK", role: .cancel) {}
+        } message: {
+          Text("Make sure Live Activities are allowed for Compasslet in the Settings app.")
+        }
+      }
+      .padding(.horizontal, 16).padding(.bottom, 8)
+    }
+  }
+
+  /// A drive whose Live Activity was dismissed or couldn't start offers to start it again.
+  private var liveActivityRunning: Bool {
+    drive.isDriving && drive.compactStatus != .dismissed && drive.compactStatus != .unavailable
+  }
+
+  private var liveActivityAction: String {
+    liveActivityRunning ? "End Live Activity" : "Start Live Activity"
+  }
+
+  private var liveActivitySymbol: String { liveActivityRunning ? "stop.circle" : "play.circle" }
+
+  private var liveActivityHint: String {
+    guard liveActivityRunning else { return "Shows your travel direction on the Lock Screen" }
+    return "Stops travel direction until you start it again or reopen Compasslet on CarPlay"
+  }
+
+  private func toggleLiveActivity() {
+    let running = liveActivityRunning
+    Task {
+      if running {
+        await drive.endLiveActivity()
+        AccessibilityNotification.Announcement("Live Activity ended").post()
+      } else {
+        await drive.startLiveActivity()
+        if drive.compactStatus == .unavailable {
+          showingLiveActivityFailure = true
+        } else if drive.isDriving {
+          AccessibilityNotification.Announcement("Live Activity started").post()
+        }
+      }
+    }
   }
 
   private func information(details: Bool) -> some View {

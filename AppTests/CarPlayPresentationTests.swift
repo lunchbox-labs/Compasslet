@@ -250,17 +250,16 @@ final class CarPlayPresentationTests: XCTestCase {
     bridge.resign()
     XCTAssertEqual(events, ["active", "resign"])
     bridge.disconnect()
-    for _ in 0..<100 where !events.contains("disconnect") {
-      await Task.yield()
-    }
-    XCTAssertTrue(events.contains("disconnect"))
+    XCTAssertEqual(events, ["active", "resign", "resign", "disconnect"])
     continuation?.resume()
   }
-  func testRealBridgeRetainsDriveOnResignButDisconnectStopsDuringActivityStart() async {
+  func testRealBridgeKeepsTheDriveThroughAShortDisconnectDuringActivityStart() async {
     let sensor = DriveSessionControllerTests.Sensor()
     let activity = DriveSessionControllerTests.Activity()
     activity.pauseStart = true
-    let drive = DriveSessionController(sensor: sensor, activity: activity, automaticTick: false)
+    var time = Date(timeIntervalSince1970: 1_000)
+    let drive = DriveSessionController(
+      sensor: sensor, activity: activity, now: { time }, automaticTick: false)
     let bridge = CarPlayLifecycleBridge(drive: drive)
     bridge.activate()
     for _ in 0..<100 where activity.startContinuation == nil { await Task.yield() }
@@ -269,7 +268,12 @@ final class CarPlayPresentationTests: XCTestCase {
     bridge.resign()
     XCTAssertTrue(drive.isDriving)
     bridge.disconnect()
-    for _ in 0..<100 where drive.isDriving { await Task.yield() }
+    XCTAssertFalse(drive.isCarPlayConnected)
+    time += DriveSessionController.carPlayAbsenceLimit
+    drive.tick()
+    XCTAssertTrue(drive.isDriving)
+    time += 1
+    drive.tick()
     XCTAssertFalse(drive.isDriving)
     XCTAssertEqual(sensor.stops, 1)
     activity.startContinuation?.resume()
