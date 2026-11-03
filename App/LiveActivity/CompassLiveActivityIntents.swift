@@ -53,7 +53,7 @@ struct EndLiveActivityIntent: AppIntent {
     let drive = CompassAppDelegate.sharedDrive
     let wasDriving = drive.isDriving
     await drive.endLiveActivity()
-    guard wasDriving else { return .result(dialog: "The Live Activity is off.") }
+    guard wasDriving else { return .result(dialog: "The Live Activity isn’t running.") }
     return .result(dialog: "Live Activity ended.")
   }
 }

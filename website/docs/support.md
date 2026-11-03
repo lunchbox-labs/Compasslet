@@ -31,10 +31,10 @@ CarPlay and ends a minute after CarPlay disconnects, and iOS decides when to sho
 Make sure Live Activities are allowed for Compasslet in the Settings app. After you open
 Compasslet on CarPlay, and until CarPlay disconnects, you can also start or end it
 yourself with the Start Live Activity or End Live Activity button at the bottom right of
-the compass screen on iPhone. The same actions are in the Shortcuts app, or ask Siri to
-"Start Compasslet Live Activity". Starting it this way opens Compasslet on iPhone, so
-unlock the phone first. A Live Activity started from Shortcuts ends after a minute unless
-you open Compasslet on CarPlay.
+the compass screen on iPhone. The same actions are in the Shortcuts app, and you can ask
+Siri to "Start Compasslet Live Activity". Starting it this way opens Compasslet on iPhone,
+so unlock the phone first, while parked. A Live Activity started from Shortcuts or Siri
+ends after a minute unless you open Compasslet on CarPlay.
 
 ## Diagnostics
 
