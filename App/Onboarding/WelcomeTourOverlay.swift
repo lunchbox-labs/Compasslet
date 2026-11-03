@@ -137,6 +137,8 @@ struct WelcomeTourOverlay: View {
         Spacer(minLength: 8)
         next
       }
+      // Without this, the row squeezes "Next" onto two lines at large text sizes.
+      .fixedSize(horizontal: true, vertical: false)
       VStack(alignment: .leading, spacing: 8) {
         position
         next
