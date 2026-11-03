@@ -83,6 +83,27 @@ final class DriveSessionController: ObservableObject {
     guard setupStatus == .ready else {
       return
     }
+    await beginDrive()
+  }
+
+  /// The phone fallback for when the automatic CarPlay start doesn't produce a Live Activity.
+  /// With no drive running, it starts one without CarPlay. During a drive whose Live Activity
+  /// was dismissed or couldn't start, it starts only the Live Activity again. Call it from the
+  /// foreground app, because ActivityKit only starts activities there.
+  func startLiveActivity() async {
+    await prepare()
+    refreshSetupStatus()
+    guard setupStatus == .ready else { return }
+    guard isDriving else {
+      await beginDrive()
+      return
+    }
+    guard compactStatus == .dismissed || compactStatus == .unavailable else { return }
+    compactStatus = .starting
+    await startActivity(generation: generation).value
+  }
+
+  private func beginDrive() async {
     let token = UUID()
     generation = token
     sensor.receive = { [weak self] event in self?.receive(event, generation: token) }
@@ -99,12 +120,16 @@ final class DriveSessionController: ObservableObject {
     presentation = TravelPresentation(sample: nil, status: .waiting)
     compactStatus = .starting
     startTicker()
-    let operation = enqueue { [weak self, activity] in
+    await startActivity(generation: token).value
+  }
+
+  private func startActivity(generation token: UUID) -> Task<Void, Never> {
+    enqueue { [weak self, activity] in
       guard let self, self.isDriving, self.generation == token else { return }
       activity.onDismiss = { [weak self] in
         guard let self, self.isDriving, self.generation == token else { return }
-        // The drive belongs to the CarPlay scene. ActivityKit ends activities on its own, so
-        // losing the compact card only ends its updates for the rest of this drive.
+        // ActivityKit ends activities on its own, so losing the compact card only ends its
+        // updates. The drive keeps running until CarPlay disconnects or the user ends it.
         self.compactStatus = .dismissed
       }
       do {
@@ -126,7 +151,6 @@ final class DriveSessionController: ObservableObject {
         self.compactStatus = .unavailable
       }
     }
-    await operation.value
   }
 
   func carPlayResignedActive() {

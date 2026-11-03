@@ -77,7 +77,7 @@ final class DeviceTravelLocationSensor: NSObject, TravelLocationSensor,
     manager.pausesLocationUpdatesAutomatically = false
     manager.allowsBackgroundLocationUpdates = true
     manager.showsBackgroundLocationIndicator = true
-    // The caller revalidates active CarPlay eligibility immediately before this call.
+    // The caller revalidates drive eligibility immediately before this call.
     backgroundSession = CLBackgroundActivitySession()
     self.manager = manager
     manager.startUpdatingLocation()

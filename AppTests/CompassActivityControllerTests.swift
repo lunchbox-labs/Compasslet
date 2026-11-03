@@ -135,6 +135,18 @@ struct CompassActivityControllerTests {
     #expect(system.handle.updates.isEmpty)
   }
 
+  @Test func startAfterDismissalRequestsAFreshActivity() async throws {
+    let system = TestActivitySystem()
+    let controller = CompassActivityController(system: system)
+    try await controller.start()
+    system.handle.onDismiss?()
+    try await controller.start()
+    #expect(system.requests == 2)
+    await controller.update(.init(sample: nil, status: .slow))
+    #expect(system.handle.updates.last?.status == .slow)
+    await controller.end()
+  }
+
   @Test func cancelledStartupDisposesItsResult() async throws {
     let system = TestActivitySystem()
     system.suspend = true

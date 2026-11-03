@@ -1,6 +1,6 @@
 # Privacy Policy
 
-_Last updated November 2, 2026_
+_Last updated November 3, 2026_
 
 The Compasslet app does not collect personal information. It has no account,
 advertising, analytics or tracking, and the app sends no data to Lunchbox Labs. Lunchbox
@@ -12,8 +12,10 @@ described under [Support Requests](#support-requests).
 Compasslet asks for location access while you use it. On iPhone, location shows your
 coordinates, elevation and nearest city while the app is visible. The compass heading
 comes from the phone's compass sensor and does not need location access. During a
-CarPlay drive, location gives your travel direction, including while another app is
-visible.
+drive, location gives your travel direction, including while another app is visible. A
+drive starts when you open Compasslet on CarPlay or start the Live Activity in
+Compasslet's settings, and ends when CarPlay disconnects or you end the Live Activity
+there.
 
 Apart from the nearest-city lookup below, location is used only on your device as it
 arrives. Compasslet does not save location or route history. The Live Activity shows

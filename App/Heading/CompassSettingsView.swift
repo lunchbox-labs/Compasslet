@@ -19,6 +19,19 @@ struct CompassSettingsView: View {
             Link("Open Settings", destination: url)
           }
         }
+        Section {
+          if canStartLiveActivity {
+            Button("Start Live Activity") { Task { await drive.startLiveActivity() } }
+              .disabled(drive.setupStatus != .ready)
+          }
+          if drive.isDriving {
+            Button("End Live Activity") { Task { await drive.endDrive() } }
+          }
+        } header: {
+          Text("Live Activity")
+        } footer: {
+          Text(liveActivityDetail)
+        }
         DiagnosticsSettingsSection()
         Section {
           if let url = URL(string: "https://github.com/lunchbox-labs/compasslet") {
@@ -47,6 +60,34 @@ struct CompassSettingsView: View {
 
   private var locationEnabled: Bool {
     drive.setupStatus == .ready || drive.setupStatus == .preciseLocationRequired
+  }
+
+  private var canStartLiveActivity: Bool {
+    !drive.isDriving || drive.compactStatus == .dismissed || drive.compactStatus == .unavailable
+  }
+
+  private var liveActivityDetail: String {
+    if !drive.isDriving {
+      switch drive.setupStatus {
+      case .ready: break
+      case .unavailable: return "The Live Activity is unavailable on this device."
+      default: return "Allow precise location access to start the Live Activity."
+      }
+      return
+        "Compasslet starts the Live Activity when you open it on CarPlay and ends it when CarPlay disconnects. If it doesn’t, start or end it here."
+    }
+    switch drive.compactStatus {
+    case .inactive, .starting: return "The Live Activity is starting."
+    case .active:
+      return
+        "The Live Activity shows your travel direction until CarPlay disconnects or you end it here."
+    case .dismissed:
+      return
+        "The Live Activity was dismissed, but Compasslet is still using location for travel direction. Start it again, or end it to stop."
+    case .unavailable:
+      return
+        "The Live Activity couldn’t start. Make sure Live Activities are allowed for Compasslet in the Settings app, then try again."
+    }
   }
 
   private var canOpenSettings: Bool {
