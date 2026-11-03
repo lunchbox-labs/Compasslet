@@ -92,7 +92,7 @@ private func sample(
   #expect(CompassSmoother(fraction: 0.5, fullTrackingDelta: .infinity) == nil)
 }
 
-@Test func smallChangeBelowFullTrackingDeltaUsesConfiguredFraction() throws {
+@Test func smallChangeKeepsConfiguredFractionAsFloor() throws {
   var smoother = try #require(CompassSmoother(fraction: 0.5, fullTrackingDelta: 10))
   #expect(smoother.update(sample(0), now: instant, maximumAge: 5)?.angle.degrees == 0)
   #expect(smoother.update(sample(3), now: instant, maximumAge: 5)?.angle.degrees == 1.5)
@@ -105,7 +105,7 @@ private func sample(
   #expect(smoother.update(sample(30), now: instant, maximumAge: 5)?.angle.degrees == 30)
 }
 
-@Test func changeBetweenFractionAndFullTrackingScalesWithItsSize() throws {
+@Test func midSizedChangeScalesFractionWithItsSize() throws {
   var smoother = try #require(CompassSmoother(fraction: 0.5, fullTrackingDelta: 10))
   _ = smoother.update(sample(0), now: instant, maximumAge: 5)
   #expect(smoother.update(sample(7.5), now: instant, maximumAge: 5)?.angle.degrees == 5.625)
