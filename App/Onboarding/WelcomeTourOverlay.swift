@@ -1,7 +1,6 @@
 import SwiftUI
 import UIKit
 
-/// Carries the Live Activity button's frame up to the tour, which highlights it in place.
 struct LiveActivityControlBoundsKey: PreferenceKey {
   static var defaultValue: Anchor<CGRect>? { nil }
   static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
@@ -9,8 +8,6 @@ struct LiveActivityControlBoundsKey: PreferenceKey {
   }
 }
 
-/// The first-launch tour, drawn over the compass screen. The Live Activity step dims everything
-/// except the real button in its bottom-right corner.
 struct WelcomeTourOverlay: View {
   @ObservedObject var onboarding: OnboardingState
   /// The button's frame in this view's coordinates, while the button is on screen.
@@ -59,9 +56,9 @@ struct WelcomeTourOverlay: View {
 
   private static let cardBackground = Color(uiColor: .secondarySystemGroupedBackground)
 
-  /// Covers the screen, safe areas included, with a hole over the highlighted button.
   private func scrim(size: CGSize, cutout: CGRect?) -> some View {
     Path { path in
+      // Reaches past the bounds so the dimming covers the safe areas too.
       path.addRect(CGRect(origin: .zero, size: size).insetBy(dx: -400, dy: -400))
       if let cutout { path.addEllipse(in: cutout) }
     }
@@ -180,7 +177,6 @@ struct WelcomeTourOverlay: View {
   }
 }
 
-/// The small triangle under the tour card that points down at the button.
 private struct Pointer: Shape {
   func path(in rect: CGRect) -> Path {
     Path { path in

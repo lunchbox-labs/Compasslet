@@ -1,7 +1,6 @@
 import Foundation
 import TipKit
 
-/// Progress through the first-launch tour and which Live Activity button tip is current.
 @MainActor
 final class OnboardingState: ObservableObject {
   enum Step: Int, CaseIterable {
@@ -11,7 +10,6 @@ final class OnboardingState: ObservableObject {
   static let tourCompletedKey = "onboarding.tourCompleted"
   static let tipGenerationKey = "onboarding.liveActivityTipGeneration"
 
-  /// The tour step on screen, or nil once the tour is finished or skipped.
   @Published private(set) var step: Step?
   @Published private(set) var liveActivityTip: LiveActivityButtonTip
   private let defaults: UserDefaults
@@ -34,8 +32,8 @@ final class OnboardingState: ObservableObject {
     }
   }
 
-  /// Ends the tour for good. A tour finished during a CarPlay drive has already pointed out the
-  /// button, so the tip for it isn't shown as well.
+  /// A tour finished during a CarPlay drive has already pointed out the button, so its tip isn't
+  /// shown as well.
   func finish(carPlayConnected: Bool) {
     let showedButton = (step?.rawValue ?? -1) >= Step.liveActivity.rawValue
     step = nil
@@ -43,8 +41,8 @@ final class OnboardingState: ObservableObject {
     if carPlayConnected, showedButton { liveActivityTip.invalidate(reason: .actionPerformed) }
   }
 
-  /// Starts the tour again and lets the button tip show again. TipKit can only reset its whole
-  /// datastore before it's configured, so a fresh tip identifier stands in for a reset.
+  /// TipKit can only reset its whole datastore before it's configured, so a fresh tip identifier
+  /// stands in for a reset.
   func replay() {
     let generation = liveActivityTip.generation + 1
     defaults.set(generation, forKey: Self.tipGenerationKey)
@@ -53,7 +51,6 @@ final class OnboardingState: ObservableObject {
   }
 }
 
-/// Points at the Live Activity button the first time it appears during a CarPlay drive.
 struct LiveActivityButtonTip: Tip {
   let generation: Int
 
