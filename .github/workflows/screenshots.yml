@@ -67,7 +67,8 @@ concurrency:
 jobs:
   capture:
     runs-on: xcode-27
-    timeout-minutes: 45
+    # A full run takes about 30 minutes on hosted runners, mostly simulator boots and captures.
+    timeout-minutes: 75
     outputs:
       artifact: ${{ steps.source.outputs.artifact }}
     env:

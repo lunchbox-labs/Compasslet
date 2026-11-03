@@ -101,8 +101,8 @@ final class ScreenshotTests: XCTestCase {
   private func requestScreenshot(_ name: String, in directory: URL) async throws {
     let done = directory.appendingPathComponent("\(name).done")
     try Data().write(to: directory.appendingPathComponent("\(name).request"))
-    // Hosted runners can take 20 seconds or more for one simulator screenshot.
-    for _ in 0..<600 where !FileManager.default.fileExists(atPath: done.path) {
+    // A busy hosted runner has taken over 80 seconds for one simulator screenshot.
+    for _ in 0..<1_800 where !FileManager.default.fileExists(atPath: done.path) {
       try await Task.sleep(for: .milliseconds(100))
     }
     XCTAssertTrue(
