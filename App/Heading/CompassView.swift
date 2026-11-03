@@ -16,6 +16,7 @@ struct CompassView: View {
   @State private var debugEnabled = false
   @State private var showingLiveActivityFailure = false
   @ScaledMetric(relativeTo: .body) private var compactStatusSize = 17
+  @ScaledMetric(relativeTo: .body) private var liveActivityDiameter: CGFloat = 52
   @AccessibilityFocusState private var menuFocused: Bool
 
   private var storedAppearance: AppearanceValues {
@@ -76,7 +77,7 @@ struct CompassView: View {
             .padding(.horizontal, 24)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
           }
-          liveActivityControl
+          liveActivityControl(compact: geometry.size.height < 700)
         }
         .allowsHitTesting(!showingSettings)
         .accessibilityHidden(showingSettings)
@@ -154,28 +155,27 @@ struct CompassView: View {
   }
 
   /// The manual fallback for the automatic CarPlay start, shown only while CarPlay is connected.
-  @ViewBuilder private var liveActivityControl: some View {
+  /// An icon-only circle in the bottom-right corner, a little smaller on short screens.
+  @ViewBuilder private func liveActivityControl(compact: Bool) -> some View {
     if drive.isCarPlayConnected, drive.setupStatus == .ready {
+      let diameter = min(compact ? liveActivityDiameter - 8 : liveActivityDiameter, 80)
       HStack {
         Spacer(minLength: 0)
         Button(action: toggleLiveActivity) {
-          Label(liveActivityAction, systemImage: liveActivitySymbol)
-            .font(.subheadline.weight(.medium))
+          Image(systemName: liveActivitySymbol)
+            .font(.system(size: diameter * 0.36, weight: .semibold))
             .foregroundStyle(.primary)
-            .multilineTextAlignment(.trailing)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .frame(minHeight: 44)
-            .glassEffect(.regular.interactive(), in: liveActivityShape)
-            .overlay { liveActivityShape.strokeBorder(Color.secondary, lineWidth: 1) }
+            .frame(width: diameter, height: diameter)
+            .glassEffect(.regular.interactive(), in: Circle())
+            .overlay { Circle().strokeBorder(Color.secondary, lineWidth: 1) }
             .background {
-              liveActivityShape.fill(Color(uiColor: .systemBackground))
+              Circle().fill(Color(uiColor: .systemBackground))
                 .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
             }
-            .contentShape(liveActivityShape)
+            .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(liveActivityAction)
         .accessibilityHint(liveActivityHint)
         .alert("Live Activity Couldn’t Start", isPresented: $showingLiveActivityFailure) {
           if let url = URL(string: UIApplication.openSettingsURLString) {
@@ -199,11 +199,7 @@ struct CompassView: View {
     liveActivityRunning ? "End Live Activity" : "Start Live Activity"
   }
 
-  private var liveActivityShape: RoundedRectangle {
-    RoundedRectangle(cornerRadius: 22, style: .continuous)
-  }
-
-  private var liveActivitySymbol: String { liveActivityRunning ? "stop.circle" : "play.circle" }
+  private var liveActivitySymbol: String { liveActivityRunning ? "stop.fill" : "play.fill" }
 
   private var liveActivityHint: String {
     guard liveActivityRunning else { return "Shows your travel direction on the Lock Screen" }
