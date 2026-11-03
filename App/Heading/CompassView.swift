@@ -158,7 +158,7 @@ struct CompassView: View {
   /// An icon-only circle in the bottom-right corner, a little smaller on short screens.
   @ViewBuilder private func liveActivityControl(compact: Bool) -> some View {
     if drive.isCarPlayConnected, drive.setupStatus == .ready {
-      let diameter = min(compact ? liveActivityDiameter - 8 : liveActivityDiameter, 80)
+      let diameter = max(44, min(compact ? liveActivityDiameter - 8 : liveActivityDiameter, 80))
       HStack {
         Spacer(minLength: 0)
         Button(action: toggleLiveActivity) {
@@ -177,6 +177,9 @@ struct CompassView: View {
         .buttonStyle(.plain)
         .accessibilityLabel(liveActivityAction)
         .accessibilityHint(liveActivityHint)
+        .accessibilityShowsLargeContentViewer {
+          Label(liveActivityAction, systemImage: liveActivitySymbol)
+        }
         .alert("Live Activity Couldn’t Start", isPresented: $showingLiveActivityFailure) {
           if let url = URL(string: UIApplication.openSettingsURLString) {
             Button("Open Settings") { openURL(url) }
