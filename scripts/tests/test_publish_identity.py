@@ -3,7 +3,6 @@ import contextlib
 import importlib.machinery
 import importlib.util
 import io
-import json
 import os
 from pathlib import Path
 import tempfile
@@ -42,33 +41,17 @@ class PublishIdentityTests(unittest.TestCase):
                 self.assertEqual(operations, ['Apple validation'] if failed_operation == 'Apple validation'
                                  else ['Apple validation', 'upload'])
 
-    def test_only_manual_main_runs_and_pushed_version_tags_reach_the_build(self):
-        accepted = 'Workflow build number'
+    def test_only_manual_runs_from_main_reach_the_build(self):
         cases = [
-            ({'GITHUB_EVENT_NAME': 'workflow_dispatch', 'GITHUB_REF': 'refs/heads/main'}, None, accepted),
-            ({'GITHUB_EVENT_NAME': 'workflow_dispatch', 'GITHUB_REF': 'refs/heads/feature'}, None, 'main'),
-            ({'GITHUB_EVENT_NAME': 'push', 'GITHUB_REF': 'refs/tags/v1.2.3'},
-             {'ref': 'refs/tags/v1.2.3', 'created': True, 'deleted': False}, accepted),
-            ({'GITHUB_EVENT_NAME': 'push', 'GITHUB_REF': 'refs/tags/v1.2.3'},
-             {'ref': 'refs/tags/v1.2.3', 'created': False, 'deleted': True}, 'version tag'),
-            ({'GITHUB_EVENT_NAME': 'push', 'GITHUB_REF': 'refs/tags/v1.2.3'},
-             {'ref': 'refs/tags/v1.2.3', 'created': False, 'deleted': False}, 'version tag'),
-            ({'GITHUB_EVENT_NAME': 'push', 'GITHUB_REF': 'refs/heads/main'},
-             {'ref': 'refs/heads/main', 'created': True, 'deleted': False}, 'version tag'),
-            ({'GITHUB_EVENT_NAME': 'push', 'GITHUB_REF': 'refs/tags/v1.2.3-beta'},
-             {'ref': 'refs/tags/v1.2.3-beta', 'created': True, 'deleted': False}, 'X.Y.Z'),
-            ({'GITHUB_EVENT_NAME': 'push', 'GITHUB_REF': 'refs/tags/v1.2.4'},
-             {'ref': 'refs/tags/v1.2.3', 'created': True, 'deleted': False}, 'X.Y.Z'),
-            ({'GITHUB_EVENT_NAME': 'release', 'GITHUB_REF': 'refs/tags/v1.2.3'},
-             {'action': 'published', 'release': {'tag_name': 'v1.2.3'}}, 'Only manual main'),
+            ({'GITHUB_EVENT_NAME': 'workflow_dispatch', 'GITHUB_REF': 'refs/heads/main'}, 'Workflow build number'),
+            ({'GITHUB_EVENT_NAME': 'workflow_dispatch', 'GITHUB_REF': 'refs/heads/feature'}, 'main'),
+            ({'GITHUB_EVENT_NAME': 'push', 'GITHUB_REF': 'refs/tags/v1.2.3'}, 'Only manual builds'),
+            ({'GITHUB_EVENT_NAME': 'push', 'GITHUB_REF': 'refs/heads/main'}, 'Only manual builds'),
+            ({'GITHUB_EVENT_NAME': 'release', 'GITHUB_REF': 'refs/tags/v1.2.3'}, 'Only manual builds'),
         ]
-        for environment, payload, expected in cases:
-            with self.subTest(environment=environment, payload=payload), \
-                    tempfile.TemporaryDirectory() as temp:
-                event = Path(temp) / 'event.json'
-                event.write_text(json.dumps(payload or {}))
-                environment = dict(environment, GITHUB_ACTIONS='true', GITHUB_EVENT_PATH=str(event),
-                                   BUILD_NUMBER='')
+        for environment, expected in cases:
+            with self.subTest(environment=environment):
+                environment = dict(environment, GITHUB_ACTIONS='true', BUILD_NUMBER='')
                 with patch.dict(os.environ, environment), patch.object(testflight, 'read_copy'), \
                         self.assertRaises(testflight.SigningError) as raised:
                     testflight.publish()

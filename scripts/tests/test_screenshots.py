@@ -1,7 +1,4 @@
-"""Exercise simulator selection, releases and the wiki page of the screenshot script."""
-import contextlib
-import io
-import json
+"""Exercise simulator selection and screenshot answers of the screenshot script."""
 import plistlib
 import runpy
 import tempfile
@@ -77,55 +74,6 @@ class DeviceSelectionTests(unittest.TestCase):
         self.assertIn("iPhone 17 Pro Max", str(raised.exception))
 
 
-class ReleaseTests(unittest.TestCase):
-    def setUp(self):
-        directory = tempfile.TemporaryDirectory()
-        self.addCleanup(directory.cleanup)
-        self.directory = Path(directory.name)
-        (self.directory / "largest-light-compass.png").write_bytes(b"png")
-        (self.directory / "screenshots.json").write_text(json.dumps(
-            [{"screen": "compass", "file": "largest-light-compass.png"}]), encoding="utf-8")
-        self.calls = []
-        self.arguments = []
-
-    def publish(self, releases):
-        def run(arguments, **options):
-            self.calls.append(arguments[1:3])
-            self.arguments.append(arguments)
-            output = json.dumps([releases]) if arguments[1] == "api" else ""
-            return subprocess.CompletedProcess(arguments, 0, output, "")
-        with patch("subprocess.run", side_effect=run), contextlib.redirect_stdout(io.StringIO()):
-            MODULE["main"](["release", "--tag", "v1.2.3", "--repository", "o/r",
-                            "--directory", str(self.directory)])
-
-    def test_a_new_release_is_drafted_from_the_tag_and_published_after_its_assets(self):
-        self.publish([{"tag_name": "v1.2.2", "draft": False}])
-        self.assertEqual(self.calls, [["api", "--paginate"], ["release", "create"],
-                                      ["release", "upload"], ["release", "edit"]])
-        self.assertIn("--verify-tag", self.arguments[1])
-        self.assertIn("--draft", self.arguments[1])
-        self.assertIn(str(self.directory / "screenshots.json"), self.arguments[2])
-        self.assertIn("--draft=false", self.arguments[3])
-
-    def test_an_existing_draft_is_finished(self):
-        self.publish([{"tag_name": "v1.2.3", "draft": True}])
-        self.assertEqual(self.calls, [["api", "--paginate"], ["release", "upload"],
-                                      ["release", "edit"]])
-
-    def test_an_older_version_never_becomes_the_latest_release(self):
-        self.publish([{"tag_name": "v1.10.0", "draft": False}])
-        self.assertIn("--latest=false", self.arguments[3])
-        self.arguments.clear()
-        self.publish([{"tag_name": "v1.2.2", "draft": False}, {"tag_name": "v2.0.0", "draft": True}])
-        self.assertIn("--latest", self.arguments[3])
-        self.assertNotIn("--latest=false", self.arguments[3])
-
-    def test_a_published_release_is_never_changed(self):
-        with self.assertRaises(SystemExit):
-            self.publish([{"tag_name": "v1.2.3", "draft": False}])
-        self.assertEqual(self.calls, [["api", "--paginate"]])
-
-
 class ResponderTests(unittest.TestCase):
     def test_a_screenshot_that_wasnt_saved_is_reported_and_still_answered(self):
         with tempfile.TemporaryDirectory() as requests, tempfile.TemporaryDirectory() as output:
@@ -153,39 +101,6 @@ class ResponderTests(unittest.TestCase):
             self.assertEqual(responder.failed, ["largest-dark-settings.png"])
             self.assertTrue((requests / "compass.done").exists())
             self.assertTrue((requests / "settings.done").exists())
-
-
-class WikiPageTests(unittest.TestCase):
-    MANIFEST = [
-        {"screen": "compass", "file": "largest-light-compass.png", "device": "iPhone 17 Pro Max",
-         "label": "largest", "appearance": "light"},
-        {"screen": "settings", "file": "largest-light-settings.png",
-         "device": "iPhone 17 Pro Max", "label": "largest", "appearance": "light"},
-        {"screen": "compass", "file": "largest-dark-compass.png", "device": "iPhone 17 Pro Max",
-         "label": "largest", "appearance": "dark"},
-        {"screen": "compass", "file": "smallest-light-compass.png", "device": "iPhone 17e",
-         "label": "smallest", "appearance": "light"},
-    ]
-
-    def test_the_page_groups_screens_by_device_and_links_the_latest_release(self):
-        page = MODULE["wiki_page"](self.MANIFEST, "lunchbox-labs/compasslet")
-        self.assertLess(page.index("## iPhone 17 Pro Max"), page.index("## iPhone 17e"))
-        self.assertLess(page.index("### compass"), page.index("### settings"))
-        self.assertIn('<img src="https://github.com/lunchbox-labs/compasslet/releases/latest/'
-                      'download/largest-light-compass.png" alt="compass, light" width="300"> '
-                      '<img src="https://github.com/lunchbox-labs/compasslet/releases/latest/'
-                      'download/largest-dark-compass.png" alt="compass, dark" width="300">', page)
-
-    def test_an_unchanged_page_is_not_rewritten(self):
-        with tempfile.TemporaryDirectory() as directory:
-            manifest = Path(directory) / "screenshots.json"
-            manifest.write_text(json.dumps(self.MANIFEST), encoding="utf-8")
-            page = Path(directory) / MODULE["WIKI_PAGE"]
-            page.write_text(MODULE["wiki_page"](self.MANIFEST, "o/r"), encoding="utf-8")
-            before = page.stat().st_mtime_ns
-            MODULE["main"](["wiki-page", "--manifest", str(manifest), "--repository", "o/r",
-                            "--wiki", directory])
-            self.assertEqual(page.stat().st_mtime_ns, before)
 
 
 if __name__ == "__main__":

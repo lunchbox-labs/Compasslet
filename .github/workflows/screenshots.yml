@@ -15,24 +15,6 @@ on:
       - "docs/**"
       - "app-store/**"
       - "website/**"
-  workflow_call:
-    inputs:
-      ref:
-        type: string
-        required: true
-      devices:
-        type: string
-        default: largest,smallest
-      appearances:
-        type: string
-        default: light and dark
-      filter:
-        type: string
-        default: ""
-    outputs:
-      artifact:
-        description: The artifact that holds the images and screenshots.json
-        value: ${{ jobs.capture.outputs.artifact }}
   workflow_dispatch:
     inputs:
       ref:
@@ -69,8 +51,6 @@ jobs:
     runs-on: xcode-27
     # A full run takes about 30 minutes on hosted runners, mostly simulator boots and captures.
     timeout-minutes: 75
-    outputs:
-      artifact: ${{ steps.source.outputs.artifact }}
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
     steps:

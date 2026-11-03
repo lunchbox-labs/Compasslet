@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish manual internal builds or version tags; keep credential-tool output private."""
+"""Publish manual internal builds from main; keep credential-tool output private."""
 import base64
 import json
 import os
@@ -120,18 +120,8 @@ def publish():
     version = None
     if event == 'workflow_dispatch':
         require(os.environ.get('GITHUB_REF') == 'refs/heads/main', 'Run manually from main.')
-    elif event == 'push':
-        payload = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
-        ref = payload.get('ref', '')
-        require(payload.get('created') is True and payload.get('deleted') is False
-                and ref.startswith('refs/tags/'), 'Only a newly pushed version tag can upload.')
-        tag = ref[len('refs/tags/'):]
-        match = re.fullmatch(r'v?((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))', tag)
-        require(match and os.environ.get('GITHUB_REF') == ref,
-                'Version tag must be X.Y.Z or vX.Y.Z, without prerelease or build metadata.')
-        version = match.group(1)
     else:
-        raise SigningError('Only manual main builds or pushed version tags can upload.')
+        raise SigningError('Only manual builds from main can upload.')
     build = os.environ.get('BUILD_NUMBER', '')
     require(re.fullmatch(r'[1-9][0-9]{0,3}\.[1-9][0-9]?', build),
             'Workflow build number must be run.attempt (run 1–9999, attempt 1–99).')

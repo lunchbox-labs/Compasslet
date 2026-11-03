@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
-"""Capture every app screen on iPhone simulators, and publish the images with a release.
+"""Capture every app screen on iPhone simulators.
 
 capture     Build the app once, then run ScreenshotTests on each device and appearance. The
             test shows one screen at a time and asks for a screenshot by writing a request
             file; this script answers with a full simulator screenshot and a done file.
-release     Publish the release for an existing version tag with a capture attached.
-wiki-page   Write the wiki page that shows the latest release's screenshots.
 """
 import argparse
 import json
@@ -23,7 +21,6 @@ ALIASES = ("largest", "smallest")
 APPEARANCES = ("light", "dark")
 BUNDLE_IDENTIFIER = "dev.lunchbox-labs.carplay-compass"
 MANIFEST = "screenshots.json"
-WIKI_PAGE = "Release-Screenshots.md"
 MINIMUM_IOS = 27
 
 
@@ -204,90 +201,6 @@ def capture(arguments):
                          "captured")
 
 
-def gh(arguments, **options):
-    return run(["gh"] + arguments, capture_output=True, **options).stdout
-
-
-def version(tag):
-    match = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", tag)
-    return tuple(int(part) for part in match.groups()) if match else None
-
-
-def is_newest(tag, releases):
-    """Whether no published release has a higher version than the tag."""
-    published = [version(item["tag_name"]) for page in releases for item in page
-                 if not item["draft"]]
-    return all(other is None or other < version(tag) for other in published)
-
-
-def release(arguments):
-    """Publish the tag's release with the capture attached.
-
-    Published releases are immutable, so every asset goes on a draft first and the draft is
-    published only once all of them have uploaded. A rerun finishes an existing draft.
-    """
-    if version(arguments.tag) is None:
-        raise SystemExit(arguments.tag + " isn't a version tag like v1.2.0")
-    directory = Path(arguments.directory)
-    manifest = json.loads((directory / MANIFEST).read_text(encoding="utf-8"))
-    if not manifest:
-        raise SystemExit("The capture has no screenshots")
-    releases = json.loads(gh(["api", "--paginate", "--slurp",
-                              "repos/" + arguments.repository + "/releases"]))
-    existing = [item for page in releases for item in page
-                if item["tag_name"] == arguments.tag]
-    if any(not item["draft"] for item in existing):
-        raise SystemExit(arguments.tag + " is already published, and published releases can't "
-                         "change")
-    if len(existing) > 1:
-        raise SystemExit(arguments.tag + " has more than one draft release; delete the extras")
-    if not existing:
-        gh(["release", "create", arguments.tag, "--repo", arguments.repository, "--verify-tag",
-            "--draft", "--title", arguments.tag, "--generate-notes"])
-    files = [str(directory / item["file"]) for item in manifest] + [str(directory / MANIFEST)]
-    gh(["release", "upload", arguments.tag, "--repo", arguments.repository, "--clobber"] + files)
-    # An older version released afterwards must not take over releases/latest, which the wiki
-    # page and its images follow.
-    latest = "--latest" if is_newest(arguments.tag, releases) else "--latest=false"
-    gh(["release", "edit", arguments.tag, "--repo", arguments.repository, "--draft=false",
-        latest])
-    print("Published " + arguments.tag + " with " + str(len(files)) + " files")
-
-
-def wiki_page(manifest, repository):
-    """Markdown showing each screen, light and dark side by side, from the latest release."""
-    base = "https://github.com/" + repository + "/releases/latest/download/"
-    lines = ["Screenshots of every Compasslet screen from the latest release, captured on "
-             "iPhone simulators by the Screenshots workflow. The images are the release's "
-             "assets, so this page always shows the newest release.", ""]
-    screens = list(dict.fromkeys(item["screen"] for item in manifest))
-    devices = list(dict.fromkeys((item["label"], item["device"]) for item in manifest))
-    for label, device in devices:
-        lines += ["## " + device, ""]
-        for screen in screens:
-            images = [item for item in manifest
-                      if item["label"] == label and item["screen"] == screen]
-            if not images:
-                continue
-            lines += ["### " + screen, ""]
-            lines.append(" ".join(
-                '<img src="' + base + item["file"] + '" alt="' + screen + ", "
-                + item["appearance"] + '" width="300">' for item in images))
-            lines.append("")
-    return "\n".join(lines)
-
-
-def write_wiki_page(arguments):
-    manifest = json.loads(Path(arguments.manifest).read_text(encoding="utf-8"))
-    target = Path(arguments.wiki) / WIKI_PAGE
-    text = wiki_page(manifest, arguments.repository)
-    if target.exists() and target.read_text(encoding="utf-8") == text:
-        print(WIKI_PAGE + " is already current")
-        return
-    target.write_text(text, encoding="utf-8")
-    print("Wrote " + str(target))
-
-
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -301,16 +214,6 @@ def main(argv=None):
     capture_parser.add_argument("--output", default=".build/screenshots")
     capture_parser.add_argument("--derived-data", default=".build/xcode")
     capture_parser.set_defaults(handler=capture)
-    release_parser = commands.add_parser("release")
-    release_parser.add_argument("--tag", required=True)
-    release_parser.add_argument("--repository", required=True)
-    release_parser.add_argument("--directory", required=True)
-    release_parser.set_defaults(handler=release)
-    wiki_parser = commands.add_parser("wiki-page")
-    wiki_parser.add_argument("--manifest", required=True)
-    wiki_parser.add_argument("--repository", required=True)
-    wiki_parser.add_argument("--wiki", required=True, help="the wiki checkout")
-    wiki_parser.set_defaults(handler=write_wiki_page)
     arguments = parser.parse_args(argv)
     arguments.handler(arguments)
 
