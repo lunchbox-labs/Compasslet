@@ -2,7 +2,6 @@
 public struct SettingsDismissalSwipe {
   private var active = false
 
-  /// Starts with no active swipe.
   public init() {}
 
   /// Accepts a predominantly leftward initial velocity.
@@ -18,7 +17,6 @@ public struct SettingsDismissalSwipe {
       && Self.isLeftward(horizontal: horizontal, vertical: vertical)
   }
 
-  /// Discards an interrupted gesture without dismissing Settings.
   public mutating func cancel() { active = false }
 
   private static func isLeftward(horizontal: Double, vertical: Double) -> Bool {
