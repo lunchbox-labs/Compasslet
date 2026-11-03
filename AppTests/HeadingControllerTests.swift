@@ -91,7 +91,7 @@ final class HeadingControllerTests: XCTestCase {
     time = time.addingTimeInterval(1)
     sensor.receive?(.reading(degrees: 1, accuracy: 2, timestamp: time))
     XCTAssertEqual(controller.sample?.angle.degrees, 358)
-    XCTAssertEqual(controller.sample?.accuracy, 2)
+    XCTAssertEqual(controller.sample?.accuracyDegrees, 2)
     XCTAssertEqual(controller.sample?.timestamp, time)
     time = time.addingTimeInterval(4.5)
     controller.tick()

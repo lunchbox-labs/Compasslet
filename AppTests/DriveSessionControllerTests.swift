@@ -59,8 +59,8 @@ final class DriveSessionControllerTests: XCTestCase {
   func reading(_ course: Double = 90) -> TravelSensorEvent {
     .reading(
       TravelReading(
-        course: course, courseAccuracy: 2, speed: 10,
-        speedAccuracy: 1, horizontalAccuracy: 5, timestamp: time))
+        courseDegrees: course, courseAccuracyDegrees: 2, speedMetersPerSecond: 10,
+        speedAccuracyMetersPerSecond: 1, horizontalAccuracyMeters: 5, timestamp: time))
   }
   func make(_ sensor: Sensor, _ activity: Activity) -> DriveSessionController {
     DriveSessionController(

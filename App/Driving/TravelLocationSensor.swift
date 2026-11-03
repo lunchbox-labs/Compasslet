@@ -103,9 +103,12 @@ final class DeviceTravelLocationSensor: NSObject, TravelLocationSensor,
     receive?(
       .reading(
         TravelReading(
-          course: location.course, courseAccuracy: location.courseAccuracy,
-          speed: location.speed, speedAccuracy: location.speedAccuracy,
-          horizontalAccuracy: location.horizontalAccuracy, timestamp: location.timestamp)))
+          courseDegrees: location.course,
+          courseAccuracyDegrees: location.courseAccuracy,
+          speedMetersPerSecond: location.speed,
+          speedAccuracyMetersPerSecond: location.speedAccuracy,
+          horizontalAccuracyMeters: location.horizontalAccuracy,
+          timestamp: location.timestamp)))
   }
 
   func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {

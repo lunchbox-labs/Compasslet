@@ -2,27 +2,28 @@ import Foundation
 
 /// Travel measurements without position or route information.
 public struct TravelReading: Sendable, Equatable {
-  /// Travel direction in degrees clockwise from true north.
-  public let course: Double
-  /// Course uncertainty in degrees.
-  public let courseAccuracy: Double
-  /// Travel speed in metres per second.
-  public let speed: Double
-  /// Speed uncertainty in metres per second.
-  public let speedAccuracy: Double
-  /// Horizontal position uncertainty in metres; no position is retained.
-  public let horizontalAccuracy: Double
+  /// Clockwise from true north.
+  public let courseDegrees: Double
+  public let courseAccuracyDegrees: Double
+  public let speedMetersPerSecond: Double
+  public let speedAccuracyMetersPerSecond: Double
+  /// Only the uncertainty is kept; no position is retained.
+  public let horizontalAccuracyMeters: Double
   public let timestamp: Date
 
   public init(
-    course: Double, courseAccuracy: Double, speed: Double, speedAccuracy: Double,
-    horizontalAccuracy: Double, timestamp: Date
+    courseDegrees: Double,
+    courseAccuracyDegrees: Double,
+    speedMetersPerSecond: Double,
+    speedAccuracyMetersPerSecond: Double,
+    horizontalAccuracyMeters: Double,
+    timestamp: Date
   ) {
-    self.course = course
-    self.courseAccuracy = courseAccuracy
-    self.speed = speed
-    self.speedAccuracy = speedAccuracy
-    self.horizontalAccuracy = horizontalAccuracy
+    self.courseDegrees = courseDegrees
+    self.courseAccuracyDegrees = courseAccuracyDegrees
+    self.speedMetersPerSecond = speedMetersPerSecond
+    self.speedAccuracyMetersPerSecond = speedAccuracyMetersPerSecond
+    self.horizontalAccuracyMeters = horizontalAccuracyMeters
     self.timestamp = timestamp
   }
 }
@@ -71,22 +72,22 @@ public struct TravelCourseFilter: Sendable {
     else { return reject(.unavailable) }
     let age = now.timeIntervalSince(reading.timestamp)
     guard age.isFinite, age >= 0, age <= 5 else { return reject(.unavailable) }
-    guard reading.speed.isFinite, reading.speed >= 2,
-      reading.speedAccuracy.isFinite, reading.speedAccuracy >= 0,
-      reading.speed - reading.speedAccuracy >= 1
+    guard reading.speedMetersPerSecond.isFinite, reading.speedMetersPerSecond >= 2,
+      reading.speedAccuracyMetersPerSecond.isFinite, reading.speedAccuracyMetersPerSecond >= 0,
+      reading.speedMetersPerSecond - reading.speedAccuracyMetersPerSecond >= 1
     else { return reject(.slow) }
-    guard reading.course.isFinite, reading.course >= 0, reading.course < 360,
-      reading.courseAccuracy.isFinite, reading.courseAccuracy >= 0,
-      reading.courseAccuracy <= 30, reading.horizontalAccuracy.isFinite,
-      reading.horizontalAccuracy >= 0, reading.horizontalAccuracy <= 50
+    guard reading.courseDegrees.isFinite, reading.courseDegrees >= 0, reading.courseDegrees < 360,
+      reading.courseAccuracyDegrees.isFinite, reading.courseAccuracyDegrees >= 0,
+      reading.courseAccuracyDegrees <= 30, reading.horizontalAccuracyMeters.isFinite,
+      reading.horizontalAccuracyMeters >= 0, reading.horizontalAccuracyMeters <= 50
     else { return reject(.unreliable) }
 
     if let previousTimestamp, reading.timestamp <= previousTimestamp {
       smoother.reset()
     }
     let sample = CompassSample(
-      degrees: reading.course, source: .vehicleCourse, reference: .trueNorth,
-      accuracy: reading.courseAccuracy, timestamp: reading.timestamp)
+      degrees: reading.courseDegrees, source: .vehicleCourse, reference: .trueNorth,
+      accuracyDegrees: reading.courseAccuracyDegrees, timestamp: reading.timestamp)
     let smoothed = smoother.update(sample, now: now, maximumAge: 5)
     previousTimestamp = reading.timestamp
     return TravelPresentation(sample: smoothed, status: .usable)

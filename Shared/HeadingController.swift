@@ -152,7 +152,7 @@ final class HeadingController: ObservableObject {
       guard
         let reading = CompassSample(
           degrees: degrees, source: .deviceHeading, reference: .magnetic,
-          accuracy: accuracy, timestamp: timestamp)
+          accuracyDegrees: accuracy, timestamp: timestamp)
       else {
         clear(.calibration)
         return
@@ -182,7 +182,7 @@ final class HeadingController: ObservableObject {
     else { return nil }
     return CompassSample(
       degrees: current.angle.degrees, source: reading.source, reference: reading.reference,
-      accuracy: reading.accuracy, timestamp: reading.timestamp)
+      accuracyDegrees: reading.accuracyDegrees, timestamp: reading.timestamp)
   }
 
   private func clear(_ next: Status) {

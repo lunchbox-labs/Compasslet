@@ -13,10 +13,10 @@ import Testing
   phone.rotation = .arrow
   preferences.setOverride(phone, for: .phone)
   global.showDegrees = true
-  global.labels = .outside
+  global.cardinalLabels = .outside
   preferences.setGlobal(global)
-  #expect(preferences.effective(for: .phone).labels != .outside)
-  #expect(preferences.effective(for: .activity).labels == .outside)
+  #expect(preferences.effective(for: .phone).cardinalLabels != .outside)
+  #expect(preferences.effective(for: .activity).cardinalLabels == .outside)
   preferences.setUsesGlobal(true, for: .phone)
   #expect(preferences.effective(for: .phone) == preferences.global)
   preferences.setUsesGlobal(false, for: .phone)
@@ -40,7 +40,7 @@ import Testing
 @Test func appearanceRoundTripAndMalformedStorageRecovery() throws {
   var preferences = AppearancePreferences()
   var custom = preferences.global
-  custom.labels = .hidden
+  custom.cardinalLabels = .hidden
   custom.minorTicks = .eight
   preferences.setOverride(custom, for: .phone)
   let data = try JSONEncoder().encode(preferences)
@@ -116,7 +116,7 @@ import Testing
   var global = preferences.global
   global.showDegrees = false
   global.minorTicks = .eight
-  global.labels = .outside
+  global.cardinalLabels = .outside
   global.rotation = .arrow
   preferences.setGlobal(global)
   var stored = try #require(
@@ -185,7 +185,7 @@ import Testing
   #expect(decoded.theme == .system)
   #expect(!decoded.global.showDegrees)
   #expect(decoded.effective(for: .phone).rotation == .arrow)
-  #expect(decoded.effective(for: .activity).labels == .outside)
+  #expect(decoded.effective(for: .activity).cardinalLabels == .outside)
   var stored = try #require(JSONSerialization.jsonObject(with: legacy) as? [String: Any])
   stored["theme"] = "unsupported-future-theme"
   let unknown = AppearancePreferences.decode(try JSONSerialization.data(withJSONObject: stored))
@@ -217,7 +217,7 @@ import Testing
           appearance.showDirection = direction
           appearance.showDegrees = degrees
           appearance.minorTicks = .five
-          appearance.labels = .outside
+          appearance.cardinalLabels = .outside
           appearance.rotation = .arrow
           let state = PhoneCompassPresentation(appearance: appearance, reduceMotion: reduceMotion)
           let steady = reduceMotion && mode == .steadyReadout
@@ -225,7 +225,7 @@ import Testing
           #expect(state.appearance.showDirection == (direction || (steady && !degrees)))
           #expect(state.appearance.showDegrees == degrees)
           #expect(state.appearance.minorTicks == .five)
-          #expect(state.appearance.labels == .outside)
+          #expect(state.appearance.cardinalLabels == .outside)
           #expect(state.appearance.rotation == .arrow)
           #expect(appearance.showDirection == direction)
         }
@@ -238,13 +238,13 @@ import Testing
   for mode in ReadoutMode.allCases {
     var value = AppearanceValues()
     value.rotation = .arrow
-    value.labels = .hidden
+    value.cardinalLabels = .hidden
     value.setReadoutMode(mode)
     #expect(value.readoutMode == mode)
     #expect(value.showDirection == (mode != .degrees))
     #expect(value.showDegrees == (mode != .direction))
     #expect(value.rotation == .arrow)
-    #expect(value.labels == .hidden)
+    #expect(value.cardinalLabels == .hidden)
   }
   var hidden = AppearanceValues()
   hidden.showDirection = false
@@ -260,7 +260,7 @@ import Testing
   let preferences = AppearancePreferences.decode(data)
   let activity = preferences.effective(for: .activity)
   #expect(activity.lockScreenTimestamp == .time)
-  #expect(activity.smallActivityTimestamp == .time)
+  #expect(activity.carPlayActivityTimestamp == .time)
   #expect(activity.customTextSize == .xxLarge)
   #expect(!activity.useSystemTextSize)
   #expect(!preferences.global.showDegrees)
@@ -270,11 +270,22 @@ import Testing
   var preferences = AppearancePreferences()
   var activity = preferences.effective(for: .activity)
   activity.lockScreenTimestamp = .hidden
-  activity.smallActivityTimestamp = .elapsed
+  activity.carPlayActivityTimestamp = .elapsed
   preferences.setOverride(activity, for: .activity)
   let restored = AppearancePreferences.decode(try JSONEncoder().encode(preferences))
   #expect(restored.effective(for: .activity).lockScreenTimestamp == .hidden)
-  #expect(restored.effective(for: .activity).smallActivityTimestamp == .elapsed)
+  #expect(restored.effective(for: .activity).carPlayActivityTimestamp == .elapsed)
   #expect(restored.global.lockScreenTimestamp == .time)
-  #expect(restored.global.smallActivityTimestamp == .time)
+  #expect(restored.global.carPlayActivityTimestamp == .time)
+}
+
+@Test func renamedFieldsKeepTheirStoredKeys() throws {
+  let data = Data(#"{"global":{"labels":"hidden","smallActivityTimestamp":"elapsed"}}"#.utf8)
+  let preferences = AppearancePreferences.decode(data)
+  #expect(preferences.global.cardinalLabels == .hidden)
+  #expect(preferences.global.carPlayActivityTimestamp == .elapsed)
+  let encoded = try JSONEncoder().encode(preferences.global)
+  let keys = try JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+  #expect(keys?["labels"] as? String == "hidden")
+  #expect(keys?["smallActivityTimestamp"] as? String == "elapsed")
 }

@@ -12,7 +12,7 @@ struct CompassActivityControllerTests {
     try await controller.start()
     let sample = CompassSample(
       degrees: 42, source: .vehicleCourse, reference: .trueNorth,
-      accuracy: 1, timestamp: time)
+      accuracyDegrees: 1, timestamp: time)
     await controller.update(.init(sample: sample, status: .usable))
     let original = try #require(system.handle.updates.last)
     #expect(original.expiry == nil)
@@ -23,7 +23,7 @@ struct CompassActivityControllerTests {
     }
     let next = CompassSample(
       degrees: 90, source: .vehicleCourse, reference: .trueNorth,
-      accuracy: 1, timestamp: time)
+      accuracyDegrees: 1, timestamp: time)
     await controller.update(.init(sample: next, status: .usable))
     #expect(system.handle.updates.last?.bearing == 90)
     #expect(system.handle.updates.last?.sampleTime == time)
@@ -43,13 +43,13 @@ struct CompassActivityControllerTests {
     try await controller.start()
     let sample = CompassSample(
       degrees: 42, source: .vehicleCourse, reference: .trueNorth,
-      accuracy: 1, timestamp: time)
+      accuracyDegrees: 1, timestamp: time)
     await controller.update(.init(sample: sample, status: .usable))
     let original = try #require(system.handle.updates.last)
     var appearance = AppearanceValues()
     appearance.showDegrees = false
     appearance.lockScreenTimestamp = .hidden
-    appearance.smallActivityTimestamp = .elapsed
+    appearance.carPlayActivityTimestamp = .elapsed
     time = time.addingTimeInterval(0.5)
     await controller.updateAppearance(appearance)?.value
     let changed = try #require(system.handle.updates.last)
@@ -58,7 +58,7 @@ struct CompassActivityControllerTests {
     #expect(changed.expiry == original.expiry)
     #expect(changed.appearance?.showDegrees == false)
     #expect(changed.appearance?.lockScreenTimestamp == .hidden)
-    #expect(changed.appearance?.smallActivityTimestamp == .elapsed)
+    #expect(changed.appearance?.carPlayActivityTimestamp == .elapsed)
     time = time.addingTimeInterval(6)
     appearance.showDegrees = true
     await controller.updateAppearance(appearance)?.value
@@ -86,7 +86,7 @@ struct CompassActivityControllerTests {
     system.handle.suspendNextUpdate = true
     let sample = CompassSample(
       degrees: 42, source: .vehicleCourse, reference: .trueNorth,
-      accuracy: 1, timestamp: time)
+      accuracyDegrees: 1, timestamp: time)
     let usable = Task { await controller.update(.init(sample: sample, status: .usable)) }
     while system.handle.resumeUpdate == nil { await Task.yield() }
     var appearance = AppearanceValues()
@@ -179,7 +179,7 @@ struct CompassActivityControllerTests {
       let sample = try #require(
         CompassSample(
           degrees: 270, source: .vehicleCourse, reference: .trueNorth,
-          accuracy: 1, timestamp: time.addingTimeInterval(-1.5)))
+          accuracyDegrees: 1, timestamp: time.addingTimeInterval(-1.5)))
       await controller.update(.init(sample: sample, status: .usable))
       #expect(system.handle.updates.last?.expiry == nil)
       #expect(system.handle.updates.last?.sampleTime == Date(timeIntervalSince1970: 98.5))
@@ -196,7 +196,7 @@ struct CompassActivityControllerTests {
     for degrees in [22.1, 22.4, 22.5, 359.6, 0.2] {
       let sample = CompassSample(
         degrees: degrees, source: .vehicleCourse, reference: .trueNorth,
-        accuracy: 1, timestamp: time)
+        accuracyDegrees: 1, timestamp: time)
       await controller.update(.init(sample: sample, status: .usable))
       time += 1
     }
@@ -222,7 +222,7 @@ struct CompassActivityControllerTests {
       .init(
         sample: CompassSample(
           degrees: degrees, source: .vehicleCourse, reference: .trueNorth,
-          accuracy: 1, timestamp: time), status: .usable)
+          accuracyDegrees: 1, timestamp: time), status: .usable)
     }
 
     system.handle.suspendNextUpdate = true
@@ -316,12 +316,12 @@ struct CompassActivityControllerTests {
       try await controller.start()
       let accepted = CompassSample(
         degrees: 90, source: .vehicleCourse, reference: .trueNorth,
-        accuracy: 1, timestamp: now)
+        accuracyDegrees: 1, timestamp: now)
       await controller.update(.init(sample: accepted, status: .usable))
       #expect(system.handle.updates.last?.bearing == 90)
       let rejected = CompassSample(
         degrees: 42, source: source, reference: reference,
-        accuracy: 1, timestamp: timestamp)
+        accuracyDegrees: 1, timestamp: timestamp)
       await controller.update(.init(sample: rejected, status: .usable))
       let cleared = try #require(system.handle.updates.last)
       #expect(cleared.bearing == nil)
@@ -339,7 +339,7 @@ struct CompassActivityControllerTests {
       .init(
         sample: CompassSample(
           degrees: degrees, source: .vehicleCourse, reference: .trueNorth,
-          accuracy: 1, timestamp: time), status: .usable)
+          accuracyDegrees: 1, timestamp: time), status: .usable)
     }
     await controller.update(reading(42))
     let encoded = try JSONEncoder().encode(system.handle.updates[0])
@@ -378,8 +378,8 @@ struct CompassActivityControllerTests {
     sensor.receive?(
       .reading(
         TravelReading(
-          course: 90, courseAccuracy: 1, speed: 10,
-          speedAccuracy: 1, horizontalAccuracy: 5, timestamp: time)))
+          courseDegrees: 90, courseAccuracyDegrees: 1, speedMetersPerSecond: 10,
+          speedAccuracyMetersPerSecond: 1, horizontalAccuracyMeters: 5, timestamp: time)))
     system.resume?.resume()
     await startup.value
     await drive.waitForPendingOperations()
@@ -399,8 +399,8 @@ struct CompassActivityControllerTests {
       sensor.receive?(
         .reading(
           .init(
-            course: degrees, courseAccuracy: 1, speed: 10, speedAccuracy: 1, horizontalAccuracy: 1,
-            timestamp: time)))
+            courseDegrees: degrees, courseAccuracyDegrees: 1, speedMetersPerSecond: 10,
+            speedAccuracyMetersPerSecond: 1, horizontalAccuracyMeters: 1, timestamp: time)))
     }
     send(42)
     await drive.waitForPendingOperations()
@@ -427,11 +427,11 @@ struct CompassActivityControllerTests {
     try await controller.start()
     let first = CompassSample(
       degrees: 42, source: .vehicleCourse, reference: .trueNorth,
-      accuracy: 1, timestamp: time)
+      accuracyDegrees: 1, timestamp: time)
     await controller.update(.init(sample: first, status: .usable))
     let delayed = CompassSample(
       degrees: 90, source: .vehicleCourse, reference: .trueNorth,
-      accuracy: 1, timestamp: time + 1)
+      accuracyDegrees: 1, timestamp: time + 1)
     time += 10
     await controller.update(.init(sample: delayed, status: .usable))
     #expect(system.handle.updates.map(\.bearing) == [42])
@@ -453,7 +453,7 @@ struct CompassActivityControllerTests {
       .init(
         sample: CompassSample(
           degrees: degrees, source: .vehicleCourse, reference: .trueNorth,
-          accuracy: 1, timestamp: time), status: .usable)
+          accuracyDegrees: 1, timestamp: time), status: .usable)
     }
     system.handle.suspendNextUpdate = true
     let first = reading(42)

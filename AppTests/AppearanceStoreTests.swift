@@ -93,11 +93,11 @@ struct AppearanceStoreTests {
     hidden.lockScreenTimestamp = .hidden
     #expect(try render(original, small: false) != render(hidden, small: false))
     #expect(try render(original, small: true) == render(hidden, small: true))
-    hidden.smallActivityTimestamp = .hidden
+    hidden.carPlayActivityTimestamp = .hidden
     #expect(try render(original, small: true) != render(hidden, small: true))
     var elapsed = original
     elapsed.lockScreenTimestamp = .elapsed
-    elapsed.smallActivityTimestamp = .elapsed
+    elapsed.carPlayActivityTimestamp = .elapsed
     for small in [false, true] {
       #expect(try render(elapsed, small: small) != render(hidden, small: small))
       // Unavailable cards must never expose a timestamp from a stale payload.
@@ -123,7 +123,7 @@ struct AppearanceStoreTests {
     changed.minorTicks = .none
     #expect(try #require(render(changed).pngData()) != original)
     changed = initial
-    changed.labels = .hidden
+    changed.cardinalLabels = .hidden
     #expect(try #require(render(changed).pngData()) != original)
     changed = initial
     changed.rotation = .arrow
@@ -189,11 +189,11 @@ struct AppearanceStoreTests {
     #expect(phone.value.minorTicks == .five)
     #expect(store.preferences.usesGlobal(for: .phone))
     phone.binding(\.rotation).wrappedValue = .arrow
-    phone.binding(\.labels).wrappedValue = .outside
+    phone.binding(\.cardinalLabels).wrappedValue = .outside
     phone.binding(\.reducedMotionDial).wrappedValue = .rotatingDial
     let saved = AppearanceStore.read(from: defaults)
     #expect(saved.effective(for: .phone).rotation == .arrow)
-    #expect(saved.effective(for: .phone).labels == .outside)
+    #expect(saved.effective(for: .phone).cardinalLabels == .outside)
     #expect(saved.effective(for: .phone).reducedMotionDial == .rotatingDial)
     #expect(saved.effective(for: .phone).minorTicks == .five)
     #expect(saved.global.rotation == .dial)
@@ -204,11 +204,11 @@ struct AppearanceStoreTests {
     #expect(phone.value.minorTicks == .eight)
     #expect(phone.value.rotation == .dial)
     // A binding made before a later store update must preserve the newer fields.
-    let labels = phone.binding(\.labels)
+    let labels = phone.binding(\.cardinalLabels)
     global.binding(\.minorTicks).wrappedValue = .none
     labels.wrappedValue = .hidden
     #expect(phone.value.minorTicks == .none)
-    #expect(phone.value.labels == .hidden)
+    #expect(phone.value.cardinalLabels == .hidden)
     #expect(
       AppearanceStore(defaults: defaults, legacyDefaults: defaults).preferences == store.preferences
     )

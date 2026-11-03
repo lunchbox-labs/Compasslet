@@ -23,7 +23,8 @@ struct CompassActivityCard: View {
         .fixedSize(horizontal: false, vertical: true)
         VStack(spacing: 1) {
           readout
-          if presentation.reading != nil, presentation.appearance.smallActivityTimestamp != .hidden
+          if presentation.reading != nil,
+            presentation.appearance.carPlayActivityTimestamp != .hidden
           {
             Text("Last Travel").font(.caption2).foregroundStyle(.secondary)
           }
@@ -68,7 +69,7 @@ struct CompassActivityCard: View {
   private var secondaryLine: some View {
     Group {
       if presentation.reading != nil, let sample = state.sampleTime {
-        ActivityTimestamp(sample: sample, mode: presentation.appearance.smallActivityTimestamp)
+        ActivityTimestamp(sample: sample, mode: presentation.appearance.carPlayActivityTimestamp)
       } else {
         Text("Travel · True North")
       }

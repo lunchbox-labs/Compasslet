@@ -21,7 +21,7 @@ struct CompassDial: View {
     GeometryReader { geometry in
       let available = max(0, min(geometry.size.width, geometry.size.height))
       // Outside labels reserve space inside the view instead of overflowing the tile.
-      let diameter = max(0, available - (appearance.labels == .outside ? 42 : 12))
+      let diameter = max(0, available - (appearance.cardinalLabels == .outside ? 42 : 12))
       let radius = diameter / 2
       let rotation = appearance.rotation == .dial ? -(bearing ?? 0) : 0
       let rim: HierarchicalShapeStyle = increasedContrast ? .tertiary : .quaternary
@@ -48,10 +48,10 @@ struct CompassDial: View {
           .offset(y: -radius * 0.9)
           .rotationEffect(.degrees(angle + rotation))
         }
-        if appearance.labels != .hidden {
+        if appearance.cardinalLabels != .hidden {
           ForEach(Array(["N", "E", "S", "W"].enumerated()), id: \.offset) { index, label in
             let angle = (Double(index) * 90 + rotation - 90) * .pi / 180
-            let distance = appearance.labels == .outside ? radius + 13 : radius * 0.7
+            let distance = appearance.cardinalLabels == .outside ? radius + 13 : radius * 0.7
             Text(label).font(.system(size: max(11, min(18, diameter * 0.085)), weight: .semibold))
               .foregroundStyle(index == 0 ? Color.red : labelColor)
               .offset(x: distance * CGFloat(cos(angle)), y: distance * CGFloat(sin(angle)))
@@ -66,7 +66,7 @@ struct CompassDial: View {
               CompassReadout(
                 bearing: bearing, appearance: appearance, degreesFirst: true, compact: true
               )
-              .frame(width: diameter * (appearance.labels == .outside ? 0.78 : 0.56))
+              .frame(width: diameter * (appearance.cardinalLabels == .outside ? 0.78 : 0.56))
             }
           } else {
             Image(systemName: "location.north.fill")

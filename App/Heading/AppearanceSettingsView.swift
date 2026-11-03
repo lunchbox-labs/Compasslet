@@ -138,7 +138,7 @@ struct AppearanceDetailView: View {
         if surface != .phone {
           Section("Last Travel") {
             timestampPicker("Lock Screen", selection: binding(\.lockScreenTimestamp))
-            timestampPicker("CarPlay", selection: binding(\.smallActivityTimestamp))
+            timestampPicker("CarPlay", selection: binding(\.carPlayActivityTimestamp))
           }
         }
         if surface != .activity {
@@ -309,7 +309,7 @@ enum AppearanceOption: CaseIterable {
     switch self {
     case .minorTicks: "\(value.minorTicks.rawValue)"
     case .labels:
-      switch value.labels {
+      switch value.cardinalLabels {
       case .inside: "Inside"
       case .outside: "Outside"
       case .hidden: "Hidden"
@@ -351,7 +351,7 @@ struct AppearanceOptionEditor: View {
         case .minorTicks:
           choices(MinorTicks.allCases, keyPath: \.minorTicks)
         case .labels:
-          choices(CardinalLabels.allCases, keyPath: \.labels)
+          choices(CardinalLabels.allCases, keyPath: \.cardinalLabels)
         case .rotation:
           choices(DialRotation.allCases, keyPath: \.rotation)
         case .reduceMotion:
