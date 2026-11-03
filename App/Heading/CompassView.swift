@@ -196,7 +196,7 @@ struct CompassView: View {
   }
   private var liveActivityControlFaded: Bool { !carPlayReady && onboarding.step == .shortcuts }
 
-  /// The manual fallback for the automatic CarPlay start, shown only while CarPlay is connected.
+  /// The manual fallback for the automatic CarPlay start, shown while CarPlay is connected.
   /// An icon-only circle in the bottom-right corner, a little smaller on short screens.
   @ViewBuilder private func liveActivityControl(compact: Bool) -> some View {
     if carPlayReady || tourShowsLiveActivityControl {
