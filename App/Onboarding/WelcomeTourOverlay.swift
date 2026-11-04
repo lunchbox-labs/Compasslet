@@ -124,7 +124,14 @@ struct WelcomeTourOverlay: View {
     let next = Button(isLast ? "Done" : "Next") {
       animated { onboarding.advance(carPlayConnected: carPlayConnected) }
     }
+    // The brand's primary action: pink with a dark label, which stays readable in both
+    // appearances where white on pink wouldn't. On light backgrounds the pink alone is too pale
+    // to outline the button, so the darker accent draws its edge; in dark mode the two match.
     .buttonStyle(.borderedProminent)
+    .buttonBorderShape(.capsule)
+    .tint(Color("PrimaryActionFill"))
+    .foregroundStyle(Color("PrimaryActionLabel"))
+    .overlay { Capsule().strokeBorder(Color.accentColor, lineWidth: 1) }
     .controlSize(.large)
     return ViewThatFits(in: .horizontal) {
       // Fixed sizes make the row fall back to the stack rather than
