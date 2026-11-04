@@ -5,9 +5,8 @@ import SwiftUI
 ///
 /// North is marked by shape as well as color: its rim tick is a pointed marker, longer and
 /// wider than the other major ticks, so it stays identifiable with cardinal labels hidden, in
-/// grayscale and with Differentiate Without Color on. Increase Contrast strengthens the rim and
-/// thickens the minor ticks without promoting decorative marks to the primary color. The labels
-/// keep the secondary style, which the system already strengthens under Increase Contrast.
+/// grayscale and with Differentiate Without Color on. Increase Contrast darkens the labels and
+/// rim and thickens the minor ticks without promoting decorative marks to the primary color.
 struct CompassDial: View {
   let bearing: Double?
   let appearance: AppearanceValues
@@ -16,15 +15,18 @@ struct CompassDial: View {
   @Environment(\.colorSchemeContrast) private var contrast
   @Environment(\.colorScheme) private var colorScheme
   /// The text size's factor relative to the default size, applied to the dial-relative labels.
+  /// It follows the system text size, not the readout's custom size.
   @ScaledMetric(relativeTo: .caption) private var labelScale: CGFloat = 1
 
   private var increasedContrast: Bool { contrast == .increased }
+  private var labelColor: Color { increasedContrast ? .primary : .secondary }
   private var north: Color { .north(for: colorScheme) }
 
-  /// Labels scale with the dial, then with Dynamic Type, and stop at 12% of the diameter. Inside
-  /// labels sit at 0.7r, 0.1r from the north marker and 0.14r from the other major ticks, so an
-  /// "N" (cap height about 0.7 em) or a "W" (about 0.95 em wide) first touches them at about 14%
-  /// of the diameter; 12% leaves room for Bold Text. The 11-point floor is the size used today.
+  /// Labels scale with the dial, then with Dynamic Type, and stop growing at 12% of the diameter.
+  /// The 11-point floor, unchanged from before, wins over that cap on dials under about 92
+  /// points. Labels don't rotate, so at a diagonal heading a glyph's corner reaches about 0.46 em
+  /// ("N") or 0.58 em ("W") from its center. Inside labels move inward by half their growth, so
+  /// at the cap they stay clear of the north marker (0.80r) and major ticks (0.84r).
   private static func labelSize(diameter: CGFloat, scale: CGFloat) -> CGFloat {
     let dialRelative = max(11, min(18, diameter * 0.085))
     return max(11, min(dialRelative * scale, diameter * 0.12))
@@ -37,11 +39,11 @@ struct CompassDial: View {
       // Labels are sized from the dial as drawn at the default text size.
       let baseDiameter = max(0, available - (outside ? 42 : 12))
       let labelSize = Self.labelSize(diameter: baseDiameter, scale: labelScale)
-      // Outside labels reserve space inside the view instead of overflowing the tile, and move out
-      // and reserve more as they grow past their size at the default text size.
-      let defaultLabelSize = Self.labelSize(diameter: baseDiameter, scale: 1)
-      let growth = outside ? max(0, labelSize - defaultLabelSize) : 0
-      let diameter = max(0, baseDiameter - growth * 2)
+      // Growth past the default text size. Labels move away from the rim by half of it, so their
+      // edge nearest the rim stays about where it is at the default size.
+      let growth = max(0, labelSize - Self.labelSize(diameter: baseDiameter, scale: 1))
+      // Outside labels reserve space inside the view instead of overflowing the tile.
+      let diameter = max(0, baseDiameter - (outside ? growth * 2 : 0))
       let radius = diameter / 2
       let rotation = appearance.rotation == .dial ? -(bearing ?? 0) : 0
       let rim: HierarchicalShapeStyle = increasedContrast ? .tertiary : .quaternary
@@ -71,9 +73,9 @@ struct CompassDial: View {
         if appearance.cardinalLabels != .hidden {
           ForEach(Array(["N", "E", "S", "W"].enumerated()), id: \.offset) { index, label in
             let angle = (Double(index) * 90 + rotation - 90) * .pi / 180
-            let distance = outside ? radius + 13 + growth / 2 : radius * 0.7
+            let distance = outside ? radius + 13 + growth / 2 : radius * 0.7 - growth / 2
             Text(label).font(.system(size: labelSize, weight: .semibold))
-              .foregroundStyle(index == 0 ? north : Color.secondary)
+              .foregroundStyle(index == 0 ? north : labelColor)
               .offset(x: distance * CGFloat(cos(angle)), y: distance * CGFloat(sin(angle)))
           }
         }

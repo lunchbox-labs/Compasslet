@@ -83,6 +83,9 @@ final class ScreenshotTests: XCTestCase {
     },
     Screen(name: "settings-appearance-minor-ticks") { ScreenshotTests.editor(.minorTicks) },
     Screen(name: "settings-appearance-cardinal-labels") { ScreenshotTests.editor(.labels) },
+    Screen(name: "settings-appearance-cardinal-labels-largest-text") {
+      AnyView(ScreenshotTests.editor(.labels).environment(\.dynamicTypeSize, .accessibility5))
+    },
     Screen(name: "settings-appearance-rotation") { ScreenshotTests.editor(.rotation) },
     Screen(name: "settings-appearance-reduce-motion") { ScreenshotTests.editor(.reduceMotion) },
     Screen(name: "live-activity") { AnyView(LiveActivityScreen()) },
