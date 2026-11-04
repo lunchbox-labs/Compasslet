@@ -208,12 +208,8 @@ struct CompassView: View {
             .font(.system(size: diameter * 0.36, weight: .semibold))
             .foregroundStyle(.primary)
             .frame(width: diameter, height: diameter)
+            // One Liquid Glass circle, without the ring and opaque fill that hid the glass.
             .glassEffect(.regular.interactive(), in: Circle())
-            .overlay { Circle().strokeBorder(Color.secondary, lineWidth: 1) }
-            .background {
-              Circle().fill(Color(uiColor: .systemBackground))
-                .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
-            }
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
