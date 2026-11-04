@@ -124,8 +124,7 @@ struct WelcomeTourOverlay: View {
     let next = Button(isLast ? "Done" : "Next") {
       animated { onboarding.advance(carPlayConnected: carPlayConnected) }
     }
-    .buttonStyle(.borderedProminent)
-    .controlSize(.large)
+    .buttonStyle(PrimaryActionButtonStyle())
     return ViewThatFits(in: .horizontal) {
       // Fixed sizes make the row fall back to the stack rather than
       // wrap "Next" at large text sizes.

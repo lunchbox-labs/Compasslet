@@ -17,7 +17,7 @@ struct CompassSettingsView: View {
           LabeledContent("Location Enabled", value: locationEnabled ? "Yes" : "No")
           Text(locationDetail).foregroundStyle(.secondary)
           if canOpenSettings, let url = URL(string: UIApplication.openSettingsURLString) {
-            Link("Open Settings", destination: url)
+            Link("Open Settings", destination: url).foregroundStyle(.tint)
           }
         }
         Section("Help") {
@@ -27,6 +27,8 @@ struct CompassSettingsView: View {
         Section {
           if let url = URL(string: "https://github.com/lunchbox-labs/compasslet") {
             Link("View Source on GitHub", destination: url)
+              // Links draw in the system blue (3.6:1 on these rows), not the accent, unless told.
+              .foregroundStyle(.tint)
           }
         } header: {
           Text("About")
@@ -40,6 +42,11 @@ struct CompassSettingsView: View {
         ToolbarItem(placement: .confirmationAction) {
           Button("Done", action: close)
             .frame(minWidth: 44, minHeight: 44)
+            // Filled with the accent: white on the light-mode plum, dark on the dark-mode pink,
+            // where white would be only 2.14:1. The style is explicit so the fill doesn't
+            // depend on how the toolbar chooses to draw a confirming button.
+            .buttonStyle(.glassProminent)
+            .foregroundStyle(Color.confirmActionLabel)
             .accessibilityFocused($closeFocused)
         }
       }
