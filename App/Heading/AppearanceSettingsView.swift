@@ -442,7 +442,7 @@ struct AppearancePreview: View {
           }
         }
         .padding().frame(maxWidth: 260)
-        .background(.background, in: RoundedRectangle(cornerRadius: 20))
+        .exampleCard()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(phoneAccessibilityDescription)
       }
@@ -463,9 +463,9 @@ struct AppearancePreview: View {
 }
 
 /// A Live Activity card in the shape the system gives it, following Apple's Live Activity
-/// specifications: the Lock Screen banner spans the screen less 22 points (at most 408) and is
-/// at least 84 points tall, and CarPlay Dashboard shows the small family at 240 by 78 points.
-/// Both grow taller rather than clip when the readout uses a larger text size.
+/// specifications: the Lock Screen banner spans the screen less 22 points and is at least 84
+/// points tall, and the CarPlay card is 240 by 78 points, the shortest of CarPlay Dashboard's
+/// sizes. Both grow taller rather than clip when the readout uses a larger text size.
 struct LiveActivityExample: View {
   enum Presentation {
     case lockScreen, carPlay
@@ -484,19 +484,46 @@ struct LiveActivityExample: View {
   var body: some View {
     VStack(spacing: 8) {
       Text(presentation.title).font(.caption).foregroundStyle(.secondary)
-      card
-        .fixedSize(horizontal: false, vertical: true)
-        .background(.background, in: RoundedRectangle(cornerRadius: 20))
+      card.exampleCard()
     }
   }
 
   @ViewBuilder private var card: some View {
     switch presentation {
     case .lockScreen:
-      CompassActivityCard(state: state).frame(maxWidth: 408, minHeight: 84)
+      CompassActivityCard(state: state)
+        .frame(minHeight: 84)
+        .fixedSize(horizontal: false, vertical: true)
     case .carPlay:
-      CompassActivityCard(state: state, isSmall: true).frame(width: 240).frame(minHeight: 78)
+      CarPlayCardLayout { CompassActivityCard(state: state, isSmall: true) }
     }
+  }
+}
+
+/// Lays the small card out at CarPlay's 240 by 78 points, so it picks the layout CarPlay would,
+/// and grows taller only when even that layout needs more height.
+private struct CarPlayCardLayout: Layout {
+  private let size = ProposedViewSize(width: 240, height: 78)
+
+  func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    let measured = subviews.first?.sizeThatFits(size) ?? .zero
+    return CGSize(width: 240, height: max(78, measured.height))
+  }
+
+  func placeSubviews(
+    in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()
+  ) {
+    subviews.first?.place(
+      at: CGPoint(x: bounds.midX, y: bounds.midY), anchor: .center, proposal: size)
+  }
+}
+
+extension View {
+  /// The rounded card each example sits on, outlined so it stands apart from the background.
+  fileprivate func exampleCard() -> some View {
+    let shape = RoundedRectangle(cornerRadius: 20)
+    return background(.background, in: shape)
+      .overlay(shape.strokeBorder(Color(uiColor: .separator)))
   }
 }
 
