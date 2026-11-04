@@ -38,3 +38,30 @@ extension AppTheme {
     }
   }
 }
+
+extension Color {
+  /// The brand's primary action fill and its label, from the organisation's colour guidance.
+  /// White on this pink is only 2.14:1, so primary actions keep the dark label in both
+  /// appearances.
+  static let brandActionFill = Color("PrimaryActionFill")
+  static let brandActionLabel = Color("PrimaryActionLabel")
+}
+
+/// The brand's primary action button: a pink capsule with a dark label. On light backgrounds
+/// the pink alone is too pale to outline the button, so the darker accent draws its edge; in
+/// dark mode the accent and the fill match. Drawn here rather than tinting a system style, so
+/// the label colour and the pressed state don't depend on how the system renders a tint.
+struct PrimaryActionButtonStyle: ButtonStyle {
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .font(.body.weight(.semibold))
+      .foregroundStyle(Color.brandActionLabel)
+      .padding(.horizontal, 20)
+      .frame(minHeight: 50)
+      .background(Color.brandActionFill, in: Capsule())
+      .overlay { Capsule().strokeBorder(Color.accentColor, lineWidth: 1) }
+      // Darkens on press rather than fading, so the dark label keeps its contrast.
+      .overlay { Capsule().fill(Color.black.opacity(configuration.isPressed ? 0.12 : 0)) }
+      .contentShape(Capsule())
+  }
+}

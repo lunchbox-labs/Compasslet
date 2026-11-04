@@ -40,6 +40,10 @@ struct CompassSettingsView: View {
         ToolbarItem(placement: .confirmationAction) {
           Button("Done", action: close)
             .frame(minWidth: 44, minHeight: 44)
+            // The system fills a confirming button with the accent and a white label, which is
+            // only 2.14:1 on the dark-mode pink; the brand's primary action keeps it dark.
+            .tint(.brandActionFill)
+            .foregroundStyle(Color.brandActionLabel)
             .accessibilityFocused($closeFocused)
         }
       }
