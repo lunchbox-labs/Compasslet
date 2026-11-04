@@ -464,8 +464,8 @@ struct AppearancePreview: View {
 
 /// A Live Activity card in the shape the system gives it, following Apple's Live Activity
 /// specifications: the Lock Screen banner spans the screen less 22 points and is at least 84
-/// points tall, and the CarPlay card is 240 by 78 points, the shortest of CarPlay Dashboard's
-/// sizes. Both grow taller rather than clip when the readout uses a larger text size.
+/// points tall, and the CarPlay card is 240 by 78 points, one of CarPlay Dashboard's sizes.
+/// Both grow taller rather than clip when the readout uses a larger text size.
 struct LiveActivityExample: View {
   enum Presentation {
     case lockScreen, carPlay
