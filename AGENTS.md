@@ -43,8 +43,8 @@ cover the file layout, invocation in each tool and reviewer permissions.
 
 `AppTests/ScreenshotTests.swift` lists the app's screens and states, with fixed heading and
 location input; CarPlay itself is not captured. A pull request that adds or changes a screen
-adds or updates its entry there. The Screenshots workflow runs only when started by hand: set
-`ref` to the branch, tag, commit or pull request number, and narrow it with `filter` when only
-a few screens matter. Each run keeps its images for 7 days as a `screenshots-run-<number>`
+adds or updates its entry there. The Screenshots workflow runs only when started by hand. Set
+`ref` to capture a branch, tag, commit or pull request number other than the one the run starts
+from, and narrow it with `filter` when only a few screens matter. Each run keeps its images for 7 days as a `screenshots-run-<number>`
 artifact. Use these captures for mock-ups; don't push other branches to produce them. Clients
 that can't download artifacts can set `log-images` and read the images from the job log.
