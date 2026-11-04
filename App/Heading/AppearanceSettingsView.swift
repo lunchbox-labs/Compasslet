@@ -447,8 +447,8 @@ struct AppearancePreview: View {
         .accessibilityLabel(phoneAccessibilityDescription)
       }
       if surface == nil || surface == .activity {
+        // CarPlay shows the same reading in a smaller card, so one example covers both.
         LiveActivityExample(presentation: .lockScreen, state: activityState)
-        LiveActivityExample(presentation: .carPlay, state: activityState)
       }
     }
     .accessibilityElement(children: .contain)
