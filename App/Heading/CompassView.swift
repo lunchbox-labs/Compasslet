@@ -177,13 +177,13 @@ struct CompassView: View {
   private var header: some View {
     HStack {
       Button(action: { openSettings() }) {
-        Image(systemName: "line.3.horizontal").frame(width: 44, height: 44)
+        Image(systemName: "gearshape").frame(width: 44, height: 44)
           .foregroundStyle(Color.primary)
           .contentShape(Rectangle())
       }
       .accessibilityLabel("Settings")
       .accessibilityShowsLargeContentViewer {
-        Label("Settings", systemImage: "line.3.horizontal")
+        Label("Settings", systemImage: "gearshape")
       }
       .accessibilityFocused($menuFocused)
       Spacer(minLength: 8)
@@ -220,12 +220,9 @@ struct CompassView: View {
             .font(.system(size: diameter * 0.36, weight: .semibold))
             .foregroundStyle(.primary)
             .frame(width: diameter, height: diameter)
-            .glassEffect(.regular.interactive(), in: Circle())
-            .overlay { Circle().strokeBorder(Color.secondary, lineWidth: 1) }
-            .background {
-              Circle().fill(Color(uiColor: .systemBackground))
-                .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
-            }
+            // The glass is the button's only surface; anything drawn under it hides the glass.
+            // Not interactive glass: the plain button style already dims it on press.
+            .glassEffect(.regular, in: Circle())
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
