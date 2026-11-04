@@ -24,7 +24,7 @@ final class DriveSessionControllerTests: XCTestCase {
   enum Failure: Error { case unavailable }
   final class Activity: CompassActivityPresenting {
     var onDismiss: (() -> Void)?
-    var isEnabled = true
+    var canStartActivities = true
     var starts = 0
     var invalidations = 0
     func invalidateReading() async { invalidations += 1 }
@@ -625,7 +625,7 @@ final class DriveSessionControllerTests: XCTestCase {
 
   func testStartWithoutCarPlayAndLiveActivitiesOffNeverAcquiresLocation() async {
     let sensor = Sensor(), activity = Activity()
-    activity.isEnabled = false
+    activity.canStartActivities = false
     let controller = make(sensor, activity)
     await controller.startLiveActivity()
     XCTAssertFalse(controller.isDriving)
@@ -634,7 +634,7 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertEqual(activity.starts, 0)
     await controller.phoneBecameActive()
     XCTAssertEqual(controller.compactStatus, .unavailable)
-    activity.isEnabled = true
+    activity.canStartActivities = true
     await controller.phoneBecameActive()
     XCTAssertEqual(controller.compactStatus, .inactive)
     await controller.startLiveActivity()

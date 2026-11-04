@@ -35,7 +35,7 @@ final class CompassActivityController: CompassActivityPresenting {
   private var appearanceObservation: AnyCancellable?
   private var lastContent: CompassActivityAttributes.ContentState?
 
-  var isEnabled: Bool { system.enabled }
+  var canStartActivities: Bool { system.enabled }
 
   init(
     system: any CompassActivitySystem = LocalCompassActivitySystem(),

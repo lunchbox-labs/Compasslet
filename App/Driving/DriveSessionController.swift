@@ -70,7 +70,9 @@ final class DriveSessionController: ObservableObject {
     refreshSetupStatus()
     if setupStatus != .ready { _ = stopDrive() }
     // A failed phone start shouldn't keep asking for a setting the user has since changed.
-    if !isDriving, compactStatus == .unavailable, activity.isEnabled { compactStatus = .inactive }
+    if !isDriving, compactStatus == .unavailable, activity.canStartActivities {
+      compactStatus = .inactive
+    }
     if requestingPermission { requestPhoneAuthorization(isForeground: true) }
   }
 
@@ -112,7 +114,7 @@ final class DriveSessionController: ObservableObject {
     guard isDriving else {
       // Without CarPlay the drive exists only for the Live Activity, so don't acquire
       // location when the system won't show one.
-      guard isCarPlayConnected || activity.isEnabled else {
+      guard isCarPlayConnected || activity.canStartActivities else {
         compactStatus = .unavailable
         return
       }
