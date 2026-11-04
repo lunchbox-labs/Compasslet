@@ -78,8 +78,7 @@ Notes:
 - **Left to the system.** Alerts, sheets, menus, tips, the keyboard and Liquid Glass keep their
   system colours. CarPlay templates keep the system's colours too. The Live Activity's text keeps
   the system's primary and secondary styles, because the system draws the Lock Screen and Dynamic
-  Island backgrounds; only its direction arrow takes the Accent, and the reading beside it carries
-  the same information in text.
+  Island backgrounds.
 - **Dark mode is not pure black.** Backgrounds use the brand's dark plum, not `#000000`.
 - **Measure what the system blends.** Glass and tinted fills can be partly transparent. Check the
   rendered colours in captures, not only the values above.
@@ -171,9 +170,9 @@ value.
 - **Compass dial**: major ticks in Text, labels and minor ticks in Secondary text, north in North,
   the index marker in Accent, and decorative marks as above. When there's no heading, the dial
   dims and the status text says why.
-- **Live Activity**: the reading on one line with the travel arrow in Accent, and Last Travel in
-  the system's secondary style. The Lock Screen card stays within the 160-point height Apple
-  allows. The Dynamic Island's arrow turns with the reading.
+- **Live Activity**: text only, with no direction arrow. The reading sits on one line, with Last
+  Travel in the system's secondary style. The Lock Screen card stays within the 160-point height
+  Apple allows.
 - **CarPlay**: the system's templates and colours, with the course arrow in Accent.
 
 ## Docs site
@@ -207,8 +206,6 @@ this list shrinks as they merge.
 - **The CarPlay Live Activity's status** can scale to 50%.
 - **Dial labels** switch to Text under Increase Contrast rather than to the stronger Secondary
   text.
-- **The direction arrow** in the Live Activity arrives with
-  [pull request 196](https://github.com/lunchbox-labs/compasslet/pull/196).
 
 The docs site follows the same pattern: its colours arrive with
 [pull request 202](https://github.com/lunchbox-labs/compasslet/pull/202), and underlined prose
