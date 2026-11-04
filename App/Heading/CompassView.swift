@@ -65,25 +65,27 @@ struct CompassView: View {
         VStack(spacing: 0) {
           header
           GeometryReader { content in
+            let width = content.size.width - 48
+            let sideDial = min(content.size.height - 24, content.size.width * 0.42)
             ViewThatFits(in: [.horizontal, .vertical]) {
               if content.size.width > content.size.height {
                 HStack(spacing: 24) {
-                  dial(size: min(content.size.height - 24, content.size.width * 0.42))
-                  information(details: true)
+                  dial(size: sideDial)
+                  information(details: true, width: width - sideDial - 24)
                 }
                 .fixedSize(horizontal: false, vertical: true)
               }
               VStack(spacing: 24) {
-                dial(size: min(content.size.width - 48, content.size.height * 0.45))
-                information(details: true)
+                dial(size: min(width, content.size.height * 0.45))
+                information(details: true, width: width)
               }
               .fixedSize(horizontal: false, vertical: true)
               VStack(spacing: 12) {
                 dial(size: min(160, content.size.height * 0.25))
-                information(details: false)
+                information(details: false, width: width)
               }
               .fixedSize(horizontal: false, vertical: true)
-              information(details: false)
+              information(details: false, width: width)
                 .fixedSize(horizontal: false, vertical: true)
               // At extreme text sizes, keep the reading or critical status readable.
               // Location preferences remain available in the scrollable Settings.
@@ -281,10 +283,23 @@ struct CompassView: View {
     }
   }
 
-  private func information(details: Bool) -> some View {
+  /// The readout keeps its one-line width, so a reading too wide for the screen still moves to
+  /// a smaller layout. The text below it is measured at `width` instead: `ViewThatFits` compares
+  /// ideal sizes, and a sentence's ideal width is one unbroken line, which would otherwise push
+  /// a long status hint into the small-dial layout without its hint.
+  private func information(details: Bool, width: CGFloat) -> some View {
+    VStack(spacing: details ? 16 : 8) {
+      if compass.sample != nil, appearance.hasReadout { phoneReadout }
+      statusAndLocation(details: details)
+        .frame(idealWidth: max(0, width), maxWidth: .infinity)
+    }
+    .multilineTextAlignment(.center)
+    .frame(maxWidth: .infinity)
+  }
+
+  private func statusAndLocation(details: Bool) -> some View {
     VStack(spacing: details ? 16 : 8) {
       if let sample = compass.sample {
-        if appearance.hasReadout { phoneReadout }
         // The readout already speaks its accuracy. With both center readouts hidden,
         // this line becomes the single VoiceOver stop for the heading instead.
         Text("Accuracy ±\(Int(min(sample.accuracyDegrees, 360).rounded()))°")
@@ -315,8 +330,6 @@ struct CompassView: View {
           .font(.caption2).foregroundStyle(.secondary)
       }
     }
-    .multilineTextAlignment(.center)
-    .frame(maxWidth: .infinity)
   }
 
   private func essentialReading(height: CGFloat) -> some View {
