@@ -14,6 +14,7 @@ struct WelcomeTourOverlay: View {
   let buttonFrame: CGRect?
   let carPlayConnected: Bool
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.colorScheme) private var colorScheme
   @AccessibilityFocusState private var titleFocused: Bool
 
   var body: some View {
@@ -54,7 +55,7 @@ struct WelcomeTourOverlay: View {
     }
   }
 
-  private static let cardBackground = Color(uiColor: .secondarySystemGroupedBackground)
+  private static let cardBackground = Color.surface
 
   private func scrim(size: CGSize, cutout: CGRect?) -> some View {
     Path { path in
@@ -77,8 +78,18 @@ struct WelcomeTourOverlay: View {
     }
     .padding(20)
     .frame(maxWidth: 440)
-    .background(Self.cardBackground, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-    .shadow(color: .black.opacity(0.2), radius: 16, y: 6)
+    .background(Self.cardBackground, in: cardShape)
+    // No shadow: the scrim sets the card apart. In dark mode, where Surface barely stands out
+    // from the dimmed screen, a hairline edge does instead.
+    .overlay {
+      if colorScheme == .dark {
+        cardShape.strokeBorder(Color.separatorLine, lineWidth: 1)
+      }
+    }
+  }
+
+  private var cardShape: RoundedRectangle {
+    RoundedRectangle(cornerRadius: 20, style: .continuous)
   }
 
   private func explanation(_ step: OnboardingState.Step) -> some View {
@@ -114,7 +125,7 @@ struct WelcomeTourOverlay: View {
   private func controls(_ step: OnboardingState.Step) -> some View {
     let isLast = step == OnboardingState.Step.allCases.last
     let position = Text("\(step.rawValue + 1) of \(OnboardingState.Step.allCases.count)")
-      .font(.footnote).foregroundStyle(.secondary)
+      .font(.footnote).foregroundStyle(Color.secondaryText)
     let skip = Button(action: finish) {
       Text("Skip").frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
     }

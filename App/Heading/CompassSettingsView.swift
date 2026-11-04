@@ -13,16 +13,19 @@ struct CompassSettingsView: View {
         Section("Display") {
           NavigationLink("Appearance") { AppearanceSettingsView() }
         }
+        .listRowBackground(Color.surface)
         Section("Location") {
           LabeledContent("Location Enabled", value: locationEnabled ? "Yes" : "No")
-          Text(locationDetail).foregroundStyle(.secondary)
+          Text(locationDetail).foregroundStyle(Color.secondaryText)
           if canOpenSettings, let url = URL(string: UIApplication.openSettingsURLString) {
             Link("Open Settings", destination: url).foregroundStyle(.tint)
           }
         }
+        .listRowBackground(Color.surface)
         Section("Help") {
           Button("Show Welcome Tour", action: showTour)
         }
+        .listRowBackground(Color.surface)
         DiagnosticsSettingsSection()
         Section {
           if let url = URL(string: "https://github.com/lunchbox-labs/compasslet") {
@@ -35,7 +38,9 @@ struct CompassSettingsView: View {
         } footer: {
           Text("Compasslet is open source under the MIT License.")
         }
+        .listRowBackground(Color.surface)
       }
+      .settingsListBackground()
       .navigationTitle("Settings")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
@@ -111,11 +116,11 @@ struct PhoneLocationReadout: View {
           Text("\(Self.formattedElevation(elevation)) Elevation")
             .accessibilityLabel("Elevation \(Self.formattedElevation(elevation, spoken: true))")
         } else {
-          Text("Elevation unavailable").foregroundStyle(.secondary)
+          Text("Elevation unavailable").foregroundStyle(Color.secondaryText)
         }
       } else {
         Text(location.approximate ? "Approximate location" : "Location unavailable")
-          .foregroundStyle(.secondary)
+          .foregroundStyle(Color.secondaryText)
       }
     }
   }

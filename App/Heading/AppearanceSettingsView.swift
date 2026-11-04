@@ -7,6 +7,7 @@ struct AppearanceSettingsView: View {
       Section("Defaults") {
         NavigationLink("Global Appearance") { AppearanceDetailView(surface: nil) }
       }
+      .listRowBackground(Color.surface)
       Section {
         ForEach(AppearanceSurface.allCases, id: \.self) { surface in
           NavigationLink(surface.title) { AppearanceDetailView(surface: surface) }
@@ -16,7 +17,9 @@ struct AppearanceSettingsView: View {
       } footer: {
         Text("Fullscreen CarPlay uses the system’s layout and text sizes.")
       }
+      .listRowBackground(Color.surface)
     }
+    .settingsListBackground()
     .navigationTitle("Appearance")
     .navigationBarTitleDisplayMode(.inline)
   }
@@ -54,6 +57,7 @@ struct AppearanceDetailView: View {
         } footer: {
           Text("Applies to the iPhone app. CarPlay and Live Activity use the system appearance.")
         }
+        .listRowBackground(Color.surface)
       }
       if let surface {
         Section {
@@ -68,6 +72,7 @@ struct AppearanceDetailView: View {
             "Turning on replaces custom settings with global settings."
           )
         }
+        .listRowBackground(Color.surface)
       }
       Section("Example") {
         AppearancePreview(surface: surface, appearance: value)
@@ -78,7 +83,8 @@ struct AppearanceDetailView: View {
           .listRowSeparator(.hidden)
         if followsGlobal {
           Text("Following Global Appearance")
-            .foregroundStyle(.secondary).frame(maxWidth: .infinity)
+            .foregroundStyle(Color.secondaryText).frame(maxWidth: .infinity)
+            .listRowBackground(Color.surface)
             .listRowSeparator(.hidden)
         }
       }
@@ -92,6 +98,7 @@ struct AppearanceDetailView: View {
             Text("This saved appearance hides the readout. Choose a mode to show it.")
           }
         }
+        .listRowBackground(Color.surface)
         Section {
           Toggle("Use System Text Size", isOn: binding(\.useSystemTextSize))
           if !value.useSystemTextSize {
@@ -113,10 +120,10 @@ struct AppearanceDetailView: View {
                 Text("A").font(.title2).accessibilityHidden(true)
               }
               .accessibilityValue(value.customTextSize.title)
-              Text(value.customTextSize.title).font(.caption).foregroundStyle(.secondary)
+              Text(value.customTextSize.title).font(.caption).foregroundStyle(Color.secondaryText)
               if value.customTextSize.isAccessibilitySize {
                 Text("Accessibility Size")
-                  .font(.caption2).foregroundStyle(.secondary).accessibilityHidden(true)
+                  .font(.caption2).foregroundStyle(Color.secondaryText).accessibilityHidden(true)
               }
             }
             .frame(maxWidth: .infinity)
@@ -136,12 +143,14 @@ struct AppearanceDetailView: View {
             }
           }
         }
+        .listRowBackground(Color.surface)
         .disabled(!value.hasReadout)
         if surface != .phone {
           Section("Last Travel") {
             timestampPicker("Lock Screen", selection: binding(\.lockScreenTimestamp))
             timestampPicker("CarPlay", selection: binding(\.carPlayActivityTimestamp))
           }
+          .listRowBackground(Color.surface)
         }
         if surface != .activity {
           Section {
@@ -151,6 +160,7 @@ struct AppearanceDetailView: View {
           } header: {
             Text("Dial")
           }
+          .listRowBackground(Color.surface)
           Section {
             editorLink(.reduceMotion)
           } header: {
@@ -160,6 +170,7 @@ struct AppearanceDetailView: View {
               "Used when Reduce Motion is on. Choose a text-only reading or a dial with reduced movement."
             )
           }
+          .listRowBackground(Color.surface)
         }
         Section {
           Button(surface == nil ? "Reset Global Appearance" : "Reset Appearance") {
@@ -173,8 +184,10 @@ struct AppearanceDetailView: View {
             }
           }
         }
+        .listRowBackground(Color.surface)
       }
     }
+    .settingsListBackground()
     .navigationTitle(surface?.title ?? "Global Appearance")
     .navigationBarTitleDisplayMode(.inline)
   }
@@ -360,7 +373,9 @@ struct AppearanceOptionEditor: View {
           choices(ReducedMotionDial.allCases, keyPath: \.reducedMotionDial)
         }
       }
+      .listRowBackground(Color.surface)
     }
+    .settingsListBackground()
     .navigationTitle(option.title)
     .navigationBarTitleDisplayMode(.inline)
   }
@@ -375,7 +390,7 @@ struct AppearanceOptionEditor: View {
       } label: {
         HStack {
           Text(choiceTitle(choice, keyPath: keyPath))
-            .foregroundStyle(Color.primary)
+            .foregroundStyle(Color.appText)
           Spacer()
           if selected {
             Image(systemName: "checkmark").accessibilityHidden(true)
@@ -486,7 +501,7 @@ struct LiveActivityExample: View {
 
   var body: some View {
     VStack(spacing: 8) {
-      Text(presentation.title).font(.caption).foregroundStyle(.secondary)
+      Text(presentation.title).font(.caption).foregroundStyle(Color.secondaryText)
       card.exampleCard()
     }
   }
@@ -523,8 +538,8 @@ extension View {
   /// The rounded card each example sits on, outlined so it stands apart from the background.
   fileprivate func exampleCard() -> some View {
     let shape = RoundedRectangle(cornerRadius: 20)
-    return background(.background, in: shape)
-      .overlay(shape.strokeBorder(Color(uiColor: .separator)))
+    return background(Color.surface, in: shape)
+      .overlay(shape.strokeBorder(Color.separatorLine))
   }
 }
 
