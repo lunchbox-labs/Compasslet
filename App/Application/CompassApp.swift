@@ -56,11 +56,11 @@ extension Color {
 /// the label colour and the pressed state don't depend on how the system renders a tint.
 struct PrimaryActionButtonStyle: ButtonStyle {
   func makeBody(configuration: Configuration) -> some View {
-    PrimaryActionLabel(label: configuration.label, isPressed: configuration.isPressed)
+    PrimaryActionCapsule(label: configuration.label, isPressed: configuration.isPressed)
   }
 }
 
-private struct PrimaryActionLabel<Label: View>: View {
+private struct PrimaryActionCapsule<Label: View>: View {
   let label: Label
   let isPressed: Bool
   @Environment(\.isEnabled) private var isEnabled
