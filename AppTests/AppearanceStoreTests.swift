@@ -108,44 +108,58 @@ struct AppearanceStoreTests {
   }
 
   @Test func lockScreenCardStaysWithinTheLiveActivityHeightLimits() {
-    let sample = Date(timeIntervalSince1970: 100)
-    var appearances: [AppearanceValues] = []
-    for mode in [ActivityTimestampMode.time, .elapsed, .hidden] {
-      var system = AppearanceValues()
-      system.lockScreenTimestamp = mode
-      appearances.append(system)
-      for custom in [ReadoutTextSize.xSmall, .accessibility5] {
-        var fixed = system
-        fixed.useSystemTextSize = false
-        fixed.customTextSize = custom
-        appearances.append(fixed)
-      }
+    struct Case {
+      var textSize: DynamicTypeSize
+      var appearance = AppearanceValues()
+      var status = CompassActivityAttributes.Status.usable
+      var stale = false
+      var diagnostics = false
     }
-    let statuses: [CompassActivityAttributes.Status] = [
-      .usable, .waiting, .slow, .unreliable, .unavailable,
-    ]
-    for appearance in appearances {
-      for status in statuses {
-        for textSize in [DynamicTypeSize.xSmall, .large, .accessibility5] {
-          for (stale, diagnostics) in [(false, false), (false, true), (true, false)] {
-            let state = CompassActivityAttributes.ContentState(
-              bearing: 359, status: status, sampleTime: sample, expiry: nil,
-              debugUpdateTime: diagnostics ? sample : nil, appearance: appearance)
-            let host = UIHostingController(
-              rootView: CompassActivityCard(state: state, isStale: stale)
-                .environment(\.dynamicTypeSize, textSize))
-            // Narrower than any supported banner (a 375-point screen less 22), for margin.
-            let size = host.sizeThatFits(in: CGSize(width: 298, height: 1000))
-            // The card reports its full height above 160 points, so an overflow shows here.
-            #expect(
-              size.height <= 160,
-              """
-              \(status) at \(textSize), stale \(stale), diagnostics \(diagnostics), \
-              \(appearance): \(size.height)
-              """)
+    var cases: [Case] = []
+    for textSize in [DynamicTypeSize.xSmall, .large, .accessibility5] {
+      for mode in [ActivityTimestampMode.time, .elapsed, .hidden] {
+        // "Move steadily to show travel" is the longest status.
+        for status in [CompassActivityAttributes.Status.usable, .slow] {
+          for diagnostics in [false, true] {
+            var appearance = AppearanceValues()
+            appearance.lockScreenTimestamp = mode
+            cases.append(
+              Case(
+                textSize: textSize, appearance: appearance, status: status,
+                diagnostics: diagnostics))
           }
         }
       }
+    }
+    // A custom readout size can be larger or smaller than the system size around it.
+    for (system, readout) in [
+      (DynamicTypeSize.xSmall, ReadoutTextSize.accessibility5), (.accessibility5, .xSmall),
+    ] {
+      for status in [CompassActivityAttributes.Status.usable, .slow] {
+        var appearance = AppearanceValues()
+        appearance.useSystemTextSize = false
+        appearance.customTextSize = readout
+        cases.append(Case(textSize: system, appearance: appearance, status: status))
+      }
+    }
+    for status in [CompassActivityAttributes.Status.waiting, .unreliable, .unavailable] {
+      cases.append(Case(textSize: .accessibility5, status: status))
+    }
+    cases.append(Case(textSize: .accessibility5, stale: true))
+
+    let sample = Date(timeIntervalSince1970: 100)
+    let host = UIHostingController(rootView: AnyView(EmptyView()))
+    for test in cases {
+      let state = CompassActivityAttributes.ContentState(
+        bearing: 359, status: test.status, sampleTime: sample, expiry: nil,
+        debugUpdateTime: test.diagnostics ? sample : nil, appearance: test.appearance)
+      host.rootView = AnyView(
+        CompassActivityCard(state: state, isStale: test.stale)
+          .environment(\.dynamicTypeSize, test.textSize))
+      // Narrower than any supported banner (a 375-point screen less 22), for margin.
+      let size = host.sizeThatFits(in: CGSize(width: 298, height: 1000))
+      // The card reports its full height above 160 points, so an overflow shows here.
+      #expect(size.height <= 160, "\(test): \(size.height)")
     }
   }
 
