@@ -45,6 +45,9 @@ extension Color {
   /// appearances.
   static let brandActionFill = Color("PrimaryActionFill")
   static let brandActionLabel = Color("PrimaryActionLabel")
+  /// The label on a button filled with the accent: white on the light-mode plum (6.75:1), dark
+  /// on the dark-mode pink (8.09:1).
+  static let confirmActionLabel = Color("ConfirmActionLabel")
 }
 
 /// The brand's primary action button: a pink capsule with a dark label. On light backgrounds
@@ -53,15 +56,30 @@ extension Color {
 /// the label colour and the pressed state don't depend on how the system renders a tint.
 struct PrimaryActionButtonStyle: ButtonStyle {
   func makeBody(configuration: Configuration) -> some View {
-    configuration.label
+    PrimaryActionLabel(label: configuration.label, isPressed: configuration.isPressed)
+  }
+}
+
+private struct PrimaryActionLabel<Label: View>: View {
+  let label: Label
+  let isPressed: Bool
+  @Environment(\.isEnabled) private var isEnabled
+  // Grow with the text so the capsule keeps its proportions at large sizes.
+  @ScaledMetric(relativeTo: .body) private var horizontalInset = 20
+  @ScaledMetric(relativeTo: .body) private var verticalInset = 14
+
+  var body: some View {
+    label
       .font(.body.weight(.semibold))
       .foregroundStyle(Color.brandActionLabel)
-      .padding(.horizontal, 20)
+      .padding(.horizontal, horizontalInset)
+      .padding(.vertical, verticalInset)
       .frame(minHeight: 50)
       .background(Color.brandActionFill, in: Capsule())
       .overlay { Capsule().strokeBorder(Color.accentColor, lineWidth: 1) }
       // Darkens on press rather than fading, so the dark label keeps its contrast.
-      .overlay { Capsule().fill(Color.black.opacity(configuration.isPressed ? 0.12 : 0)) }
+      .overlay { Capsule().fill(Color.black.opacity(isPressed ? 0.12 : 0)) }
+      .opacity(isEnabled ? 1 : 0.4)
       .contentShape(Capsule())
   }
 }
