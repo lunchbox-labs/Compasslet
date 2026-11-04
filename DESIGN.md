@@ -169,8 +169,8 @@ value.
   Secondary text and the primary action. The spotlight ring is white at 2 points, over the black
   55% scrim.
 - **Compass dial**: major ticks in Text, labels and minor ticks in Secondary text, north in North,
-  the index marker in Accent, and decorative marks as above. When there's no heading, the dial dims and the
-  status text says why.
+  the index marker in Accent, and decorative marks as above. When there's no heading, the dial
+  dims and the status text says why.
 - **Live Activity**: the reading on one line with the travel arrow in Accent, and Last Travel in
   the system's secondary style. The Lock Screen card stays within the 160-point height Apple
   allows. The Dynamic Island's arrow turns with the reading.
