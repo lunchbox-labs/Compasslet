@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A5BEEE9D3A6E97EDC26FBCB5 /* OnboardingStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D91B4E0D371503B99ECD765 /* OnboardingStateTests.swift */; };
+		3228C34B241C23C096F897A0 /* WelcomeTourOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB4E2DDE294BB7C0D864F26C /* WelcomeTourOverlay.swift */; };
+		5CC09A1F88FC413F597763FB /* OnboardingState.swift in Sources */ = {isa = PBXBuildFile; fileRef = D61327A3FD18FBBDF030A402 /* OnboardingState.swift */; };
 		AB1310000000000000000001 /* CompassActivityCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB1310000000000000000003 /* CompassActivityCard.swift */; };
 		AB1310000000000000000002 /* CompassActivityCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB1310000000000000000003 /* CompassActivityCard.swift */; };
 		020F1378FBC3CA202F0BD64E /* TravelLocationSensor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B8C91614F79675159741862 /* TravelLocationSensor.swift */; };
@@ -92,6 +95,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		8D91B4E0D371503B99ECD765 /* OnboardingStateTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OnboardingStateTests.swift; sourceTree = "<group>"; };
+		DB4E2DDE294BB7C0D864F26C /* WelcomeTourOverlay.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WelcomeTourOverlay.swift; sourceTree = "<group>"; };
+		D61327A3FD18FBBDF030A402 /* OnboardingState.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OnboardingState.swift; sourceTree = "<group>"; };
 		AB1310000000000000000003 /* CompassActivityCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompassActivityCard.swift; sourceTree = "<group>"; };
 		00E111F986E110C7D82BA48C /* PhoneLocationController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PhoneLocationController.swift; sourceTree = "<group>"; };
 		00F237C285337B5CFA6907E4 /* CompassActivity.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = CompassActivity.entitlements; sourceTree = "<group>"; };
@@ -290,6 +296,7 @@
 				5FF69E94E9E7C6A94754E828 /* Driving */,
 				651EB86926D5F6CA5BCA9EA8 /* CarPlay */,
 				FFABD4A00B014023AF290D95 /* LiveActivity */,
+				035810DFC4A2AE627DA4E14C /* Onboarding */,
 				10A9C1012AD54E0AA0676C02 /* Assets.xcassets */,
 				FD697ECCB09B35EE9223BFF1 /* Info.plist */,
 				5B26188BCA24C591A1887EE6 /* Compass.entitlements */,
@@ -310,6 +317,7 @@
 				5C4EE0A1D2B3C4D5E6F70812 /* ScreenshotTests.swift */,
 				E10300000000000000000004 /* SettingsDismissGestureTests.swift */,
 				477ECA488466B5E09ABBE0F2 /* AppearanceStoreTests.swift */,
+				8D91B4E0D371503B99ECD765 /* OnboardingStateTests.swift */,
 			);
 			name = AppTests;
 			path = AppTests;
@@ -323,6 +331,15 @@
 				30824FB5698A3169AA134E40 /* CompassActivityPresenting.swift */,
 			);
 			path = LiveActivity;
+			sourceTree = "<group>";
+		};
+		035810DFC4A2AE627DA4E14C /* Onboarding */ = {
+			isa = PBXGroup;
+			children = (
+				D61327A3FD18FBBDF030A402 /* OnboardingState.swift */,
+				DB4E2DDE294BB7C0D864F26C /* WelcomeTourOverlay.swift */,
+			);
+			path = Onboarding;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -460,6 +477,7 @@
 				579778A1A4E3CF711F1D2023 /* HeadingControllerTests.swift in Sources */,
 				14F6505531FA7B7C727EC52A /* PhoneLocationControllerTests.swift in Sources */,
 				F294782D8B40F45F001D1942 /* DriveSessionControllerTests.swift in Sources */,
+				A5BEEE9D3A6E97EDC26FBCB5 /* OnboardingStateTests.swift in Sources */,
 				29D6B7B8A0067DFD42EA7CB5 /* CompassActivityControllerTests.swift in Sources */,
 				7D2734D738F62A57FBC0C728 /* CarPlayPresentationTests.swift in Sources */,
 				774742633DD35133F9D14ED8 /* CompassDiagnosticsTests.swift in Sources */,
@@ -488,6 +506,8 @@
 			files = (
 				9E6DF7AA346C5341EE5E0E55 /* CompassApp.swift in Sources */,
 				90090CB56FF0934B45B2BA5B /* CompassView.swift in Sources */,
+				3228C34B241C23C096F897A0 /* WelcomeTourOverlay.swift in Sources */,
+				5CC09A1F88FC413F597763FB /* OnboardingState.swift in Sources */,
 				0838A3A568319EC0360654D0 /* HeadingController.swift in Sources */,
 				7DAFBB08145E36C20B9711CD /* PhoneLocationController.swift in Sources */,
 				E10300000000000000000001 /* SettingsDismissGesture.swift in Sources */,

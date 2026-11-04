@@ -1,6 +1,7 @@
 import CompassCore
 import CoreLocation
 import SwiftUI
+import TipKit
 import XCTest
 
 @testable import Compass
@@ -13,17 +14,47 @@ import XCTest
 final class ScreenshotTests: XCTestCase {
   struct Screen {
     let name: String
-    let content: @MainActor () -> AnyView
+    let content: @MainActor () async -> AnyView
   }
 
   static let screens: [Screen] = [
-    Screen(name: "compass") { ScreenshotTests.compass() },
+    Screen(name: "compass") { await ScreenshotTests.compass() },
     Screen(name: "compass-large-text") {
-      AnyView(ScreenshotTests.compass().environment(\.dynamicTypeSize, .accessibility3))
+      AnyView(await ScreenshotTests.compass().environment(\.dynamicTypeSize, .accessibility3))
     },
-    Screen(name: "compass-finding-north") { ScreenshotTests.compass(heading: nil) },
-    Screen(name: "compass-calibration") { ScreenshotTests.compass(heading: .calibrationNeeded) },
-    Screen(name: "compass-location-denied") { ScreenshotTests.compass(location: .denied) },
+    Screen(name: "compass-finding-north") { await ScreenshotTests.compass(heading: nil) },
+    Screen(name: "compass-calibration") {
+      await ScreenshotTests.compass(heading: .calibrationNeeded)
+    },
+    Screen(name: "compass-location-denied") { await ScreenshotTests.compass(location: .denied) },
+    Screen(name: "compass-live-activity-start") {
+      await ScreenshotTests.compass(carPlay: .connected)
+    },
+    Screen(name: "compass-live-activity-start-large-text") {
+      AnyView(
+        await ScreenshotTests.compass(carPlay: .connected)
+          .environment(\.dynamicTypeSize, .accessibility5))
+    },
+    Screen(name: "compass-live-activity-end") { await ScreenshotTests.compass(carPlay: .driving) },
+    Screen(name: "compass-live-activity-tip") {
+      await ScreenshotTests.compass(carPlay: .connected, showsTip: true)
+    },
+    Screen(name: "tour-welcome") { await ScreenshotTests.compass(tour: .compass) },
+    Screen(name: "tour-live-activity-button") {
+      await ScreenshotTests.compass(tour: .liveActivity)
+    },
+    Screen(name: "tour-live-activity-button-large-text") {
+      AnyView(
+        await ScreenshotTests.compass(tour: .liveActivity)
+          .environment(\.dynamicTypeSize, .accessibility3))
+    },
+    Screen(name: "tour-live-activity-button-carplay") {
+      await ScreenshotTests.compass(tour: .liveActivity, carPlay: .connected)
+    },
+    Screen(name: "tour-shortcuts") { await ScreenshotTests.compass(tour: .shortcuts) },
+    Screen(name: "tour-shortcuts-carplay") {
+      await ScreenshotTests.compass(tour: .shortcuts, carPlay: .connected)
+    },
     Screen(name: "settings") { ScreenshotTests.settings() },
     Screen(name: "settings-bottom") {
       AnyView(ScreenshotTests.settings().defaultScrollAnchor(.bottom))
@@ -74,7 +105,7 @@ final class ScreenshotTests: XCTestCase {
     }
     XCTAssertFalse(selected.isEmpty, "No screen name starts with \(nameFilter)")
     for screen in selected {
-      let window = try makeWindow(screen.content())
+      let window = try makeWindow(await screen.content())
       // Long enough for the first readings, navigation titles and any appearance animation.
       try await Task.sleep(for: .seconds(2))
       try await requestScreenshot(screen.name, in: directory)
@@ -109,10 +140,15 @@ final class ScreenshotTests: XCTestCase {
       FileManager.default.fileExists(atPath: done.path), "No screenshot was taken of \(name)")
   }
 
+  enum CarPlay { case disconnected, connected, driving }
+
   private static func compass(
     heading: FixedHeadingSensor.Reading? = .northeast,
-    location: FixedTravelSensor.Access = .allowed
-  ) -> AnyView {
+    location: FixedTravelSensor.Access = .allowed,
+    tour: OnboardingState.Step? = nil,
+    carPlay: CarPlay = .disconnected,
+    showsTip: Bool = false
+  ) async -> AnyView {
     CompassView.makeHeadingController = {
       HeadingController(sensor: FixedHeadingSensor(reading: heading))
     }
@@ -121,11 +157,36 @@ final class ScreenshotTests: XCTestCase {
         sensor: FixedPhoneLocationSensor(allowed: location == .allowed),
         cityLookup: FixedCityLookup())
     }
-    return AnyView(CompassView(drive: drive(location: location)))
+    let drive = drive(location: location)
+    switch carPlay {
+    case .disconnected: break
+    case .connected: drive.carPlayConnected()
+    case .driving: await drive.carPlayActivated()
+    }
+    let onboarding = onboarding(at: tour)
+    if !showsTip { onboarding.liveActivityTip.invalidate(reason: .actionPerformed) }
+    return AnyView(CompassView(drive: drive, onboarding: onboarding))
+  }
+
+  /// TipKit remembers a shown tip across runs on the same simulator, so each screen gets a tip
+  /// id it hasn't shown. Separate defaults keep the tour state off the app host's.
+  private static func onboarding(at step: OnboardingState.Step?) -> OnboardingState {
+    let suite = "screenshots.onboarding"
+    guard let defaults = UserDefaults(suiteName: suite) else {
+      preconditionFailure("No defaults suite named \(suite)")
+    }
+    defaults.removePersistentDomain(forName: suite)
+    defaults.set(step == nil, forKey: OnboardingState.tourCompletedKey)
+    defaults.set(Int.random(in: 1...Int(Int32.max)), forKey: OnboardingState.tipGenerationKey)
+    let onboarding = OnboardingState(defaults: defaults)
+    while let current = onboarding.step, let step, current.rawValue < step.rawValue {
+      onboarding.advance(carPlayConnected: false)
+    }
+    return onboarding
   }
 
   private static func settings() -> AnyView {
-    AnyView(CompassSettingsView(drive: drive(location: .allowed), close: {}))
+    AnyView(CompassSettingsView(drive: drive(location: .allowed), close: {}, showTour: {}))
   }
 
   private static func editor(_ option: AppearanceOption) -> AnyView {

@@ -1,5 +1,6 @@
 import CompassCore
 import SwiftUI
+import TipKit
 import UIKit
 
 struct CompassView: View {
@@ -19,6 +20,7 @@ struct CompassView: View {
   @StateObject private var compass = CompassView.makeHeadingController()
   @StateObject private var location = CompassView.makeLocationController()
   @ObservedObject private var appearanceStore = AppearanceStore.shared
+  @StateObject private var onboarding: OnboardingState
   @State private var showingSettings = false
   @State private var showingHeadingStatus = false
   @State private var debugEnabled = false
@@ -26,6 +28,14 @@ struct CompassView: View {
   @ScaledMetric(relativeTo: .body) private var compactStatusSize = 17
   @ScaledMetric(relativeTo: .body) private var liveActivityDiameter: CGFloat = 52
   @AccessibilityFocusState private var menuFocused: Bool
+
+  init(
+    drive: DriveSessionController,
+    onboarding: @autoclosure @escaping () -> OnboardingState = OnboardingState()
+  ) {
+    self.drive = drive
+    _onboarding = StateObject(wrappedValue: onboarding())
+  }
 
   private var storedAppearance: AppearanceValues {
     appearanceStore.preferences.effective(for: .phone)
@@ -87,8 +97,8 @@ struct CompassView: View {
           }
           liveActivityControl(compact: geometry.size.height < 700)
         }
-        .allowsHitTesting(!showingSettings)
-        .accessibilityHidden(showingSettings)
+        .allowsHitTesting(!showingSettings && !onboarding.isTouring)
+        .accessibilityHidden(showingSettings || onboarding.isTouring)
         .contentShape(Rectangle())
         .simultaneousGesture(
           DragGesture(minimumDistance: 24, coordinateSpace: .local)
@@ -101,7 +111,7 @@ struct CompassView: View {
         )
         if showingSettings {
           CompassSettingsView(
-            drive: drive, close: closeSettings
+            drive: drive, close: closeSettings, showTour: replayTour
           )
           .frame(width: geometry.size.width, height: geometry.size.height)
           .gesture(SettingsDismissGesture(close: closeSettings))
@@ -111,6 +121,14 @@ struct CompassView: View {
         }
       }
       .frame(width: geometry.size.width, height: geometry.size.height)
+      .overlayPreferenceValue(LiveActivityControlBoundsKey.self) { anchor in
+        GeometryReader { overlay in
+          WelcomeTourOverlay(
+            onboarding: onboarding, buttonFrame: anchor.map { overlay[$0] },
+            carPlayConnected: carPlayReady)
+        }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: onboarding.step)
+      }
     }
     .background(Color(uiColor: .systemBackground))
     .task(id: scenePhase) {
@@ -121,7 +139,9 @@ struct CompassView: View {
       }
       // The phone readouts don't depend on ending leftover Live Activities, so the sensors
       // start without waiting for it. Cleanup still runs if this task is already cancelled.
-      async let activation: Void = drive.phoneBecameActive()
+      // The location prompt waits for the first-launch tour so it doesn't cover it.
+      async let activation: Void = drive.phoneBecameActive(
+        requestingPermission: !onboarding.isTouring)
       guard !Task.isCancelled else { return }
       compass.setReducedMotion(stepsHeading)
       async let heading: Void = compass.run()
@@ -143,6 +163,11 @@ struct CompassView: View {
       Text(compass.status.detail)
     }
     .onChange(of: stepsHeading) { _, value in compass.setReducedMotion(value) }
+    .onChange(of: onboarding.isTouring) { _, touring in
+      guard !touring else { return }
+      menuFocused = true
+      drive.requestPhoneAuthorization(isForeground: scenePhase == .active)
+    }
   }
 
   private var header: some View {
@@ -162,10 +187,19 @@ struct CompassView: View {
     .padding(.horizontal, 16).padding(.vertical, 8)
   }
 
-  /// The manual fallback for the automatic CarPlay start, shown only while CarPlay is connected.
+  private var carPlayReady: Bool { drive.isCarPlayConnected && drive.setupStatus == .ready }
+
+  /// The tour shows the button in place for its step without CarPlay, then fades it out while
+  /// keeping its space, so the compass doesn't jump under the next step.
+  private var tourShowsLiveActivityControl: Bool {
+    onboarding.step == .liveActivity || onboarding.step == .shortcuts
+  }
+  private var liveActivityControlFaded: Bool { !carPlayReady && onboarding.step == .shortcuts }
+
+  /// The manual fallback for the automatic CarPlay start, shown while CarPlay is connected.
   /// An icon-only circle in the bottom-right corner, a little smaller on short screens.
   @ViewBuilder private func liveActivityControl(compact: Bool) -> some View {
-    if drive.isCarPlayConnected, drive.setupStatus == .ready {
+    if carPlayReady || tourShowsLiveActivityControl {
       let diameter = max(44, min(compact ? liveActivityDiameter - 8 : liveActivityDiameter, 80))
       HStack {
         Spacer(minLength: 0)
@@ -183,6 +217,12 @@ struct CompassView: View {
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .anchorPreference(key: LiveActivityControlBoundsKey.self, value: .bounds) { $0 }
+        .popoverTip(
+          carPlayReady && !onboarding.isTouring && !showingSettings
+            ? onboarding.liveActivityTip : nil,
+          arrowEdge: .bottom
+        )
         .accessibilityLabel(liveActivityAction)
         .accessibilityHint(liveActivityHint)
         .accessibilityShowsLargeContentViewer {
@@ -198,6 +238,9 @@ struct CompassView: View {
         }
       }
       .padding(.horizontal, 16).padding(.bottom, 8)
+      .opacity(liveActivityControlFaded ? 0 : 1)
+      .accessibilityHidden(liveActivityControlFaded)
+      .animation(.easeOut(duration: reduceMotion ? 0.2 : 0.8), value: liveActivityControlFaded)
     }
   }
 
@@ -219,6 +262,7 @@ struct CompassView: View {
   }
 
   private func toggleLiveActivity() {
+    onboarding.liveActivityTip.invalidate(reason: .actionPerformed)
     let running = liveActivityRunning
     Task {
       if running {
@@ -374,6 +418,13 @@ struct CompassView: View {
   private func closeSettings() {
     withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) { showingSettings = false }
     menuFocused = true
+  }
+
+  private func replayTour() {
+    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) {
+      showingSettings = false
+      onboarding.replay()
+    }
   }
 }
 
