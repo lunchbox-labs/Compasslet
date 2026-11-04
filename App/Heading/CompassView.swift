@@ -177,13 +177,13 @@ struct CompassView: View {
   private var header: some View {
     HStack {
       Button(action: { openSettings() }) {
-        Image(systemName: "line.3.horizontal").frame(width: 44, height: 44)
+        Image(systemName: "gearshape").frame(width: 44, height: 44)
           .foregroundStyle(Color.primary)
           .contentShape(Rectangle())
       }
       .accessibilityLabel("Settings")
       .accessibilityShowsLargeContentViewer {
-        Label("Settings", systemImage: "line.3.horizontal")
+        Label("Settings", systemImage: "gearshape")
       }
       .accessibilityFocused($menuFocused)
       Spacer(minLength: 8)
