@@ -72,6 +72,8 @@ struct AppearanceDetailView: View {
       Section("Example") {
         AppearancePreview(surface: surface, appearance: value)
           .frame(maxWidth: .infinity)
+          // The Lock Screen example spans the row, as the real banner spans the screen.
+          .listRowInsets(.horizontal, 0)
           .listRowBackground(Color.clear)
           .listRowSeparator(.hidden)
         if followsGlobal {
@@ -445,26 +447,55 @@ struct AppearancePreview: View {
         .accessibilityLabel(phoneAccessibilityDescription)
       }
       if surface == nil || surface == .activity {
-        activityExample("Lock Screen", small: false)
-        activityExample("CarPlay", small: true)
+        LiveActivityExample(presentation: .lockScreen, state: activityState)
+        LiveActivityExample(presentation: .carPlay, state: activityState)
       }
     }
     .accessibilityElement(children: .contain)
     .accessibilityLabel("Example")
   }
 
-  private func activityExample(_ title: String, small: Bool) -> some View {
+  private var activityState: CompassActivityAttributes.ContentState {
+    .init(
+      bearing: 45, status: .usable, sampleTime: sampleTime, expiry: nil,
+      appearance: appearance.requiringReadout())
+  }
+}
+
+/// A Live Activity card in the shape the system gives it, following Apple's Live Activity
+/// specifications: the Lock Screen banner spans the screen less 22 points (at most 408) and is
+/// at least 84 points tall, and CarPlay Dashboard shows the small family at 240 by 78 points.
+/// Both grow taller rather than clip when the readout uses a larger text size.
+struct LiveActivityExample: View {
+  enum Presentation {
+    case lockScreen, carPlay
+
+    var title: String {
+      switch self {
+      case .lockScreen: "Lock Screen"
+      case .carPlay: "CarPlay"
+      }
+    }
+  }
+
+  let presentation: Presentation
+  let state: CompassActivityAttributes.ContentState
+
+  var body: some View {
     VStack(spacing: 8) {
-      Text(title).font(.caption).foregroundStyle(.secondary)
-      CompassActivityCard(
-        state: .init(
-          bearing: 45, status: .usable, sampleTime: sampleTime, expiry: nil,
-          appearance: appearance.requiringReadout()),
-        isSmall: small
-      )
-      .frame(maxWidth: 300)
-      .frame(height: small ? 100 : nil)
-      .background(.background, in: RoundedRectangle(cornerRadius: 20))
+      Text(presentation.title).font(.caption).foregroundStyle(.secondary)
+      card
+        .fixedSize(horizontal: false, vertical: true)
+        .background(.background, in: RoundedRectangle(cornerRadius: 20))
+    }
+  }
+
+  @ViewBuilder private var card: some View {
+    switch presentation {
+    case .lockScreen:
+      CompassActivityCard(state: state).frame(maxWidth: 408, minHeight: 84)
+    case .carPlay:
+      CompassActivityCard(state: state, isSmall: true).frame(width: 240).frame(minHeight: 78)
     }
   }
 }

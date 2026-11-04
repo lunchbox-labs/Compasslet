@@ -314,27 +314,13 @@ private struct LiveActivityScreen: View {
   var body: some View {
     VStack(spacing: 32) {
       Spacer()
-      card(title: "Lock Screen") {
-        CompassActivityCard(state: state)
-      }
-      card(title: "CarPlay") {
-        CompassActivityCard(state: state, isSmall: true).frame(height: 100)
-      }
+      LiveActivityExample(presentation: .lockScreen, state: state)
+      LiveActivityExample(presentation: .carPlay, state: state)
       Spacer()
     }
-    .padding(24)
+    // The Lock Screen banner is 22 points narrower than the screen.
+    .padding(.horizontal, 11)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(Color(uiColor: .systemGroupedBackground))
-  }
-
-  private func card<Content: View>(
-    title: String, @ViewBuilder content: () -> Content
-  ) -> some View {
-    VStack(spacing: 8) {
-      Text(title).font(.caption).foregroundStyle(.secondary)
-      content()
-        .frame(maxWidth: 360)
-        .background(.background, in: RoundedRectangle(cornerRadius: 24))
-    }
   }
 }
