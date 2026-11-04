@@ -7,8 +7,9 @@ organisation's [colour guidance](https://github.com/lunchbox-labs/.github/blob/m
 If the two ever disagree on a brand value, the organisation's guidance wins and this file is
 updated to match.
 
-This file describes where the app is going. [Where the app differs today](#where-the-app-differs-today)
-lists what still has to change to match it.
+This file describes where the app is going.
+[Where the app differs today](#where-the-app-differs-today) lists what still has to change to match
+it.
 
 ## Principles
 
@@ -125,8 +126,7 @@ value.
 | 24 | Sections of a screen; the compass screen's side margin |
 | 32 | Separating major regions of a screen |
 
-- The Lock Screen Live Activity keeps the 14-point side margin Apple uses for notifications, the
-  one value off the scale.
+- The Lock Screen Live Activity keeps its 14-point side margin, the one value off the scale.
 - Every control's touch target is at least 44 by 44 points, even when it draws smaller.
 - Grouped lists keep the system's insets and row heights.
 - Insets around text grow with Dynamic Type through `@ScaledMetric`, as the primary action does, so
@@ -168,8 +168,8 @@ value.
 - **Tour card**: Surface, 20-point radius and padding, a card title, body text, a step count in
   Secondary text and the primary action. The spotlight ring is white at 2 points, over the black
   55% scrim.
-- **Compass dial**: major ticks in Text, labels and minor ticks in Secondary text, north in North, the index
-  marker in Accent, and decorative marks as above. When there's no heading, the dial dims and the
+- **Compass dial**: major ticks in Text, labels and minor ticks in Secondary text, north in North,
+  the index marker in Accent, and decorative marks as above. When there's no heading, the dial dims and the
   status text says why.
 - **Live Activity**: the reading on one line with the travel arrow in Accent, and Last Travel in
   the system's secondary style. The Lock Screen card stays within the 160-point height Apple
@@ -197,7 +197,7 @@ this list shrinks as they merge.
 - **Backgrounds, surfaces and text.** The app uses the system's neutral backgrounds, label colours
   and separators. It should use the Background, Grouped background, Surface, Text, Secondary text
   and Separator sets, and the Increase Contrast values above.
-- **North.** The dial draws north in the system red, which is 3.40:1 or less on light
+- **North.** The dial draws north in the system red, which is 3.55:1 or less on light
   backgrounds.
 - **Toggles** are system green.
 - **Dial labels** size with the dial but not with Dynamic Type.
@@ -205,8 +205,14 @@ this list shrinks as they merge.
 - **CarPlay's course arrow** is system teal.
 - **Spacing** uses some off-scale values (1, 6 and 10 points).
 - **The CarPlay Live Activity's status** can scale to 50%.
+- **Dial labels** switch to Text under Increase Contrast rather than to the stronger Secondary
+  text.
 - **The direction arrow** in the Live Activity arrives with
   [pull request 196](https://github.com/lunchbox-labs/compasslet/pull/196).
+
+The docs site follows the same pattern: its colours arrive with
+[pull request 202](https://github.com/lunchbox-labs/compasslet/pull/202), and underlined prose
+links and the focus outline described above are still to add.
 
 ## Changing this file
 
