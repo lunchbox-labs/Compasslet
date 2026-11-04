@@ -501,7 +501,7 @@ struct LiveActivityExample: View {
 
   var body: some View {
     VStack(spacing: 8) {
-      Text(presentation.title).font(.caption).foregroundStyle(Color.secondaryText)
+      Text(presentation.title).font(.caption).foregroundStyle(.secondary)
       card.exampleCard()
     }
   }
@@ -538,8 +538,8 @@ extension View {
   /// The rounded card each example sits on, outlined so it stands apart from the background.
   fileprivate func exampleCard() -> some View {
     let shape = RoundedRectangle(cornerRadius: 20)
-    return background(Color.surface, in: shape)
-      .overlay(shape.strokeBorder(Color.separatorLine))
+    return background(.background, in: shape)
+      .overlay(shape.strokeBorder(Color(uiColor: .separator)))
   }
 }
 

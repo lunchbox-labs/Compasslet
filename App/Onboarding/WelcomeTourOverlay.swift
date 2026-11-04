@@ -35,7 +35,14 @@ struct WelcomeTourOverlay: View {
               card(step).frame(maxWidth: .infinity, alignment: .trailing)
               Pointer()
                 .fill(Self.cardBackground)
+                .overlay {
+                  if colorScheme == .dark {
+                    PointerEdge().stroke(Color.separatorLine, lineWidth: 1)
+                  }
+                }
                 .frame(width: 22, height: 11)
+                // Overlaps the card by a point so the fill covers the card's edge at its base.
+                .offset(y: -1)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.leading, max(20, min(spotlight.midX - 16 - 11, proxy.size.width - 64)))
                 .accessibilityHidden(true)
@@ -220,6 +227,17 @@ private struct Pointer: Shape {
       path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
       path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
       path.closeSubpath()
+    }
+  }
+}
+
+/// The pointer's two slanted sides, outlined in dark mode to match the card's edge.
+private struct PointerEdge: Shape {
+  func path(in rect: CGRect) -> Path {
+    Path { path in
+      path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+      path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+      path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
     }
   }
 }
