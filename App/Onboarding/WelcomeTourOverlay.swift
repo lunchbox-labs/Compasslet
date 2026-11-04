@@ -71,7 +71,7 @@ struct WelcomeTourOverlay: View {
     VStack(alignment: .leading, spacing: 16) {
       ViewThatFits(in: .vertical) {
         explanation(step)
-        ScrollView { explanation(step) }
+        ScrollingExplanation { explanation(step) }.id(step)
       }
       controls(step)
     }
@@ -175,6 +175,31 @@ struct WelcomeTourOverlay: View {
       return
         "Start Live Activity and End Live Activity are also in the Shortcuts app for your automations, and you can ask Siri to “Start Compasslet Live Activity”. Starting it this way opens Compasslet on iPhone, so do it while parked. It ends after a minute unless you open Compasslet on CarPlay."
     }
+  }
+}
+
+/// An explanation too long for the tour card, which fades at the bottom edge while more text is
+/// below it, so it doesn't read as if the sentence just stops.
+private struct ScrollingExplanation<Content: View>: View {
+  @ViewBuilder let content: Content
+  // Starts true: the card only scrolls when its text overflows, and it opens at the top.
+  @State private var moreBelow = true
+
+  var body: some View {
+    ScrollView { content }
+      .scrollIndicatorsFlash(onAppear: true)
+      .onScrollGeometryChange(for: Bool.self) { scroll in
+        scroll.visibleRect.maxY < scroll.contentSize.height - 1
+      } action: { _, more in
+        moreBelow = more
+      }
+      .mask {
+        VStack(spacing: 0) {
+          Color.black
+          LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+            .frame(height: moreBelow ? 40 : 0)
+        }
+      }
   }
 }
 
