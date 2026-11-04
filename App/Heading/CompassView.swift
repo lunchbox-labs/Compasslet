@@ -134,7 +134,7 @@ struct CompassView: View {
         .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: onboarding.step)
       }
     }
-    .background(Color.appBackground)
+    .background(Color(uiColor: .systemBackground))
     .task(id: scenePhase) {
       guard scenePhase == .active else {
         compass.stop()
@@ -178,7 +178,7 @@ struct CompassView: View {
     HStack {
       Button(action: { openSettings() }) {
         Image(systemName: "gearshape").frame(width: 44, height: 44)
-          .foregroundStyle(Color.appText)
+          .foregroundStyle(Color.primary)
           .contentShape(Rectangle())
       }
       .accessibilityLabel("Settings")
@@ -311,17 +311,17 @@ struct CompassView: View {
         // The readout already speaks its accuracy. With both center readouts hidden,
         // this line becomes the single VoiceOver stop for the heading instead.
         Text("Accuracy ±\(Int(min(sample.accuracyDegrees, 360).rounded()))°")
-          .font(.subheadline).foregroundStyle(Color.secondaryText)
+          .font(.subheadline).foregroundStyle(.secondary)
           .accessibilityHidden(appearance.hasReadout)
           .accessibilityLabel(accessibilitySummary)
         if steadyReading {
           Text("Dial hidden while Reduce Motion is on")
-            .font(.caption2).foregroundStyle(Color.secondaryText)
+            .font(.caption2).foregroundStyle(.secondary)
         }
       } else {
         if details {
           Text(compass.status.title).font(.headline)
-          Text(compass.status.detail).foregroundStyle(Color.secondaryText)
+          Text(compass.status.detail).foregroundStyle(.primary)
         } else {
           // Without room for the hint, the title opens it, as in the last layout.
           Button(action: { showingHeadingStatus = true }) {
@@ -343,7 +343,7 @@ struct CompassView: View {
       }
       if debugEnabled, details, let sample = compass.sample {
         Text("Debug · Sample \(sample.timestamp.formatted(date: .omitted, time: .standard))")
-          .font(.caption2).foregroundStyle(Color.secondaryText)
+          .font(.caption2).foregroundStyle(.secondary)
       }
     }
   }

@@ -16,9 +16,8 @@ struct DiagnosticsSettingsSection: View {
         Button("Export Diagnostics", action: export)
         Button("Clear Logs", role: .destructive) { confirmingClear = true }
       }
-      if let error { Text(error).font(.footnote).foregroundStyle(Color.secondaryText) }
+      if let error { Text(error).font(.footnote).foregroundStyle(.primary) }
     }
-    .listRowBackground(Color.surface)
     .sheet(item: $exportItem, onDismiss: removeExport) { item in
       DiagnosticsShareSheet(url: item.url)
     }

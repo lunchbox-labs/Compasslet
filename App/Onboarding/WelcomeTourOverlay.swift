@@ -37,7 +37,7 @@ struct WelcomeTourOverlay: View {
                 .fill(Self.cardBackground)
                 .overlay {
                   if colorScheme == .dark {
-                    PointerEdge().stroke(Color.separatorLine, lineWidth: 1)
+                    PointerEdge().stroke(Color(uiColor: .separator), lineWidth: 1)
                   }
                 }
                 .frame(width: 22, height: 11)
@@ -62,7 +62,7 @@ struct WelcomeTourOverlay: View {
     }
   }
 
-  private static let cardBackground = Color.surface
+  private static let cardBackground = Color(uiColor: .secondarySystemGroupedBackground)
 
   private func scrim(size: CGSize, cutout: CGRect?) -> some View {
     Path { path in
@@ -86,11 +86,9 @@ struct WelcomeTourOverlay: View {
     .padding(20)
     .frame(maxWidth: 440)
     .background(Self.cardBackground, in: cardShape)
-    // No shadow: the scrim sets the card apart. In dark mode, where Surface barely stands out
-    // from the dimmed screen, a hairline edge does instead.
     .overlay {
       if colorScheme == .dark {
-        cardShape.strokeBorder(Color.separatorLine, lineWidth: 1)
+        cardShape.strokeBorder(Color(uiColor: .separator), lineWidth: 1)
       }
     }
   }
@@ -104,6 +102,7 @@ struct WelcomeTourOverlay: View {
       artwork(step)
       Text(title(step))
         .font(.title3.bold())
+        .fontDesign(.rounded)
         .accessibilityAddTraits(.isHeader)
         .accessibilityFocused($titleFocused)
       Text(message(step))
@@ -132,7 +131,7 @@ struct WelcomeTourOverlay: View {
   private func controls(_ step: OnboardingState.Step) -> some View {
     let isLast = step == OnboardingState.Step.allCases.last
     let position = Text("\(step.rawValue + 1) of \(OnboardingState.Step.allCases.count)")
-      .font(.footnote).foregroundStyle(Color.secondaryText)
+      .font(.footnote).foregroundStyle(.secondary)
     let skip = Button(action: finish) {
       Text("Skip").frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
     }

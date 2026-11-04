@@ -51,30 +51,6 @@ extension Color {
   /// The label on a button filled with the accent: white on the light-mode plum (6.75:1), dark
   /// on the dark-mode pink (8.09:1).
   static let confirmActionLabel = Color("ConfirmActionLabel")
-
-  // The colour roles in DESIGN.md. Each set switches with the appearance, and Secondary text
-  // and Separator also with Increase Contrast. App only: the Live Activity extension has no
-  // asset catalog.
-  /// Screen backgrounds, including the compass.
-  static let appBackground = Color("Background")
-  /// Behind inset grouped lists such as Settings.
-  static let groupedBackground = Color("GroupedBackground")
-  /// Grouped list rows and the tour card.
-  static let surface = Color("Surface")
-  /// Body text and headings.
-  static let appText = Color("Text")
-  /// Explanations, footers and captions.
-  static let secondaryText = Color("SecondaryText")
-  /// Decorative dividers and hairlines.
-  static let separatorLine = Color("Separator")
-}
-
-extension View {
-  /// An inset grouped Settings list on the grouped background. Its sections put their rows on
-  /// Surface with `listRowBackground(Color.surface)`, since a list has no default for it.
-  func settingsListBackground() -> some View {
-    scrollContentBackground(.hidden).background(Color.groupedBackground)
-  }
 }
 
 /// The brand's primary action button: a pink capsule with a dark label. On light backgrounds
