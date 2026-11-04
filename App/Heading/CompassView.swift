@@ -23,6 +23,8 @@ struct CompassView: View {
   @StateObject private var onboarding: OnboardingState
   @State private var showingSettings = false
   @State private var showingHeadingStatus = false
+  /// The main screen's side margin, also subtracted when measuring its text.
+  private let contentMargin: CGFloat = 24
   @State private var debugEnabled = false
   @State private var showingLiveActivityFailure = false
   @ScaledMetric(relativeTo: .body) private var compactStatusSize = 17
@@ -65,27 +67,27 @@ struct CompassView: View {
         VStack(spacing: 0) {
           header
           GeometryReader { content in
-            let width = content.size.width - 48
-            let sideDial = min(content.size.height - 24, content.size.width * 0.42)
+            let textWidth = (content.size.width - 2 * contentMargin).rounded(.down)
+            let sideDial = min(content.size.height - 24, content.size.width * 0.42).rounded(.down)
             ViewThatFits(in: [.horizontal, .vertical]) {
               if content.size.width > content.size.height {
                 HStack(spacing: 24) {
                   dial(size: sideDial)
-                  information(details: true, width: width - sideDial - 24)
+                  information(details: true, width: textWidth - sideDial - 24)
                 }
                 .fixedSize(horizontal: false, vertical: true)
               }
               VStack(spacing: 24) {
-                dial(size: min(width, content.size.height * 0.45))
-                information(details: true, width: width)
+                dial(size: min(textWidth, content.size.height * 0.45))
+                information(details: true, width: textWidth)
               }
               .fixedSize(horizontal: false, vertical: true)
               VStack(spacing: 12) {
                 dial(size: min(160, content.size.height * 0.25))
-                information(details: false, width: width)
+                information(details: false, width: textWidth)
               }
               .fixedSize(horizontal: false, vertical: true)
-              information(details: false, width: width)
+              information(details: false, width: textWidth)
                 .fixedSize(horizontal: false, vertical: true)
               // At extreme text sizes, keep the reading or critical status readable.
               // Location preferences remain available in the scrollable Settings.
@@ -94,7 +96,7 @@ struct CompassView: View {
               // is a deliberate non-scrolling design choice rather than a Dynamic Type gap.
               essentialReading(height: content.size.height)
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, contentMargin)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
           }
           liveActivityControl(compact: geometry.size.height < 700)
@@ -286,7 +288,8 @@ struct CompassView: View {
   /// The readout keeps its one-line width, so a reading too wide for the screen still moves to
   /// a smaller layout. The text below it is measured at `width` instead: `ViewThatFits` compares
   /// ideal sizes, and a sentence's ideal width is one unbroken line, which would otherwise push
-  /// a long status hint into the small-dial layout without its hint.
+  /// a long status hint into the small-dial layout without its hint. `width` must not exceed the
+  /// width `ViewThatFits` offers, or every layout but the last fails to fit.
   private func information(details: Bool, width: CGFloat) -> some View {
     VStack(spacing: details ? 16 : 8) {
       if compass.sample != nil, appearance.hasReadout { phoneReadout }
@@ -311,9 +314,16 @@ struct CompassView: View {
             .font(.caption2).foregroundStyle(.secondary)
         }
       } else {
-        Text(compass.status.title).font(.headline)
         if details {
+          Text(compass.status.title).font(.headline)
           Text(compass.status.detail).foregroundStyle(.secondary)
+        } else {
+          // Without room for the hint, the title opens it, as in the last layout.
+          Button(action: { showingHeadingStatus = true }) {
+            Text(compass.status.title).font(.headline)
+          }
+          .frame(minHeight: 44)
+          .accessibilityHint("Shows heading status and available recovery actions")
         }
         if compass.status == .denied, let url = URL(string: UIApplication.openSettingsURLString) {
           Link("Open Settings", destination: url).frame(minHeight: 44)
