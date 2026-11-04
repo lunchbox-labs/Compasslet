@@ -1,219 +1,94 @@
 # Compasslet design
 
-This file sets Compasslet's visual language: colour, type, spacing, shape and motion. It covers the
-iPhone app, its Live Activity, CarPlay and the docs site at
-[compasslet.lunchbox-labs.dev](https://compasslet.lunchbox-labs.dev/). Brand values come from the
-organisation's [colour guidance](https://github.com/lunchbox-labs/.github/blob/main/brand/colors.md).
-If the two ever disagree on a brand value, the organisation's guidance wins and this file is
-updated to match.
+Compasslet follows the Lunchbox Labs [design foundation](https://github.com/lunchbox-labs/.github/blob/main/brand/foundation.md)
+and [organisation colours](https://github.com/lunchbox-labs/.github/blob/main/brand/colors.md).
+The [iOS guide](https://github.com/lunchbox-labs/.github/blob/main/brand/ios.md) maps those rules to
+the app; the [web guide](https://github.com/lunchbox-labs/.github/blob/main/brand/web.md) maps them
+to the docs site. Read the relevant guide before changing a surface.
 
-This file describes where the app is going.
-[Where the app differs today](#where-the-app-differs-today) lists what still has to change to match
-it.
+Those documents own the shared tokens, contrast checks, type, spacing, shape and motion.
+This file records Compasslet's implementation mapping and platform constraints. It does not
+define a second palette. Shared changes belong in the organisation guidance first; record a
+local exception here only with its reason.
 
-## Principles
+## iPhone app
 
-- **Native first.** Compasslet looks and behaves like an iPhone app. Use system components,
-  navigation and materials, and bring the brand in through colour, not custom chrome.
-- **Pink for accents and the main action.** The primary pink `#F78AEE` marks the brand and the
-  one main action on a screen. It is not used for small text on light backgrounds, and it is not a
-  status colour.
-- **Readable at every setting.** Text is 4.5:1 or better against its background in both
-  appearances, and meaningful control edges and state indicators are 3:1 or better. Every text
-  style follows Dynamic Type, and layouts wrap or stack instead of truncating.
-- **Colour is never the only cue.** Pair it with a label, an icon or a shape.
-- **Respect the person's settings.** Dark mode, Increase Contrast, Reduce Motion, Reduce
-  Transparency and Bold Text all keep working.
+The iOS guide is the implementation target. Adding this document does not apply the remaining
+visual changes to the app.
 
-## Colour
-
-Each role has a light and a dark value, and a stronger value for Increase Contrast where it needs
-one. The app defines them as colour sets in `App/Assets.xcassets`, named in the last column, so
-appearance and contrast changes switch them automatically. The Live Activity uses only the
-system's text styles. Its extension has no asset catalog, so if it ever needs a colour from this
-file, choose it in code from the colour scheme, with the same values.
-
-| Role | Light | Dark | Increase Contrast | Use | Colour set |
-| --- | --- | --- | --- | --- | --- |
-| Background | `#FFF8FE` | `#18111A` | — | Screen backgrounds, including the compass | Background |
-| Grouped background | `#F7EFF5` | `#18111A` | — | Behind inset grouped lists such as Settings | GroupedBackground |
-| Surface | `#FFFFFF` | `#241A26` | — | Grouped list rows, the tour card | Surface |
-| Text | `#281423` | `#FFF5FD` | — | Body text, headings, the dial's major ticks | Text |
-| Secondary text | `#736470` | `#AEA5AE` | `#5C4D59` / `#C9C0C8` | Explanations, footers, captions, dial labels and minor ticks | SecondaryText |
-| Accent | `#992B91` | `#F78AEE` | `#7D2276` / `#FFA9F7` | Links, tinted buttons, toggles, the dial index, the heading arrow | AccentColor |
-| Primary action fill | `#F78AEE` | `#F78AEE` | — | The one main button on a screen | PrimaryActionFill |
-| Primary action label | `#281423` | `#281423` | — | Text on the primary action fill | PrimaryActionLabel |
-| Label on accent | `#FFFFFF` | `#281423` | — | Text on an accent fill, such as Settings Done | ConfirmActionLabel |
-| Control border | `#992B91` | `#F78AEE` | as Accent | Edges of pink buttons and fields | AccentColor |
-| Separator | `#E1DEE0` | `#473D48` | `#B4A8B1` / `#696169` | Decorative dividers and hairlines | Separator |
-| North and error | `#D70015` | `#FF6961` | — | The dial's north marker and "N", error text | North |
-
-Contrast, measured with the WCAG formula against Grouped background, Background and Surface, the
-backgrounds each colour can sit on (light, then dark):
-
-| Pair | Light | Dark |
-| --- | --- | --- |
-| Text | 15.33:1 to 17.29:1 | 15.78:1 to 17.40:1 |
-| Secondary text | 4.92:1 to 5.55:1 | 7.03:1 to 7.75:1 |
-| Secondary text, Increase Contrast | 7.00:1 to 7.89:1 | 9.48:1 to 10.46:1 |
-| Accent | 5.99:1 to 6.75:1 | 7.86:1 to 8.66:1 |
-| Accent, Increase Contrast | 7.88:1 to 8.89:1 | 9.81:1 to 10.82:1 |
-| Primary action label on fill | 8.09:1 | 8.09:1 |
-| Label on accent fill | 6.75:1 | 8.09:1 |
-| Control border against the fill | 3.16:1 | — |
-| North and error | 4.77:1 to 5.38:1 | 5.95:1 to 6.57:1 |
-
-Notes:
-
-- **Primary action.** Pink fill with the dark label in both appearances, outlined with the control
-  border, which shows on light surfaces where the pink alone is only 2.14:1 against white. White on
-  the pink is 2.14:1, so the label is never white.
-- **North stays red.** A compass reads north as red, so north keeps a red of its own rather than
-  the brand pink. These are the system's higher-contrast reds, chosen so the small "N" passes as
-  text. Error text uses the same red, always with an icon or words that say what went wrong.
-- **Decorative marks.** The dial's rim and the symbol shown when there's no heading are
-  decoration. They use the system's tertiary and quaternary styles and don't need to meet a
-  contrast ratio. Under Increase Contrast the dial thickens its ticks and strengthens the rim
-  rather than promoting decorative marks to Text.
-- **Left to the system.** Alerts, sheets, menus, tips, the keyboard and Liquid Glass keep their
-  system colours. CarPlay templates keep the system's colours too. The Live Activity's text keeps
-  the system's primary and secondary styles, because the system draws the Lock Screen and Dynamic
-  Island backgrounds.
-- **Dark mode is not pure black.** Backgrounds use the brand's dark plum, not `#000000`.
-- **Measure what the system blends.** Glass and tinted fills can be partly transparent. Check the
-  rendered colours in captures, not only the values above.
-
-## Type
-
-The app uses San Francisco through Dynamic Type text styles, so every size follows the person's
-text size setting. A size tied to a drawing, such as the dial's labels, scales with both the dial
-and the text size, and stops at a stated cap.
-
-| Role | Style | Notes |
-| --- | --- | --- |
-| Navigation title | System inline title | Set with `navigationTitle` |
-| App name on the compass | Headline | One line |
-| Compass readout | Large Title scale, light | Monospaced digits, sized by the appearance settings |
-| Live Activity readout | Large Title, or Title 2 in CarPlay, semibold | One line, shortening before it scales |
-| Card title | Title 3, bold | The tour card |
-| Body | Body | Default for rows and prose |
-| Primary action label | Body, semibold | |
-| Supporting detail | Subheadline | Accuracy, coordinates, location notices |
-| Explanation | Footnote | Secondary text, under a control or in a card |
-| Caption | Caption or Caption 2 | Secondary text in tight places, such as the Live Activity |
-
-- Numbers that change, such as degrees and times, use monospaced digits so they don't jitter.
-- Text that must stay on one line first switches to a shorter form, as the Live Activity readout
-  does, and only then scales down, to no less than 65%.
-- Capitalisation follows the "UI capitalization" rules in [AGENTS.md](AGENTS.md).
-- The docs site keeps its theme's type scale and uses the same colour roles for text. Links in
-  prose are underlined.
-
-## Spacing
-
-Spacing uses a 4-point scale with a 2-point half step. Pick the nearest step, not an in-between
-value.
-
-| Step | Use |
+| Surface or role | Compasslet mapping |
 | --- | --- |
-| 2 | Lines that read as one unit, such as the Live Activity's reading and its caption |
-| 4 | An icon and its label, tight inline groups |
-| 8 | Related items in a stack or row |
-| 12 | Text blocks inside a card |
-| 16 | Groups inside a card or screen; screen edge margin for overlays and cards |
-| 20 | Card padding |
-| 24 | Sections of a screen; the compass screen's side margin |
-| 32 | Separating major regions of a screen |
+| Compass background | `systemBackground` in `App/Heading/CompassView.swift` |
+| Settings and tour surfaces | System grouped backgrounds and fills; keep `Form` and native list insets |
+| Essential text and readings | System `label` / SwiftUI `.primary` |
+| Supporting text | System `secondaryLabel` / `.secondary`; check Increase Contrast as the iOS guide requires |
+| Dividers | System `separator`; decorative dial marks may use tertiary or quaternary styles |
+| Links, toggles and selected controls | `AccentColor` in `App/Assets.xcassets`, using the iOS guide's strong pink |
+| Main filled action | `PrimaryActionFill` and `PrimaryActionLabel` in the asset catalog |
+| Label on a filled toolbar confirm | `ConfirmActionLabel` in the asset catalog, paired with `AccentColor` |
 
-- The Lock Screen Live Activity keeps its 14-point side margin, the one value off the scale.
-- Every control's touch target is at least 44 by 44 points, even when it draws smaller.
-- Grouped lists keep the system's insets and row heights.
-- Insets around text grow with Dynamic Type through `@ScaledMetric`, as the primary action does, so
-  large text doesn't crowd its container.
+Keep iOS semantic neutrals in both appearances. The web's tinted page, surface and text tokens
+do not replace them, and a system black background is not a design defect. Asset names above
+are the shared iOS mapping, including colours that still need to be added by implementation PRs.
 
-## Shape and depth
+- Apply the rounded bold display voice to the main reading and onboarding or permission titles.
+  Navigation titles, settings and body text keep SF Pro. Preserve the person's readout size
+  choices and use monospaced digits for changing readings. Casing follows [AGENTS.md](AGENTS.md).
+- Use the foundation's spacing steps for custom layout and `@ScaledMetric` beside text. Native
+  margins and list insets follow iOS rather than the web. The iOS guide owns card corners,
+  capsules, glass controls, target sizes and press states.
+- The dial in `Shared/CompassDial.swift` keeps a red north marker, distinguished by shape as well
+  as colour. Check the small “N” separately for text contrast; red is functional, not a brand
+  accent. Essential direction information must remain readable without colour.
+- Keep the compass's reduced-motion choice: steady text or a dial with reduced movement.
+  Values crossing north must not animate the long way round. New custom transitions follow
+  the foundation's timing and no-bounce rule, with a short fade or no movement under Reduce Motion.
 
-- **Cards** use a 20-point continuous corner radius.
-- **Buttons** are capsules. Floating controls on the compass, such as the Live Activity button, are
-  single Liquid Glass shapes: the glass is the button's only surface, with nothing drawn under it.
-- **Nested shapes** keep their corners concentric with their container where the padding allows; a
-  capsule inside a card is the exception.
-- **No custom shadows.** Depth comes from system materials, Liquid Glass and the tour's scrim. In
-  dark mode, where a Surface card barely stands out from the dimmed screen, the card takes a
-  1-point Separator edge instead of a shadow.
+## Live Activity and CarPlay
 
-## Motion
+These system-hosted surfaces have constraints beyond an ordinary iPhone screen.
 
-- Use the system's standard transitions and springs, and keep custom timings short.
-- With Reduce Motion on, the compass uses the reduced-motion appearance the person chose (a
-  text-only reading or a dial with reduced movement), and new transitions prefer fades to movement.
-- Values that wrap, such as a direction crossing north, are replaced rather than animated, so
-  nothing spins the long way round.
-
-## Components
-
-- **Primary action** (`PrimaryActionButtonStyle`):
-  - A capsule with the primary action fill and label, a 1-point control border, at least 50 points
-    tall.
-  - It darkens with 12% black on press instead of fading, keeping the label at 6.26:1. It dims to
-    40% when disabled, which contrast rules exempt.
-  - Use one per screen at most.
-- **Confirming toolbar button** (Settings Done): the system's prominent glass style, filled with
-  the Accent and labelled with Label on accent.
-- **Links and text buttons**: Accent. A `Link` needs `.foregroundStyle(.tint)`, because the system
-  otherwise draws it in its own blue.
-- **Toggles**: tinted with the Accent through `.tint`, because a switch stays system green
-  otherwise. The plum track is 5.57:1 against the off track in light mode.
-- **Tour card**: Surface, 20-point radius and padding, a card title, body text, a step count in
-  Secondary text and the primary action. The spotlight ring is white at 2 points, over the black
-  55% scrim.
-- **Compass dial**: major ticks in Text, labels and minor ticks in Secondary text, north in North,
-  the index marker in Accent, and decorative marks as above. When there's no heading, the dial
-  dims and the status text says why.
-- **Live Activity**: text only, with no direction arrow. The reading sits on one line, with Last
-  Travel in the system's secondary style. The Lock Screen card stays within the 160-point height
-  Apple allows.
-- **CarPlay**: the system's templates and colours, with the course arrow in Accent.
+- `Shared/CompassActivityCard.swift` keeps the Lock Screen and small mirrored card text-only.
+  The single-line reading shortens before scaling, with “Last Travel” and a sample time when
+  available. Keep the Lock Screen card within its 160pt height limit.
+- Live Activity backgrounds belong to the system. Keep semantic primary and secondary text
+  rather than copying web neutrals into the extension. Its compact readings use the system's
+  text styles for legibility in the available space.
+- The Lock Screen card's 14pt side inset and 2pt reading-to-caption spacing are local compact
+  layout exceptions, not extra steps in the app-wide spacing scale.
+- `CompassActivity/CompassActivityWidget.swift` caps the Dynamic Island readout at
+  `.xxxLarge` because its regions have fixed bounds. Lock Screen and small-card layouts must
+  still be checked through the accessibility sizes. Preserve the full spoken reading and
+  freshness information when visible text is shortened.
+- `App/CarPlay/CarPlayCompassTemplate.swift` leaves template layout, text and backgrounds to
+  CarPlay. Resolve custom dial colours and dimensions using the car's traits, not the phone's.
+  Keep travel direction distinct from the phone's magnetic heading and from a live reading.
 
 ## Docs site
 
-The site at [compasslet.lunchbox-labs.dev](https://compasslet.lunchbox-labs.dev/) uses the same
-colour roles:
-- Background for the page.
-- Text and Secondary text.
-- Accent for links, the header bar and the current-page highlight.
+The web guide is the implementation target for the Zensical site in `website/`. Adding this
+document does not apply website changes. Adopt the guide's tinted neutrals, Recursive
+display/body/code voices, underlined links and focus treatment rather than keeping the theme's
+type scale unchanged.
 
-Its stylesheet, `website/docs/stylesheets/brand.css`, maps these roles onto the theme's variables
-and owns the site-only details. Focus outlines follow the organisation's guidance: 3 pixels wide
-with a 3-pixel offset in Text colour, keeping a gap of the background colour between a pale outline
-and a pink button in dark mode.
+The consumer stylesheet belongs at `website/docs/stylesheets/brand.css`: expose the foundation
+tokens as `--ll-*` properties, then map the theme's `--md-*` variables to them. Use Zensical's
+`default` and `slate` colour schemes for appearance overrides, and keep `font = false` in
+`website/zensical.toml` when self-hosting Recursive. The organisation's
+[reference tokens](https://github.com/lunchbox-labs/.github/blob/main/brand/tokens.css) provide
+the shared values. Compasslet has one main product, so its tray may have one compartment or
+be omitted, as the web guide permits.
 
-## Where the app differs today
+## Making a change
 
-These are the changes still needed to match this file. Each lands as its own pull request, and
-this list shrinks as they merge.
+- Track implementation gaps and rollout work in [issues](https://github.com/lunchbox-labs/compasslet/issues),
+  starting from the design-document task [#203](https://github.com/lunchbox-labs/compasslet/issues/203).
+  Existing deviations are not new design tokens.
+- Copy shared token names as well as values into the relevant platform consumer. Keep native
+  semantic colours native; do not create matching asset sets for web neutrals.
+- Run the relevant platform guide's checks on the changed interface. A shared contrast table
+  does not verify translucent materials, pressed states, new pairs or the whole product.
+- For iOS changes, use the repository's Screenshots workflow and update
+  `AppTests/ScreenshotTests.swift` when screens or states change. Follow the review procedures
+  in [AGENTS.md](AGENTS.md), and check accessibility settings and VoiceOver beyond screenshots.
 
-- **Backgrounds, surfaces and text.** The app uses the system's neutral backgrounds, label colours
-  and separators. It should use the Background, Grouped background, Surface, Text, Secondary text
-  and Separator sets, and the Increase Contrast values above.
-- **North.** The dial draws north in the system red, which is 3.55:1 or less on light
-  backgrounds.
-- **Toggles** are system green.
-- **Dial labels** size with the dial but not with Dynamic Type.
-- **Tour card** has a drop shadow instead of the dark-mode edge.
-- **CarPlay's course arrow** is system teal.
-- **Spacing** uses some off-scale values (1, 6 and 10 points).
-- **The CarPlay Live Activity's status** can scale to 50%.
-- **Dial labels** switch to Text under Increase Contrast rather than to the stronger Secondary
-  text.
-
-The docs site follows the same pattern: its colours arrive with
-[pull request 202](https://github.com/lunchbox-labs/compasslet/pull/202), and underlined prose
-links and the focus outline described above are still to add.
-
-## Changing this file
-
-Add or change a token here first, with its light and dark values and its contrast, then use it in
-the app or the site. Check every new colour pair in both appearances. Capture the affected screens
-with the Screenshots workflow in light, dark and the largest text size. Check Increase Contrast by
-hand, since the workflow doesn't capture it.
