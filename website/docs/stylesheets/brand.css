@@ -8,8 +8,6 @@
 
 :root,
 [data-md-color-scheme="default"] {
-  --md-hue: 305deg;
-
   --md-default-fg-color: #281423;
   --md-default-fg-color--light: #281423a6;
   --md-default-fg-color--lighter: #28142380;
@@ -20,8 +18,6 @@
   --md-default-bg-color--lightest: #fff8fe1f;
 
   --md-primary-fg-color: #992b91;
-  --md-primary-fg-color--light: #992b91;
-  --md-primary-fg-color--dark: #992b91;
   --md-primary-bg-color: #ffffff;
   --md-primary-bg-color--light: #ffffffb3;
 
@@ -45,12 +41,7 @@
   --md-default-bg-color--lighter: #18111a4d;
   --md-default-bg-color--lightest: #18111a12;
 
-  --md-footer-bg-color: #241a26;
-  --md-footer-bg-color--dark: #18111a;
-
   --md-primary-fg-color: #f78aee;
-  --md-primary-fg-color--light: #f78aee;
-  --md-primary-fg-color--dark: #f78aee;
   --md-primary-bg-color: #281423;
   --md-primary-bg-color--light: #281423b3;
 
@@ -60,4 +51,8 @@
   --md-accent-bg-color--light: #281423b3;
 
   --md-typeset-a-color: #f78aee;
+}
+
+.md-progress {
+  background-color: var(--md-accent-fg-color);
 }
