@@ -331,7 +331,8 @@ struct CompassView: View {
           .accessibilityHint("Shows heading status and available recovery actions")
         }
         if compass.status == .denied, let url = URL(string: UIApplication.openSettingsURLString) {
-          Link("Open Settings", destination: url).frame(minHeight: 44)
+          // Links draw in the system blue (4.0:1 on white), not the accent, unless told.
+          Link("Open Settings", destination: url).foregroundStyle(.tint).frame(minHeight: 44)
         }
       }
       if details {

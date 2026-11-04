@@ -17,7 +17,7 @@ struct CompassSettingsView: View {
           LabeledContent("Location Enabled", value: locationEnabled ? "Yes" : "No")
           Text(locationDetail).foregroundStyle(.secondary)
           if canOpenSettings, let url = URL(string: UIApplication.openSettingsURLString) {
-            Link("Open Settings", destination: url)
+            Link("Open Settings", destination: url).foregroundStyle(.tint)
           }
         }
         Section("Help") {
@@ -27,7 +27,7 @@ struct CompassSettingsView: View {
         Section {
           if let url = URL(string: "https://github.com/lunchbox-labs/compasslet") {
             Link("View Source on GitHub", destination: url)
-              // Links draw in the system blue (3.6:1 on these rows) unless told to use the accent.
+              // Links draw in the system blue (3.6:1 on these rows), not the accent, unless told.
               .foregroundStyle(.tint)
           }
         } header: {
