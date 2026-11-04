@@ -26,6 +26,16 @@ final class ScreenshotTests: XCTestCase {
     Screen(name: "compass-calibration") {
       await ScreenshotTests.compass(heading: .calibrationNeeded)
     },
+    Screen(name: "compass-calibration-large-text") {
+      AnyView(
+        await ScreenshotTests.compass(heading: .calibrationNeeded)
+          .environment(\.dynamicTypeSize, .accessibility3))
+    },
+    Screen(name: "compass-calibration-largest-text") {
+      AnyView(
+        await ScreenshotTests.compass(heading: .calibrationNeeded)
+          .environment(\.dynamicTypeSize, .accessibility5))
+    },
     Screen(name: "compass-location-denied") { await ScreenshotTests.compass(location: .denied) },
     Screen(name: "compass-live-activity-start") {
       await ScreenshotTests.compass(carPlay: .connected)
