@@ -14,6 +14,8 @@ struct WelcomeTourOverlay: View {
   let buttonFrame: CGRect?
   let carPlayConnected: Bool
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  /// Whether the scrolling explanation has text below the card's edge, which fades out to show it.
+  @State private var moreBelow = false
   @AccessibilityFocusState private var titleFocused: Bool
 
   var body: some View {
@@ -72,6 +74,20 @@ struct WelcomeTourOverlay: View {
       ViewThatFits(in: .vertical) {
         explanation(step)
         ScrollView { explanation(step) }
+          .scrollIndicatorsFlash(onAppear: true)
+          .scrollIndicatorsFlash(trigger: step)
+          .onScrollGeometryChange(for: Bool.self) { scroll in
+            scroll.visibleRect.maxY < scroll.contentSize.height - 1
+          } action: { _, more in
+            moreBelow = more
+          }
+          .mask {
+            VStack(spacing: 0) {
+              Color.black
+              LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                .frame(height: moreBelow ? 40 : 0)
+            }
+          }
       }
       controls(step)
     }
