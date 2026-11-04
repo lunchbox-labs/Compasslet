@@ -108,8 +108,16 @@ struct CompassActivityCard: View {
             .lineLimit(2).minimumScaleFactor(0.8)
         }
       } else {
+        // Each form of the reading is tried with the arrow and then without it, so the arrow
+        // gives way before the reading shortens.
         ViewThatFits(in: .horizontal) {
           ForEach(presentation.bearingCandidates, id: \.self) { candidate in
+            if let reading = presentation.reading {
+              HStack(spacing: 8) {
+                TravelArrow(degrees: reading.roundedDegrees).font(readoutFont)
+                readoutText(candidate).lineLimit(1).minimumScaleFactor(0.8)
+              }
+            }
             readoutText(candidate).lineLimit(1).minimumScaleFactor(0.8)
           }
         }
@@ -120,9 +128,13 @@ struct CompassActivityCard: View {
     .contentTransition(.identity)
   }
 
+  private var readoutFont: Font {
+    (isSmall ? Font.title2 : Font.largeTitle).weight(.semibold)
+  }
+
   private func readoutText(_ text: String) -> some View {
     Text(text)
-      .font((isSmall ? Font.title2 : Font.largeTitle).weight(.semibold)).monospacedDigit()
+      .font(readoutFont).monospacedDigit()
       .multilineTextAlignment(.center)
   }
 
@@ -201,7 +213,7 @@ struct CompassActivityView: View {
       } else {
         Text("—").font(.largeTitle.bold())
       }
-      Text("Travel · True North").font(.caption2)
+      Text("Travel · True North").font(.caption2).foregroundStyle(.secondary)
       if presentation.reading != nil, let sample = state.sampleTime {
         ActivityTimestamp(sample: sample, mode: presentation.appearance.lockScreenTimestamp)
           .font(.caption2).foregroundStyle(.secondary)
@@ -245,4 +257,35 @@ struct ActivityTimestamp: View {
       }
     }
   }
+}
+
+/// An arrow along the direction of travel, with north at the top, in the brand accent. The
+/// spoken summary already gives the direction, so it is hidden from VoiceOver.
+struct TravelArrow: View {
+  let degrees: Int
+
+  var body: some View {
+    // A circle reserves square room, so the arrow stays inside its frame at any angle.
+    Image(systemName: "circle").hidden()
+      .overlay {
+        Image(systemName: "location.north.fill")
+          .foregroundStyle(Color.travelArrow)
+          .rotationEffect(.degrees(Double(degrees)))
+          // A new arrow for each degree, so a turn across north never spins the long way round.
+          .id(degrees)
+          .transition(.identity)
+      }
+      .accessibilityHidden(true)
+  }
+}
+
+extension Color {
+  /// The brand accent: plum in light mode, pink in dark, matching the app's accent colour. Defined
+  /// here rather than read from an asset catalog, because the Live Activity extension has none.
+  static let travelArrow = Color(
+    UIColor { traits in
+      traits.userInterfaceStyle == .dark
+        ? UIColor(red: 0xF7 / 255, green: 0x8A / 255, blue: 0xEE / 255, alpha: 1)
+        : UIColor(red: 0x99 / 255, green: 0x2B / 255, blue: 0x91 / 255, alpha: 1)
+    })
 }

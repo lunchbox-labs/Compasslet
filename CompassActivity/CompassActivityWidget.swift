@@ -23,12 +23,12 @@ struct CompassActivityWidget: Widget {
             state: context.state, isStale: context.isStale, maximumTextSize: .xxxLarge)
         }
       } compactLeading: {
-        // The trailing readout speaks the whole state; the icon is decorative.
-        Image(systemName: "location.north").accessibilityHidden(true)
+        // The trailing readout speaks the whole state; the arrow is decorative.
+        IslandArrow(context: context).accessibilityHidden(true)
       } compactTrailing: {
         ActivityCompactReadout(context: context)
       } minimal: {
-        Image(systemName: "location.north")
+        IslandArrow(context: context)
           .accessibilityLabel(
             CompassActivityView.accessibilitySummary(state: context.state, isStale: context.isStale)
           )
@@ -44,6 +44,21 @@ private struct ActivityCard: View {
 
   var body: some View {
     CompassActivityCard(state: context.state, isStale: context.isStale, isSmall: family == .small)
+  }
+}
+
+/// Turns with the direction of travel while there's a reading, and shows a plain north outline
+/// while waiting or stale, so a held arrow never looks current.
+private struct IslandArrow: View {
+  let context: ActivityViewContext<CompassActivityAttributes>
+
+  var body: some View {
+    let presentation = CompassActivityReading(state: context.state, isStale: context.isStale)
+    if let reading = presentation.reading {
+      TravelArrow(degrees: reading.roundedDegrees)
+    } else {
+      Image(systemName: "location.north")
+    }
   }
 }
 
