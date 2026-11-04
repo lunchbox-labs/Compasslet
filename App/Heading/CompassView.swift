@@ -178,17 +178,20 @@ struct CompassView: View {
           .contentShape(Rectangle())
       }
       .accessibilityLabel("Settings")
-      .accessibilityShowsLargeContentViewer()
+      .accessibilityShowsLargeContentViewer {
+        Label("Settings", systemImage: "line.3.horizontal")
+      }
       .accessibilityFocused($menuFocused)
       Spacer(minLength: 8)
-      Text("Compasslet").font(.headline).lineLimit(1).minimumScaleFactor(0.8)
+      Text("Compasslet").font(.headline).lineLimit(1).minimumScaleFactor(0.65)
+        .allowsTightening(true)
       Spacer(minLength: 8)
       Color.clear.frame(width: 44, height: 44).accessibilityHidden(true)
     }
     .padding(.horizontal, 16).padding(.vertical, 8)
     // Like a navigation bar, the header stops growing partway through the accessibility sizes so
-    // the name stays on one line. Settings and the screen below still follow the user's size, and
-    // the Settings button shows its name in the large content viewer.
+    // the name stays on one line. The Settings screen and the compass below still follow the
+    // user's size, and the Settings button shows its name in the large content viewer.
     .dynamicTypeSize(...DynamicTypeSize.accessibility3)
   }
 
