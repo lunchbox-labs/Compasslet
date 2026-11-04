@@ -1,6 +1,9 @@
 import CompassCore
 import SwiftUI
 
+/// The Live Activity on the Lock Screen and in CarPlay: the reading on one line, with Last Travel
+/// beneath it. The Lock Screen card uses a larger readout and stays within the 84 to 160 point
+/// height Apple allows; the small card fills the size CarPlay gives it.
 struct CompassActivityCard: View {
   let state: CompassActivityAttributes.ContentState
   var isStale = false
@@ -11,33 +14,73 @@ struct CompassActivityCard: View {
     CompassActivityReading(state: state, isStale: isStale)
   }
 
+  private var timestampMode: ActivityTimestampMode {
+    isSmall
+      ? presentation.appearance.carPlayActivityTimestamp
+      : presentation.appearance.lockScreenTimestamp
+  }
+
   var body: some View {
-    if isSmall {
-      ViewThatFits(in: .vertical) {
-        VStack(spacing: 2) {
-          // Reserve equal space above and below so diagnostics never move the reading.
-          secondaryLine.hidden().accessibilityHidden(true)
-          readout
-          secondaryLine
-        }
-        .fixedSize(horizontal: false, vertical: true)
-        VStack(spacing: 1) {
-          readout
-          if presentation.reading != nil,
-            presentation.appearance.carPlayActivityTimestamp != .hidden
-          {
-            Text("Last Travel").font(.caption2).foregroundStyle(.secondary)
-          }
+    Group {
+      if isSmall {
+        layouts
+          .padding(.horizontal, 8)
+          .padding(.vertical, 4)
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+      } else {
+        LockScreenHeight {
+          layouts
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity)
         }
       }
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
-      .padding(.horizontal, 8)
-      .padding(.vertical, 4)
-      .accessibilityElement(children: .ignore)
-      .accessibilityLabel(CompassActivityView.accessibilitySummary(state: state, isStale: isStale))
-    } else {
-      CompassActivityView(state: state, isStale: isStale).padding()
     }
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(CompassActivityView.accessibilitySummary(state: state, isStale: isStale))
+  }
+
+  /// The tallest layout that fits: diagnostics (Lock Screen only), then the reading between
+  /// balanced lines, then a bare Last Travel, then the reading alone.
+  private var layouts: some View {
+    ViewThatFits(in: .vertical) {
+      if !isSmall, let update = state.debugUpdateTime {
+        VStack(spacing: 2) {
+          balanced
+          diagnostics(update: update)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+      }
+      balanced.fixedSize(horizontal: false, vertical: true)
+      VStack(spacing: 1) {
+        readout
+        if presentation.reading != nil, timestampMode != .hidden {
+          Text("Last Travel").font(.caption2).foregroundStyle(.secondary)
+        }
+      }
+      .fixedSize(horizontal: false, vertical: true)
+      readout.fixedSize(horizontal: false, vertical: true)
+    }
+  }
+
+  private var balanced: some View {
+    VStack(spacing: 2) {
+      // Reserve equal space above and below so diagnostics never move the reading.
+      secondaryLine.hidden().accessibilityHidden(true)
+      readout
+      secondaryLine
+    }
+  }
+
+  private func diagnostics(update: Date) -> some View {
+    VStack(spacing: 1) {
+      Text("Update \(update, format: .dateTime.hour().minute().second())")
+      if let sample = state.sampleTime {
+        Text("Sample \(sample, format: .dateTime.hour().minute().second())")
+      }
+    }
+    .font(.caption2).foregroundStyle(.secondary).monospacedDigit()
+    .lineLimit(1).minimumScaleFactor(0.85)
   }
 
   /// At large text sizes the reading drops to a shorter form (degrees, then direction) before
@@ -62,20 +105,45 @@ struct CompassActivityCard: View {
 
   private func readoutText(_ text: String) -> some View {
     Text(text)
-      .font(.title2.weight(.semibold)).monospacedDigit()
+      .font((isSmall ? Font.title2 : Font.largeTitle).weight(.semibold)).monospacedDigit()
       .multilineTextAlignment(.center)
   }
 
   private var secondaryLine: some View {
     Group {
       if presentation.reading != nil, let sample = state.sampleTime {
-        ActivityTimestamp(sample: sample, mode: presentation.appearance.carPlayActivityTimestamp)
+        ActivityTimestamp(sample: sample, mode: timestampMode)
       } else {
         Text("Travel · True North")
       }
     }
     .font(.caption2).foregroundStyle(.secondary).monospacedDigit()
     .lineLimit(1).minimumScaleFactor(0.85)
+  }
+}
+
+/// Lays the Lock Screen card out within the 84 to 160 point height Apple allows a Lock Screen
+/// Live Activity: the card picks its layout for at most 160 points, so the system never clips it.
+struct LockScreenHeight: Layout {
+  static let heights: ClosedRange<CGFloat> = 84...160
+
+  func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    let measured =
+      subviews.first?.sizeThatFits(.init(width: proposal.width, height: Self.heights.upperBound))
+      ?? .zero
+    // Not capped at 160 points, so a layout that overflowed would show (and fail the tests)
+    // rather than be hidden here; the system would clip it.
+    return CGSize(
+      width: proposal.width ?? measured.width,
+      height: max(measured.height, Self.heights.lowerBound))
+  }
+
+  func placeSubviews(
+    in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()
+  ) {
+    subviews.first?.place(
+      at: CGPoint(x: bounds.midX, y: bounds.midY), anchor: .center,
+      proposal: .init(width: bounds.width, height: min(bounds.height, Self.heights.upperBound)))
   }
 }
 

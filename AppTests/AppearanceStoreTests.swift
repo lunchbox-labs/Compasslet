@@ -107,6 +107,27 @@ struct AppearanceStoreTests {
     }
   }
 
+  @Test func lockScreenCardStaysWithinTheLiveActivityHeightLimits() {
+    let sample = Date(timeIntervalSince1970: 100)
+    for status in [CompassActivityAttributes.Status.usable, .slow] {
+      for textSize in [DynamicTypeSize.xSmall, .large, .accessibility5] {
+        for diagnostics in [false, true] {
+          let state = CompassActivityAttributes.ContentState(
+            bearing: 359, status: status, sampleTime: sample, expiry: nil,
+            debugUpdateTime: diagnostics ? sample : nil)
+          let host = UIHostingController(
+            rootView: CompassActivityCard(state: state)
+              .environment(\.dynamicTypeSize, textSize))
+          // The narrowest Lock Screen banner: a 320-point-wide screen less 22 points.
+          let size = host.sizeThatFits(in: CGSize(width: 298, height: 1000))
+          #expect(
+            (84...160).contains(size.height),
+            "\(status) at \(textSize), diagnostics \(diagnostics): \(size.height)")
+        }
+      }
+    }
+  }
+
   @Test func phonePreviewRendersDialChoicesAndReducedMotionFallback() throws {
     func render(_ value: AppearanceValues, reduceMotion: Bool = false) throws -> UIImage {
       let renderer = ImageRenderer(

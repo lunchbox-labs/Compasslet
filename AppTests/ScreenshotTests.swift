@@ -86,6 +86,9 @@ final class ScreenshotTests: XCTestCase {
     Screen(name: "settings-appearance-rotation") { ScreenshotTests.editor(.rotation) },
     Screen(name: "settings-appearance-reduce-motion") { ScreenshotTests.editor(.reduceMotion) },
     Screen(name: "live-activity") { AnyView(LiveActivityScreen()) },
+    Screen(name: "live-activity-largest-text") {
+      AnyView(LiveActivityScreen().environment(\.dynamicTypeSize, .accessibility5))
+    },
   ]
 
   private var directory: URL?
