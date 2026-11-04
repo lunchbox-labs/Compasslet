@@ -447,8 +447,9 @@ struct AppearancePreview: View {
         .accessibilityLabel(phoneAccessibilityDescription)
       }
       if surface == nil || surface == .activity {
-        // Only the Lock Screen card is shown. CarPlay's smaller card puts the reading on one line
-        // and follows the CarPlay Last Travel setting; the live-activity screenshot shows both.
+        // Only the Lock Screen card is shown. CarPlay's card has the same layout at a smaller
+        // size and follows the CarPlay Last Travel setting; the live-activity screenshot shows
+        // both.
         LiveActivityExample(presentation: .lockScreen, state: activityState)
       }
     }
@@ -465,9 +466,9 @@ struct AppearancePreview: View {
 
 /// A Live Activity card in the shape the system gives it, following Apple's Live Activity
 /// specifications: the Lock Screen card fills the width it is given (on the Lock Screen, the
-/// screen less 22 points) and is at least 84 points tall, and the CarPlay card is 240 by 78
-/// points, one of CarPlay Dashboard's sizes.
-/// Both grow taller rather than clip when the readout uses a larger text size.
+/// screen less 22 points) and stays between 84 and 160 points tall, and the CarPlay card is 240 by
+/// 78 points, one of CarPlay Dashboard's sizes, growing taller rather than clip when the readout
+/// uses a larger text size.
 struct LiveActivityExample: View {
   enum Presentation {
     case lockScreen, carPlay
@@ -494,8 +495,6 @@ struct LiveActivityExample: View {
     switch presentation {
     case .lockScreen:
       CompassActivityCard(state: state)
-        .frame(minHeight: 84)
-        .fixedSize(horizontal: false, vertical: true)
     case .carPlay:
       CarPlayCardLayout { CompassActivityCard(state: state, isSmall: true) }
     }
