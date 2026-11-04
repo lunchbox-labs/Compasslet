@@ -208,8 +208,9 @@ struct CompassView: View {
             .font(.system(size: diameter * 0.36, weight: .semibold))
             .foregroundStyle(.primary)
             .frame(width: diameter, height: diameter)
-            // One Liquid Glass circle, without the ring and opaque fill that hid the glass.
-            .glassEffect(.regular.interactive(), in: Circle())
+            // The glass is the button's only surface; anything drawn under it hides the glass.
+            // Not interactive glass: the plain button style already dims it on press.
+            .glassEffect(.regular, in: Circle())
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
