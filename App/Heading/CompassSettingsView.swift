@@ -27,6 +27,8 @@ struct CompassSettingsView: View {
         Section {
           if let url = URL(string: "https://github.com/lunchbox-labs/compasslet") {
             Link("View Source on GitHub", destination: url)
+              // Links draw in the system blue (3.6:1 on these rows) unless told to use the accent.
+              .foregroundStyle(.tint)
           }
         } header: {
           Text("About")
