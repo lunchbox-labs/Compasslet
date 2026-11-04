@@ -1,0 +1,58 @@
+/*
+ * Lunchbox Labs brand colours:
+ * https://github.com/lunchbox-labs/.github/blob/main/brand/colors.md
+ *
+ * The translucent text shades are opaque enough to keep secondary text at
+ * 4.5:1 and faint icons at 3:1 against the page background.
+ */
+
+:root,
+[data-md-color-scheme="default"] {
+  --md-default-fg-color: #281423;
+  --md-default-fg-color--light: #281423a6;
+  --md-default-fg-color--lighter: #28142380;
+  --md-default-fg-color--lightest: #2814231a;
+  --md-default-bg-color: #fff8fe;
+  --md-default-bg-color--light: #fff8feb3;
+  --md-default-bg-color--lighter: #fff8fe4d;
+  --md-default-bg-color--lightest: #fff8fe1f;
+
+  --md-primary-fg-color: #992b91;
+  --md-primary-bg-color: #ffffff;
+  --md-primary-bg-color--light: #ffffffb3;
+
+  --md-accent-fg-color: #992b91;
+  --md-accent-fg-color--transparent: #992b911a;
+  --md-accent-bg-color: #ffffff;
+  --md-accent-bg-color--light: #ffffffb3;
+
+  --md-typeset-a-color: #992b91;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-hue: 305deg;
+
+  --md-default-fg-color: #fff5fd;
+  --md-default-fg-color--light: #fff5fda6;
+  --md-default-fg-color--lighter: #fff5fd66;
+  --md-default-fg-color--lightest: #fff5fd1f;
+  --md-default-bg-color: #18111a;
+  --md-default-bg-color--light: #18111ab3;
+  --md-default-bg-color--lighter: #18111a4d;
+  --md-default-bg-color--lightest: #18111a12;
+
+  --md-primary-fg-color: #f78aee;
+  --md-primary-bg-color: #281423;
+  --md-primary-bg-color--light: #281423b3;
+
+  --md-accent-fg-color: #f78aee;
+  --md-accent-fg-color--transparent: #f78aee1a;
+  --md-accent-bg-color: #281423;
+  --md-accent-bg-color--light: #281423b3;
+
+  --md-typeset-a-color: #f78aee;
+}
+
+.md-progress {
+  background-color: var(--md-accent-fg-color);
+}

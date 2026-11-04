@@ -11,6 +11,7 @@ nav = [
   "support.md",
   "privacy.md",
 ]
+extra_css = ["stylesheets/brand.css"]
 
 [project.theme]
 font = false
@@ -28,18 +29,24 @@ features = [
 # system -> light -> dark and remembers the choice in the browser.
 [[project.theme.palette]]
 media = "(prefers-color-scheme)"
+primary = "custom"
+accent = "custom"
 toggle.icon = "lucide/sun-moon"
 toggle.name = "Switch to Light Mode"
 
 [[project.theme.palette]]
 media = "(prefers-color-scheme: light)"
 scheme = "default"
+primary = "custom"
+accent = "custom"
 toggle.icon = "lucide/sun"
 toggle.name = "Switch to Dark Mode"
 
 [[project.theme.palette]]
 media = "(prefers-color-scheme: dark)"
 scheme = "slate"
+primary = "custom"
+accent = "custom"
 toggle.icon = "lucide/moon"
 toggle.name = "Switch to System Preference"
 
