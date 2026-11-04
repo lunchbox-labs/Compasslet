@@ -72,6 +72,8 @@ struct AppearanceDetailView: View {
       Section("Example") {
         AppearancePreview(surface: surface, appearance: value)
           .frame(maxWidth: .infinity)
+          // The Lock Screen example spans the row, as the real banner spans the screen.
+          .listRowInsets(.horizontal, 0)
           .listRowBackground(Color.clear)
           .listRowSeparator(.hidden)
         if followsGlobal {
@@ -440,32 +442,90 @@ struct AppearancePreview: View {
           }
         }
         .padding().frame(maxWidth: 260)
-        .background(.background, in: RoundedRectangle(cornerRadius: 20))
+        .exampleCard()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(phoneAccessibilityDescription)
       }
       if surface == nil || surface == .activity {
-        activityExample("Lock Screen", small: false)
-        activityExample("CarPlay", small: true)
+        // Only the Lock Screen card is shown. CarPlay's smaller card puts the reading on one line
+        // and follows the CarPlay Last Travel setting; the live-activity screenshot shows both.
+        LiveActivityExample(presentation: .lockScreen, state: activityState)
       }
     }
     .accessibilityElement(children: .contain)
     .accessibilityLabel("Example")
   }
 
-  private func activityExample(_ title: String, small: Bool) -> some View {
-    VStack(spacing: 8) {
-      Text(title).font(.caption).foregroundStyle(.secondary)
-      CompassActivityCard(
-        state: .init(
-          bearing: 45, status: .usable, sampleTime: sampleTime, expiry: nil,
-          appearance: appearance.requiringReadout()),
-        isSmall: small
-      )
-      .frame(maxWidth: 300)
-      .frame(height: small ? 100 : nil)
-      .background(.background, in: RoundedRectangle(cornerRadius: 20))
+  private var activityState: CompassActivityAttributes.ContentState {
+    .init(
+      bearing: 45, status: .usable, sampleTime: sampleTime, expiry: nil,
+      appearance: appearance.requiringReadout())
+  }
+}
+
+/// A Live Activity card in the shape the system gives it, following Apple's Live Activity
+/// specifications: the Lock Screen card fills the width it is given (on the Lock Screen, the
+/// screen less 22 points) and is at least 84 points tall, and the CarPlay card is 240 by 78
+/// points, one of CarPlay Dashboard's sizes.
+/// Both grow taller rather than clip when the readout uses a larger text size.
+struct LiveActivityExample: View {
+  enum Presentation {
+    case lockScreen, carPlay
+
+    var title: String {
+      switch self {
+      case .lockScreen: "Lock Screen"
+      case .carPlay: "CarPlay"
+      }
     }
+  }
+
+  let presentation: Presentation
+  let state: CompassActivityAttributes.ContentState
+
+  var body: some View {
+    VStack(spacing: 8) {
+      Text(presentation.title).font(.caption).foregroundStyle(.secondary)
+      card.exampleCard()
+    }
+  }
+
+  @ViewBuilder private var card: some View {
+    switch presentation {
+    case .lockScreen:
+      CompassActivityCard(state: state)
+        .frame(minHeight: 84)
+        .fixedSize(horizontal: false, vertical: true)
+    case .carPlay:
+      CarPlayCardLayout { CompassActivityCard(state: state, isSmall: true) }
+    }
+  }
+}
+
+/// Lays the small card out at CarPlay's 240 by 78 points, so it picks the layout CarPlay would,
+/// and grows taller only when even that layout needs more height.
+private struct CarPlayCardLayout: Layout {
+  private let size = ProposedViewSize(width: 240, height: 78)
+
+  func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    let measured = subviews.first?.sizeThatFits(size) ?? .zero
+    return CGSize(width: 240, height: max(78, measured.height))
+  }
+
+  func placeSubviews(
+    in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()
+  ) {
+    subviews.first?.place(
+      at: CGPoint(x: bounds.midX, y: bounds.midY), anchor: .center, proposal: size)
+  }
+}
+
+extension View {
+  /// The rounded card each example sits on, outlined so it stands apart from the background.
+  fileprivate func exampleCard() -> some View {
+    let shape = RoundedRectangle(cornerRadius: 20)
+    return background(.background, in: shape)
+      .overlay(shape.strokeBorder(Color(uiColor: .separator)))
   }
 }
 
