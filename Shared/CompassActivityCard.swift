@@ -110,13 +110,12 @@ struct CompassActivityCard: View {
       } else {
         // Each form of the reading is tried with the arrow and then without it, so the arrow
         // gives way before the reading shortens.
+        let degrees = presentation.reading?.roundedDegrees ?? 0
         ViewThatFits(in: .horizontal) {
           ForEach(presentation.bearingCandidates, id: \.self) { candidate in
-            if let reading = presentation.reading {
-              HStack(spacing: 8) {
-                TravelArrow(degrees: reading.roundedDegrees).font(readoutFont)
-                readoutText(candidate).lineLimit(1).minimumScaleFactor(0.8)
-              }
+            HStack(spacing: 8) {
+              TravelArrow(degrees: degrees).font(readoutFont)
+              readoutText(candidate).lineLimit(1).minimumScaleFactor(0.8)
             }
             readoutText(candidate).lineLimit(1).minimumScaleFactor(0.8)
           }
@@ -259,33 +258,29 @@ struct ActivityTimestamp: View {
   }
 }
 
-/// An arrow along the direction of travel, with north at the top, in the brand accent. The
-/// spoken summary already gives the direction, so it is hidden from VoiceOver.
+/// An arrow along the direction of travel, with north at the top, in the brand accent: the darker
+/// plum `#992B91` in light mode and the pink `#F78AEE` in dark. Callers hide it from VoiceOver or
+/// give it a label, since the spoken summary already gives the direction.
 struct TravelArrow: View {
   let degrees: Int
+  // Chosen from the colour scheme rather than a dynamic UIColor, so a Live Activity the system
+  // has archived still follows a change of appearance. The extension has no asset catalog.
+  @Environment(\.colorScheme) private var colorScheme
 
   var body: some View {
     // A circle reserves square room, so the arrow stays inside its frame at any angle.
     Image(systemName: "circle").hidden()
       .overlay {
         Image(systemName: "location.north.fill")
-          .foregroundStyle(Color.travelArrow)
+          .foregroundStyle(
+            colorScheme == .dark
+              ? Color(red: 0xF7 / 255, green: 0x8A / 255, blue: 0xEE / 255)
+              : Color(red: 0x99 / 255, green: 0x2B / 255, blue: 0x91 / 255)
+          )
           .rotationEffect(.degrees(Double(degrees)))
           // A new arrow for each degree, so a turn across north never spins the long way round.
           .id(degrees)
           .transition(.identity)
       }
-      .accessibilityHidden(true)
   }
-}
-
-extension Color {
-  /// The brand accent: plum in light mode, pink in dark, matching the app's accent colour. Defined
-  /// here rather than read from an asset catalog, because the Live Activity extension has none.
-  static let travelArrow = Color(
-    UIColor { traits in
-      traits.userInterfaceStyle == .dark
-        ? UIColor(red: 0xF7 / 255, green: 0x8A / 255, blue: 0xEE / 255, alpha: 1)
-        : UIColor(red: 0x99 / 255, green: 0x2B / 255, blue: 0x91 / 255, alpha: 1)
-    })
 }

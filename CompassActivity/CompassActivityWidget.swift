@@ -29,6 +29,7 @@ struct CompassActivityWidget: Widget {
         ActivityCompactReadout(context: context)
       } minimal: {
         IslandArrow(context: context)
+          .accessibilityElement(children: .ignore)
           .accessibilityLabel(
             CompassActivityView.accessibilitySummary(state: context.state, isStale: context.isStale)
           )
@@ -54,11 +55,16 @@ private struct IslandArrow: View {
 
   var body: some View {
     let presentation = CompassActivityReading(state: context.state, isStale: context.isStale)
-    if let reading = presentation.reading {
-      TravelArrow(degrees: reading.roundedDegrees)
-    } else {
-      Image(systemName: "location.north")
+    Group {
+      if let reading = presentation.reading {
+        TravelArrow(degrees: reading.roundedDegrees)
+      } else {
+        Image(systemName: "location.north")
+      }
     }
+    // The island has fixed bounds, so the arrow stops at the largest standard size, as the
+    // compact readout does.
+    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
   }
 }
 
