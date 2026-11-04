@@ -74,7 +74,7 @@ struct CompassActivityCard: View {
 
   private var balanced: some View {
     VStack(spacing: 2) {
-      // An equal line above keeps the reading centred between the card's top and bottom.
+      // An equal line above centers the reading against the line below.
       secondaryLine.hidden().accessibilityHidden(true)
       readout
       secondaryLine

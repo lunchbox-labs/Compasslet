@@ -134,7 +134,7 @@ struct AppearanceStoreTests {
             let host = UIHostingController(
               rootView: CompassActivityCard(state: state, isStale: stale)
                 .environment(\.dynamicTypeSize, textSize))
-            // The narrowest Lock Screen banner: a 320-point-wide screen less 22 points.
+            // Narrower than any supported banner (a 375-point screen less 22), for margin.
             let size = host.sizeThatFits(in: CGSize(width: 298, height: 1000))
             // The card reports its full height above 160 points, so an overflow shows here.
             #expect(
