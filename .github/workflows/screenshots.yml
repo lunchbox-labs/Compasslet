@@ -1,5 +1,7 @@
 name: Screenshots
 on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
   workflow_dispatch:
     inputs:
       ref:
@@ -27,6 +29,10 @@ permissions:
   contents: read
 jobs:
   capture:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+       github.event.label.name == 'screenshots')
     runs-on: xcode-27
     # A full run takes about 30 minutes on hosted runners, mostly simulator boots and captures.
     timeout-minutes: 75
@@ -36,9 +42,17 @@ jobs:
       - name: Choose what to check out
         id: target
         env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           REF_INPUT: ${{ inputs.ref }}
         run: |
-          if [[ "$REF_INPUT" =~ ^[0-9]+$ ]]; then
+          if [[ "$EVENT_NAME" == pull_request ]]; then
+            [[ "$PR_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+            echo "ref=$PR_HEAD_SHA" >> "$GITHUB_OUTPUT"
+          elif [[ "$REF_INPUT" == *$'\n'* || "$REF_INPUT" == *$'\r'* ]]; then
+            echo "The capture ref must be a single line" >&2
+            exit 1
+          elif [[ "$REF_INPUT" =~ ^[0-9]+$ ]]; then
             echo "ref=refs/pull/$REF_INPUT/head" >> "$GITHUB_OUTPUT"
           else
             echo "ref=$REF_INPUT" >> "$GITHUB_OUTPUT"
@@ -47,6 +61,11 @@ jobs:
         with:
           ref: ${{ steps.target.outputs.ref }}
           persist-credentials: false
+      - name: Report the captured source
+        run: |
+          revision=$(git rev-parse HEAD)
+          echo "Capturing commit $revision"
+          echo "Capturing commit \`$revision\`." >> "$GITHUB_STEP_SUMMARY"
       - name: Capture every screen on each simulator and appearance
         env:
           DEVICES: ${{ inputs.devices || 'largest,smallest' }}
