@@ -111,7 +111,7 @@ struct CompassDial: View {
 }
 
 extension Color {
-  /// DESIGN.md's North role, defined in code because the Live Activity extension, which also
+  /// Functional north red, defined in code because the Live Activity extension, which also
   /// compiles this file, has no asset catalog. Neither value changes under Increase Contrast.
   fileprivate static func north(for colorScheme: ColorScheme) -> Color {
     switch colorScheme {
