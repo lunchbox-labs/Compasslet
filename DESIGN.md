@@ -29,9 +29,9 @@ it.
 
 Each role has a light and a dark value, and a stronger value for Increase Contrast where it needs
 one. The app defines them as colour sets in `App/Assets.xcassets`, named in the last column, so
-appearance and contrast changes switch them automatically. The Live Activity extension has no
-asset catalog, so the colours it needs are chosen in code from the colour scheme, with the same
-values.
+appearance and contrast changes switch them automatically. The Live Activity uses only the
+system's text styles. Its extension has no asset catalog, so if it ever needs a colour from this
+file, choose it in code from the colour scheme, with the same values.
 
 | Role | Light | Dark | Increase Contrast | Use | Colour set |
 | --- | --- | --- | --- | --- | --- |
