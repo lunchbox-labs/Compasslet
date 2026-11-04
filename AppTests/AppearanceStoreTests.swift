@@ -109,20 +109,41 @@ struct AppearanceStoreTests {
 
   @Test func lockScreenCardStaysWithinTheLiveActivityHeightLimits() {
     let sample = Date(timeIntervalSince1970: 100)
-    for status in [CompassActivityAttributes.Status.usable, .slow] {
-      for textSize in [DynamicTypeSize.xSmall, .large, .accessibility5] {
-        for diagnostics in [false, true] {
-          let state = CompassActivityAttributes.ContentState(
-            bearing: 359, status: status, sampleTime: sample, expiry: nil,
-            debugUpdateTime: diagnostics ? sample : nil)
-          let host = UIHostingController(
-            rootView: CompassActivityCard(state: state)
-              .environment(\.dynamicTypeSize, textSize))
-          // The narrowest Lock Screen banner: a 320-point-wide screen less 22 points.
-          let size = host.sizeThatFits(in: CGSize(width: 298, height: 1000))
-          #expect(
-            (84...160).contains(size.height),
-            "\(status) at \(textSize), diagnostics \(diagnostics): \(size.height)")
+    var appearances: [AppearanceValues] = []
+    for mode in [ActivityTimestampMode.time, .elapsed, .hidden] {
+      var system = AppearanceValues()
+      system.lockScreenTimestamp = mode
+      appearances.append(system)
+      for custom in [ReadoutTextSize.xSmall, .accessibility5] {
+        var fixed = system
+        fixed.useSystemTextSize = false
+        fixed.customTextSize = custom
+        appearances.append(fixed)
+      }
+    }
+    let statuses: [CompassActivityAttributes.Status] = [
+      .usable, .waiting, .slow, .unreliable, .unavailable,
+    ]
+    for appearance in appearances {
+      for status in statuses {
+        for textSize in [DynamicTypeSize.xSmall, .large, .accessibility5] {
+          for (stale, diagnostics) in [(false, false), (false, true), (true, false)] {
+            let state = CompassActivityAttributes.ContentState(
+              bearing: 359, status: status, sampleTime: sample, expiry: nil,
+              debugUpdateTime: diagnostics ? sample : nil, appearance: appearance)
+            let host = UIHostingController(
+              rootView: CompassActivityCard(state: state, isStale: stale)
+                .environment(\.dynamicTypeSize, textSize))
+            // The narrowest Lock Screen banner: a 320-point-wide screen less 22 points.
+            let size = host.sizeThatFits(in: CGSize(width: 298, height: 1000))
+            // The card reports its full height above 160 points, so an overflow shows here.
+            #expect(
+              size.height <= 160,
+              """
+              \(status) at \(textSize), stale \(stale), diagnostics \(diagnostics), \
+              \(appearance): \(size.height)
+              """)
+          }
         }
       }
     }

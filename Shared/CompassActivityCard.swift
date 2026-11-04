@@ -41,7 +41,8 @@ struct CompassActivityCard: View {
   }
 
   /// The tallest layout that fits: diagnostics (Lock Screen only), then the reading between
-  /// balanced lines, then a bare Last Travel, then the reading alone.
+  /// balanced lines, then (Lock Screen only) the reading above its Last Travel line, then a bare
+  /// Last Travel, then (Lock Screen only, so it never grows past 160 points) the reading alone.
   private var layouts: some View {
     ViewThatFits(in: .vertical) {
       if !isSmall, let update = state.debugUpdateTime {
@@ -52,20 +53,28 @@ struct CompassActivityCard: View {
         .fixedSize(horizontal: false, vertical: true)
       }
       balanced.fixedSize(horizontal: false, vertical: true)
+      if !isSmall {
+        VStack(spacing: 2) {
+          readout
+          secondaryLine
+        }
+        .fixedSize(horizontal: false, vertical: true)
+      }
       VStack(spacing: 1) {
         readout
         if presentation.reading != nil, timestampMode != .hidden {
           Text("Last Travel").font(.caption2).foregroundStyle(.secondary)
         }
       }
-      .fixedSize(horizontal: false, vertical: true)
-      readout.fixedSize(horizontal: false, vertical: true)
+      if !isSmall {
+        readout.fixedSize(horizontal: false, vertical: true)
+      }
     }
   }
 
   private var balanced: some View {
     VStack(spacing: 2) {
-      // Reserve equal space above and below so diagnostics never move the reading.
+      // An equal line above keeps the reading centred between the card's top and bottom.
       secondaryLine.hidden().accessibilityHidden(true)
       readout
       secondaryLine
@@ -85,11 +94,19 @@ struct CompassActivityCard: View {
 
   /// At large text sizes the reading drops to a shorter form (degrees, then direction) before
   /// any text is scaled down, so an enlarged size stays enlarged; the accessibility label keeps
-  /// every detail. Status text keeps its single shrinking line.
+  /// every detail. Status text keeps its single shrinking line in CarPlay; on the Lock Screen it
+  /// uses a smaller style and may wrap to a second line, so it stays readable at large sizes.
   private var readout: some View {
     Group {
       if presentation.reading == nil {
-        readoutText(presentation.status).lineLimit(1).minimumScaleFactor(0.5)
+        if isSmall {
+          readoutText(presentation.status).lineLimit(1).minimumScaleFactor(0.5)
+        } else {
+          Text(presentation.status)
+            .font(.title2.weight(.semibold))
+            .multilineTextAlignment(.center)
+            .lineLimit(2).minimumScaleFactor(0.8)
+        }
       } else {
         ViewThatFits(in: .horizontal) {
           ForEach(presentation.bearingCandidates, id: \.self) { candidate in
@@ -111,9 +128,12 @@ struct CompassActivityCard: View {
 
   private var secondaryLine: some View {
     Group {
-      if presentation.reading != nil, let sample = state.sampleTime {
+      if presentation.reading != nil, let sample = state.sampleTime,
+        isSmall || timestampMode != .hidden
+      {
         ActivityTimestamp(sample: sample, mode: timestampMode)
       } else {
+        // Without a reading, or on the Lock Screen with Last Travel hidden, say what this is.
         Text("Travel · True North")
       }
     }
