@@ -138,7 +138,7 @@ struct AppearanceDetailView: View {
         }
         .disabled(!value.hasReadout)
         if surface != .phone {
-          Section("Last Travel") {
+          Section("Last Updated") {
             timestampPicker("Lock Screen", selection: binding(\.lockScreenTimestamp))
             timestampPicker("CarPlay", selection: binding(\.carPlayActivityTimestamp))
           }
@@ -448,7 +448,7 @@ struct AppearancePreview: View {
       }
       if surface == nil || surface == .activity {
         // Only the Lock Screen card is shown. CarPlay's card has the same layout at a smaller
-        // size and follows the CarPlay Last Travel setting; the live-activity screenshot shows
+        // size and follows the CarPlay Last Updated setting; the live-activity screenshot shows
         // both.
         LiveActivityExample(presentation: .lockScreen, state: activityState)
       }

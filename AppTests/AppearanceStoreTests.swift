@@ -102,8 +102,31 @@ struct AppearanceStoreTests {
       #expect(try render(elapsed, small: small) != render(hidden, small: small))
       // Unavailable cards must never expose a timestamp from a stale payload.
       #expect(
-        try render(original, small: small, stale: true) == render(hidden, small: small, stale: true)
+        try render(original, small: small, stale: true)
+          == render(elapsed, small: small, stale: true)
       )
+    }
+  }
+
+  @Test func hiddenTimestampCardsShowOnlyTheReading() throws {
+    var appearance = AppearanceValues()
+    appearance.lockScreenTimestamp = .hidden
+    appearance.carPlayActivityTimestamp = .hidden
+    let state = CompassActivityAttributes.ContentState(
+      bearing: 45, status: .usable, sampleTime: Date(timeIntervalSince1970: 100),
+      expiry: nil, appearance: appearance)
+    func render(_ view: some View) throws -> Data {
+      let renderer = ImageRenderer(
+        content: view.frame(width: 300, height: 160)
+          .environment(\.dynamicTypeSize, .large)
+          .environment(\.colorScheme, .light))
+      return try #require(renderer.uiImage?.pngData())
+    }
+    for small in [false, true] {
+      let card = CompassActivityCard(state: state, isSmall: small)
+      let reading = Text("NE 45°")
+        .font((small ? Font.title2 : Font.largeTitle).weight(.semibold)).monospacedDigit()
+      #expect(try render(card) == render(reading))
     }
   }
 
