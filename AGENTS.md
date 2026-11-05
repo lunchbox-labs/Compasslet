@@ -11,16 +11,16 @@ Read these documents explicitly; GitHub does not automatically inherit them into
 
 ## Commands
 
-The app targets iOS 27.0 and builds with Xcode 27.1 (`Compass.xcodeproj`, `Compass` scheme).
-On macOS with Xcode 27.1 selected, build and test the app on an available iOS 27+ iPhone
-simulator:
+Run these from the repository root. The app targets iOS 27.0 and builds with Xcode 27.1
+(`Compass.xcodeproj`, `Compass` scheme). On macOS with Xcode 27.1 selected, build and test
+the app on an available iOS 27+ iPhone simulator:
 
 ```sh
 bash scripts/test-ios
 ```
 
-The `CompassCore` package and formatting checks also run on Linux with Swift 6.4.1 and its
-bundled swift-format 6.4.1:
+The `CompassCore` package and formatting checks need Swift 6.4.1 and its bundled
+swift-format 6.4.1; CI runs them on Linux in the `swift:6.4.1` container:
 
 ```sh
 bash scripts/swift-style check   # `format` applies the formatting
@@ -33,6 +33,13 @@ or network access:
 
 ```sh
 python3 -m unittest discover -s scripts/tests -v
+```
+
+The workflow event-condition tests need Node and network access for `npm ci`:
+
+```sh
+npm ci --prefix scripts/tests/workflows --ignore-scripts --no-audit --no-fund
+npm test --prefix scripts/tests/workflows
 ```
 
 The simulator has no heading sensor and cannot exercise CarPlay operation; physical-device
