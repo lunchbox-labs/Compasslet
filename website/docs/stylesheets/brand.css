@@ -58,15 +58,30 @@
 }
 
 /* Shortcut download buttons: keep them apart when they wrap on narrow screens,
- * and give the secondary button full-strength text. */
+ * give them 44px targets and a visible focus ring, and draw the secondary
+ * button as an outlined pill per the org web guide. */
 .md-typeset .compasslet-downloads p {
   display: flex;
   flex-wrap: wrap;
   gap: 0.6rem;
 }
 
+.md-typeset .compasslet-downloads .md-button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  border: 1.5px solid var(--md-primary-fg-color);
+}
+
+.md-typeset .compasslet-downloads .md-button.focus-visible,
+.md-typeset .compasslet-downloads .md-button:focus-visible {
+  outline: 3px solid var(--md-accent-fg-color);
+  outline-offset: 3px;
+}
+
 .md-typeset .compasslet-downloads .md-button:not(.md-button--primary),
 .md-typeset .compasslet-downloads .md-button:not(.md-button--primary):focus,
 .md-typeset .compasslet-downloads .md-button:not(.md-button--primary):hover {
   color: var(--md-default-fg-color);
+  background-color: transparent;
 }

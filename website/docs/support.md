@@ -40,8 +40,8 @@ Shortcuts or Siri ends after a minute unless you open Compasslet on CarPlay.
 
 If the Live Activity doesn't start when you drive with CarPlay, add the
 [Live Activity Shortcuts](shortcuts.md). They start the Live Activity when CarPlay
-connects and end it when CarPlay disconnects. The page explains how to add them on your
-iPhone and set them to run on their own.
+connects and end it when CarPlay disconnects. After it starts, open Compasslet on CarPlay
+within a minute to keep it.
 
 ## Diagnostics
 
