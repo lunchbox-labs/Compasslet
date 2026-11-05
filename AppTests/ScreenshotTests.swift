@@ -90,11 +90,26 @@ final class ScreenshotTests: XCTestCase {
     Screen(name: "settings-appearance-global") {
       AnyView(NavigationStack { AppearanceDetailView(surface: nil) })
     },
+    Screen(name: "settings-appearance-global-largest-text") {
+      AnyView(
+        NavigationStack { AppearanceDetailView(surface: nil) }
+          .environment(\.dynamicTypeSize, .accessibility5))
+    },
     Screen(name: "settings-appearance-iphone") {
       AnyView(NavigationStack { AppearanceDetailView(surface: .phone) })
     },
+    Screen(name: "settings-appearance-iphone-largest-text") {
+      AnyView(
+        NavigationStack { AppearanceDetailView(surface: .phone) }
+          .environment(\.dynamicTypeSize, .accessibility5))
+    },
     Screen(name: "settings-appearance-live-activity") {
       AnyView(NavigationStack { AppearanceDetailView(surface: .activity) })
+    },
+    Screen(name: "settings-appearance-live-activity-largest-text") {
+      AnyView(
+        NavigationStack { AppearanceDetailView(surface: .activity) }
+          .environment(\.dynamicTypeSize, .accessibility5))
     },
     Screen(name: "settings-appearance-minor-ticks") { ScreenshotTests.editor(.minorTicks) },
     Screen(name: "settings-appearance-cardinal-labels") { ScreenshotTests.editor(.labels) },
@@ -347,8 +362,8 @@ private struct LiveActivityScreen: View {
   var body: some View {
     VStack(spacing: 32) {
       Spacer()
-      LiveActivityExample(presentation: .lockScreen, state: state)
-      LiveActivityExample(presentation: .carPlay, state: state)
+      LiveActivityExample(presentation: .lockScreen, state: state, title: "Lock Screen")
+      LiveActivityExample(presentation: .carPlay, state: state, title: "CarPlay")
       Spacer()
     }
     // The Lock Screen banner is 22 points narrower than the screen.
