@@ -16,8 +16,8 @@ struct CompassApp: App {
     WindowGroup {
       CompassView(drive: appDelegate.drive)
         .modifier(AppThemeModifier(store: .shared))
-        // Switches stay system green unless tinted; this also reaches Settings, which the
-        // compass screen draws over itself rather than presenting.
+        // Switches stay system green unless tinted. The Settings sheet repeats both modifiers,
+        // so it follows them while it's open.
         .tint(Color.accentColor)
     }
   }

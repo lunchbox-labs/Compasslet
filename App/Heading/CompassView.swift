@@ -22,6 +22,11 @@ struct CompassView: View {
   @ObservedObject private var appearanceStore = AppearanceStore.shared
   @StateObject private var onboarding: OnboardingState
   @State private var showingSettings: Bool
+  /// True from opening Settings until its sheet has fully gone, unlike `showingSettings`, which
+  /// turns false as the sheet starts to close.
+  @State private var settingsOnScreen: Bool
+  /// Whether the gear opened Settings, so VoiceOver focus goes back to it afterwards.
+  @State private var settingsOpenedFromGear = false
   /// Set when Settings asks for the tour, which starts once the sheet has gone.
   @State private var tourAfterSettings = false
   @State private var showingHeadingStatus = false
@@ -39,11 +44,13 @@ struct CompassView: View {
   init(
     drive: DriveSessionController,
     onboarding: @autoclosure @escaping () -> OnboardingState = OnboardingState(),
+    // Only the screenshots open the screen with Settings already presented.
     showingSettings: Bool = false
   ) {
     self.drive = drive
     _onboarding = StateObject(wrappedValue: onboarding())
     _showingSettings = State(initialValue: showingSettings)
+    _settingsOnScreen = State(initialValue: showingSettings)
   }
 
   private var storedAppearance: AppearanceValues {
@@ -75,6 +82,9 @@ struct CompassView: View {
         .navigationTitle("Compasslet")
         .navigationBarTitleDisplayMode(.inline)
     }
+    // The title is in the navigation bar, outside the compass, so the tour hides both.
+    .allowsHitTesting(!onboarding.isTouring)
+    .accessibilityHidden(onboarding.isTouring)
     .overlay {
       // Over the navigation bar too, so the tour dims the whole screen.
       GeometryReader { overlay in
@@ -88,6 +98,8 @@ struct CompassView: View {
     }
     .sheet(isPresented: $showingSettings, onDismiss: settingsDismissed) {
       CompassSettingsView(drive: drive, showTour: replayTour)
+        .modifier(AppThemeModifier(store: .shared))
+        .tint(Color.accentColor)
         .navigationTransition(.zoom(sourceID: SettingsTransition.source, in: glassNamespace))
     }
   }
@@ -128,10 +140,10 @@ struct CompassView: View {
           .padding(.horizontal, contentMargin)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        floatingControls(compact: geometry.size.height < 700)
+        // Measured below the 44pt navigation bar, so the same phones count as short as when
+        // the whole screen was measured against 700pt.
+        floatingControls(compact: geometry.size.height < 656)
       }
-      .allowsHitTesting(!onboarding.isTouring)
-      .accessibilityHidden(onboarding.isTouring)
       .frame(width: geometry.size.width, height: geometry.size.height)
     }
     .background(Color(uiColor: .systemBackground))
@@ -176,18 +188,17 @@ struct CompassView: View {
 
   private var carPlayReady: Bool { drive.isCarPlayConnected && drive.setupStatus == .ready }
 
-  /// The tour shows the button in place for its step without CarPlay, then fades it out while
-  /// keeping its space, so the compass doesn't jump under the next step.
-  private var tourShowsLiveActivityControl: Bool {
-    onboarding.step == .liveActivity || onboarding.step == .shortcuts
-  }
-  private var liveActivityControlFaded: Bool { !carPlayReady && onboarding.step == .shortcuts }
+  /// The tour shows the button for its step without CarPlay. When the step ends, the button
+  /// merges back into the gear, which keeps its place, so nothing else moves.
+  private var tourShowsLiveActivityControl: Bool { onboarding.step == .liveActivity }
 
   /// The screen's floating controls on glass in the bottom-right corner: Settings, and the
   /// Live Activity button beside it while CarPlay is connected. One glass container, so the
   /// two render as a group and the button can appear and leave beside the gear.
   private func floatingControls(compact: Bool) -> some View {
-    let diameter = max(44, min(compact ? floatingControlDiameter - 8 : floatingControlDiameter, 80))
+    // Capped below the guide's 80pt so the row leaves the compass room at the largest text
+    // sizes; the large content viewer shows each control's name instead.
+    let diameter = max(44, min(compact ? floatingControlDiameter - 8 : floatingControlDiameter, 60))
     return HStack {
       Spacer(minLength: 0)
       GlassEffectContainer(spacing: 12) {
@@ -198,12 +209,16 @@ struct CompassView: View {
           settingsButton(diameter: diameter)
         }
       }
+      .animation(reduceMotion ? nil : .smooth, value: carPlayReady)
     }
     .padding(.horizontal, 16).padding(.bottom, 8)
   }
 
   private func settingsButton(diameter: CGFloat) -> some View {
-    Button(action: openSettings) {
+    Button {
+      settingsOpenedFromGear = true
+      openSettings()
+    } label: {
       FloatingControlLabel(
         systemImage: "gear", diameter: diameter, glassID: SettingsTransition.source,
         namespace: glassNamespace)
@@ -225,12 +240,14 @@ struct CompassView: View {
         namespace: glassNamespace)
     }
     .buttonStyle(FloatingControlStyle())
-    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
+    .onGeometryChange(for: CGRect.self) {
+      $0.frame(in: .global)
+    } action: {
       liveActivityButtonFrame = $0
     }
     .onDisappear { liveActivityButtonFrame = nil }
     .popoverTip(
-      carPlayReady && !onboarding.isTouring && !showingSettings
+      carPlayReady && !onboarding.isTouring && !settingsOnScreen
         ? onboarding.liveActivityTip : nil,
       arrowEdge: .bottom
     )
@@ -247,10 +264,6 @@ struct CompassView: View {
     } message: {
       Text("Make sure Live Activities are allowed for Compasslet in the Settings app.")
     }
-    .opacity(liveActivityControlFaded ? 0 : 1)
-    .allowsHitTesting(!liveActivityControlFaded)
-    .accessibilityHidden(liveActivityControlFaded)
-    .animation(.easeOut(duration: reduceMotion ? 0.2 : 0.8), value: liveActivityControlFaded)
   }
 
   /// A drive whose Live Activity was dismissed or couldn't start offers to start it again.
@@ -447,6 +460,7 @@ struct CompassView: View {
   }
 
   private func openSettings() {
+    settingsOnScreen = true
     showingSettings = true
   }
 
@@ -457,10 +471,13 @@ struct CompassView: View {
   }
 
   private func settingsDismissed() {
+    settingsOnScreen = false
+    let fromGear = settingsOpenedFromGear
+    settingsOpenedFromGear = false
     if tourAfterSettings {
       tourAfterSettings = false
       withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) { onboarding.replay() }
-    } else {
+    } else if fromGear {
       settingsButtonFocused = true
     }
   }
