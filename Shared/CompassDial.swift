@@ -13,15 +13,37 @@ struct CompassDial: View {
   var showsReadout = true
   var unavailableSymbol = "safari"
   @Environment(\.colorSchemeContrast) private var contrast
+  @Environment(\.colorScheme) private var colorScheme
+  /// The text size's factor relative to the default size, applied to the dial-relative labels.
+  /// It follows the system text size, not the readout's custom size.
+  @ScaledMetric(relativeTo: .caption) private var labelScale: CGFloat = 1
 
   private var increasedContrast: Bool { contrast == .increased }
   private var labelColor: Color { increasedContrast ? .primary : .secondary }
+  private var north: Color { .north(for: colorScheme) }
+
+  /// Labels scale with the dial, then with Dynamic Type, and stop growing at 12% of the diameter.
+  /// The 11-point floor, unchanged from before, wins over that cap on dials under about 92
+  /// points. Labels don't rotate, so at a diagonal heading a glyph's corner reaches about 0.46 em
+  /// ("N") or 0.58 em ("W") from its center. Inside labels move inward by half their growth, so
+  /// at the cap they stay clear of the north marker (0.80r) and major ticks (0.84r).
+  private static func labelSize(diameter: CGFloat, scale: CGFloat) -> CGFloat {
+    let dialRelative = max(11, min(18, diameter * 0.085))
+    return max(11, min(dialRelative * scale, diameter * 0.12))
+  }
 
   var body: some View {
     GeometryReader { geometry in
       let available = max(0, min(geometry.size.width, geometry.size.height))
+      let outside = appearance.cardinalLabels == .outside
+      // Labels are sized from the dial as drawn at the default text size.
+      let baseDiameter = max(0, available - (outside ? 42 : 12))
+      let labelSize = Self.labelSize(diameter: baseDiameter, scale: labelScale)
+      // Growth past the default text size. Labels move away from the rim by half of it, so their
+      // edge nearest the rim stays about where it is at the default size.
+      let growth = max(0, labelSize - Self.labelSize(diameter: baseDiameter, scale: 1))
       // Outside labels reserve space inside the view instead of overflowing the tile.
-      let diameter = max(0, available - (appearance.cardinalLabels == .outside ? 42 : 12))
+      let diameter = max(0, baseDiameter - (outside ? growth * 2 : 0))
       let radius = diameter / 2
       let rotation = appearance.rotation == .dial ? -(bearing ?? 0) : 0
       let rim: HierarchicalShapeStyle = increasedContrast ? .tertiary : .quaternary
@@ -34,7 +56,7 @@ struct CompassDial: View {
               // Spans 0.80r to 0.96r: longer than a major tick, clear of the inside labels,
               // and ending before the fixed index triangle so the two never merge near north.
               NorthMarker()
-                .fill(Color.red)
+                .fill(north)
                 .frame(width: diameter * 0.06, height: diameter * 0.08)
                 .offset(y: radius * 0.02)
             } else {
@@ -51,9 +73,9 @@ struct CompassDial: View {
         if appearance.cardinalLabels != .hidden {
           ForEach(Array(["N", "E", "S", "W"].enumerated()), id: \.offset) { index, label in
             let angle = (Double(index) * 90 + rotation - 90) * .pi / 180
-            let distance = appearance.cardinalLabels == .outside ? radius + 13 : radius * 0.7
-            Text(label).font(.system(size: max(11, min(18, diameter * 0.085)), weight: .semibold))
-              .foregroundStyle(index == 0 ? Color.red : labelColor)
+            let distance = outside ? radius + 13 + growth / 2 : radius * 0.7 - growth / 2
+            Text(label).font(.system(size: labelSize, weight: .semibold))
+              .foregroundStyle(index == 0 ? north : labelColor)
               .offset(x: distance * CGFloat(cos(angle)), y: distance * CGFloat(sin(angle)))
           }
         }
@@ -66,7 +88,7 @@ struct CompassDial: View {
               CompassReadout(
                 bearing: bearing, appearance: appearance, degreesFirst: true, compact: true
               )
-              .frame(width: diameter * (appearance.cardinalLabels == .outside ? 0.78 : 0.56))
+              .frame(width: diameter * (outside ? 0.78 : 0.56))
             }
           } else {
             Image(systemName: "location.north.fill")
@@ -84,6 +106,17 @@ struct CompassDial: View {
       .opacity(bearing == nil ? (increasedContrast ? 0.6 : 0.35) : 1)
       .frame(width: diameter, height: diameter)
       .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+  }
+}
+
+extension Color {
+  /// Functional north red, defined in code because the Live Activity extension, which also
+  /// compiles this file, has no asset catalog. Neither value changes under Increase Contrast.
+  fileprivate static func north(for colorScheme: ColorScheme) -> Color {
+    switch colorScheme {
+    case .dark: Color(.sRGB, red: 1, green: 0x69 / 255, blue: 0x61 / 255)  // #FF6961
+    default: Color(.sRGB, red: 0xD7 / 255, green: 0, blue: 0x15 / 255)  // #D70015
     }
   }
 }
