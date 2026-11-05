@@ -21,22 +21,36 @@ struct CompassView: View {
   @StateObject private var location = CompassView.makeLocationController()
   @ObservedObject private var appearanceStore = AppearanceStore.shared
   @StateObject private var onboarding: OnboardingState
-  @State private var showingSettings = false
+  @State private var showingSettings: Bool
+  /// True from opening Settings until its sheet has fully gone, unlike `showingSettings`, which
+  /// turns false as the sheet starts to close.
+  @State private var settingsOnScreen: Bool
+  /// Whether the gear opened Settings, so VoiceOver focus goes back to it afterwards.
+  @State private var settingsOpenedFromGear = false
+  /// Set when Settings asks for the tour, which starts once the sheet has gone.
+  @State private var tourAfterSettings = false
   @State private var showingHeadingStatus = false
   /// The main screen's side margin, also subtracted when measuring its text.
   private let contentMargin: CGFloat = 24
   @State private var debugEnabled = false
   @State private var showingLiveActivityFailure = false
+  /// The Live Activity button's frame in global coordinates, for the tour's spotlight.
+  @State private var liveActivityButtonFrame: CGRect?
   @ScaledMetric(relativeTo: .body) private var compactStatusSize = 17
-  @ScaledMetric(relativeTo: .body) private var liveActivityDiameter: CGFloat = 52
-  @AccessibilityFocusState private var menuFocused: Bool
+  @ScaledMetric(relativeTo: .body) private var floatingControlDiameter: CGFloat = 52
+  @AccessibilityFocusState private var settingsButtonFocused: Bool
+  @Namespace private var glassNamespace
 
   init(
     drive: DriveSessionController,
-    onboarding: @autoclosure @escaping () -> OnboardingState = OnboardingState()
+    onboarding: @autoclosure @escaping () -> OnboardingState = OnboardingState(),
+    // Only the screenshots open the screen with Settings already presented.
+    showingSettings: Bool = false
   ) {
     self.drive = drive
     _onboarding = StateObject(wrappedValue: onboarding())
+    _showingSettings = State(initialValue: showingSettings)
+    _settingsOnScreen = State(initialValue: showingSettings)
   }
 
   private var storedAppearance: AppearanceValues {
@@ -63,77 +77,74 @@ struct CompassView: View {
   }
 
   var body: some View {
+    NavigationStack {
+      compassScreen
+        .navigationTitle("Compasslet")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+    // The title is in the navigation bar, outside the compass, so the tour hides both.
+    .allowsHitTesting(!onboarding.isTouring)
+    .accessibilityHidden(onboarding.isTouring)
+    .overlay {
+      // Over the navigation bar too, so the tour dims the whole screen.
+      GeometryReader { overlay in
+        let origin = overlay.frame(in: .global).origin
+        WelcomeTourOverlay(
+          onboarding: onboarding,
+          buttonFrame: liveActivityButtonFrame?.offsetBy(dx: -origin.x, dy: -origin.y),
+          carPlayConnected: carPlayReady)
+      }
+      .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: onboarding.step)
+    }
+    .sheet(isPresented: $showingSettings, onDismiss: settingsDismissed) {
+      CompassSettingsView(drive: drive, showTour: replayTour)
+        .modifier(AppThemeModifier(store: .shared))
+        .tint(Color.accentColor)
+        .navigationTransition(.zoom(sourceID: SettingsTransition.source, in: glassNamespace))
+    }
+  }
+
+  private var compassScreen: some View {
     GeometryReader { geometry in
-      ZStack(alignment: .leading) {
-        VStack(spacing: 0) {
-          header
-          GeometryReader { content in
-            let textWidth = (content.size.width - 2 * contentMargin).rounded(.down)
-            let sideDial = min(content.size.height - 24, content.size.width * 0.42).rounded(.down)
-            ViewThatFits(in: [.horizontal, .vertical]) {
-              if content.size.width > content.size.height {
-                HStack(spacing: 24) {
-                  dial(size: sideDial)
-                  information(details: true, width: textWidth - sideDial - 24)
-                }
-                .fixedSize(horizontal: false, vertical: true)
-              }
-              VStack(spacing: 24) {
-                dial(size: min(textWidth, content.size.height * 0.45))
-                information(details: true, width: textWidth)
+      VStack(spacing: 0) {
+        GeometryReader { content in
+          let textWidth = (content.size.width - 2 * contentMargin).rounded(.down)
+          let sideDial = min(content.size.height - 24, content.size.width * 0.42).rounded(.down)
+          ViewThatFits(in: [.horizontal, .vertical]) {
+            if content.size.width > content.size.height {
+              HStack(spacing: 24) {
+                dial(size: sideDial)
+                information(details: true, width: textWidth - sideDial - 24)
               }
               .fixedSize(horizontal: false, vertical: true)
-              VStack(spacing: 12) {
-                dial(size: min(160, content.size.height * 0.25))
-                information(details: false, width: textWidth)
-              }
-              .fixedSize(horizontal: false, vertical: true)
+            }
+            VStack(spacing: 24) {
+              dial(size: min(textWidth, content.size.height * 0.45))
+              information(details: true, width: textWidth)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            VStack(spacing: 12) {
+              dial(size: min(160, content.size.height * 0.25))
               information(details: false, width: textWidth)
-                .fixedSize(horizontal: false, vertical: true)
-              // At extreme text sizes, keep the reading or critical status readable.
-              // Location preferences remain available in the scrollable Settings.
-              // This last layout is the one place the main screen limits the user's size: the
-              // reading is capped to the screen so it stays whole rather than clipped, which
-              // is a deliberate non-scrolling design choice rather than a Dynamic Type gap.
-              essentialReading(height: content.size.height)
             }
-            .padding(.horizontal, contentMargin)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .fixedSize(horizontal: false, vertical: true)
+            information(details: false, width: textWidth)
+              .fixedSize(horizontal: false, vertical: true)
+            // At extreme text sizes, keep the reading or critical status readable.
+            // Location preferences remain available in the scrollable Settings.
+            // This last layout is the one place the main screen limits the user's size: the
+            // reading is capped to the screen so it stays whole rather than clipped, which
+            // is a deliberate non-scrolling design choice rather than a Dynamic Type gap.
+            essentialReading(height: content.size.height)
           }
-          liveActivityControl(compact: geometry.size.height < 700)
+          .padding(.horizontal, contentMargin)
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .allowsHitTesting(!showingSettings && !onboarding.isTouring)
-        .accessibilityHidden(showingSettings || onboarding.isTouring)
-        .contentShape(Rectangle())
-        .simultaneousGesture(
-          DragGesture(minimumDistance: 24, coordinateSpace: .local)
-            .onEnded { value in
-              guard value.startLocation.x <= 24, value.translation.width > 60,
-                abs(value.translation.height) < value.translation.width / 2
-              else { return }
-              openSettings()
-            }
-        )
-        if showingSettings {
-          CompassSettingsView(
-            drive: drive, close: closeSettings, showTour: replayTour
-          )
-          .frame(width: geometry.size.width, height: geometry.size.height)
-          .gesture(SettingsDismissGesture(close: closeSettings))
-          .accessibilityAddTraits(.isModal)
-          .accessibilityAction(.escape, closeSettings)
-          .transition(reduceMotion ? .opacity : .move(edge: .leading))
-        }
+        // Measured below the 44pt navigation bar, so the same phones count as short as when
+        // the whole screen was measured against 700pt.
+        floatingControls(compact: geometry.size.height < 656)
       }
       .frame(width: geometry.size.width, height: geometry.size.height)
-      .overlayPreferenceValue(LiveActivityControlBoundsKey.self) { anchor in
-        GeometryReader { overlay in
-          WelcomeTourOverlay(
-            onboarding: onboarding, buttonFrame: anchor.map { overlay[$0] },
-            carPlayConnected: carPlayReady)
-        }
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: onboarding.step)
-      }
     }
     .background(Color(uiColor: .systemBackground))
     .task(id: scenePhase) {
@@ -170,87 +181,88 @@ struct CompassView: View {
     .onChange(of: stepsHeading) { _, value in compass.setReducedMotion(value) }
     .onChange(of: onboarding.isTouring) { _, touring in
       guard !touring else { return }
-      menuFocused = true
+      settingsButtonFocused = true
       drive.requestPhoneAuthorization(isForeground: scenePhase == .active)
     }
   }
 
-  private var header: some View {
-    HStack {
-      Button(action: { openSettings() }) {
-        Image(systemName: "gearshape").frame(width: 44, height: 44)
-          .foregroundStyle(Color.primary)
-          .contentShape(Rectangle())
-      }
-      .accessibilityLabel("Settings")
-      .accessibilityShowsLargeContentViewer {
-        Label("Settings", systemImage: "gearshape")
-      }
-      .accessibilityFocused($menuFocused)
-      Spacer(minLength: 8)
-      Text("Compasslet").font(.headline).lineLimit(1).minimumScaleFactor(0.65)
-        .allowsTightening(true)
-      Spacer(minLength: 8)
-      Color.clear.frame(width: 44, height: 44).accessibilityHidden(true)
-    }
-    .padding(.horizontal, 16).padding(.vertical, 8)
-    // Like a navigation bar, the header stops growing partway through the accessibility sizes so
-    // the name stays on one line. The Settings screen and the compass below still follow the
-    // user's size, and the Settings button shows its name in the large content viewer.
-    .dynamicTypeSize(...DynamicTypeSize.accessibility3)
-  }
-
   private var carPlayReady: Bool { drive.isCarPlayConnected && drive.setupStatus == .ready }
 
-  /// The tour shows the button in place for its step without CarPlay, then fades it out while
-  /// keeping its space, so the compass doesn't jump under the next step.
-  private var tourShowsLiveActivityControl: Bool {
-    onboarding.step == .liveActivity || onboarding.step == .shortcuts
-  }
-  private var liveActivityControlFaded: Bool { !carPlayReady && onboarding.step == .shortcuts }
+  /// The tour shows the button for its step without CarPlay. When the step ends, the button
+  /// merges back into the gear, which keeps its place, so nothing else moves.
+  private var tourShowsLiveActivityControl: Bool { onboarding.step == .liveActivity }
 
-  /// The manual fallback for the automatic CarPlay start, shown while CarPlay is connected.
-  /// An icon-only circle in the bottom-right corner, a little smaller on short screens.
-  @ViewBuilder private func liveActivityControl(compact: Bool) -> some View {
-    if carPlayReady || tourShowsLiveActivityControl {
-      let diameter = max(44, min(compact ? liveActivityDiameter - 8 : liveActivityDiameter, 80))
-      HStack {
-        Spacer(minLength: 0)
-        Button(action: toggleLiveActivity) {
-          Image(systemName: liveActivitySymbol)
-            .font(.system(size: diameter * 0.36, weight: .semibold))
-            .foregroundStyle(.primary)
-            .frame(width: diameter, height: diameter)
-            // The glass is the button's only surface; anything drawn under it hides the glass.
-            // Not interactive glass: the plain button style already dims it on press.
-            .glassEffect(.regular, in: Circle())
-            .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .anchorPreference(key: LiveActivityControlBoundsKey.self, value: .bounds) { $0 }
-        .popoverTip(
-          carPlayReady && !onboarding.isTouring && !showingSettings
-            ? onboarding.liveActivityTip : nil,
-          arrowEdge: .bottom
-        )
-        .accessibilityLabel(liveActivityAction)
-        .accessibilityHint(liveActivityHint)
-        .accessibilityShowsLargeContentViewer {
-          Label(liveActivityAction, systemImage: liveActivitySymbol)
-        }
-        .alert("Live Activity Couldn’t Start", isPresented: $showingLiveActivityFailure) {
-          if let url = URL(string: UIApplication.openSettingsURLString) {
-            Button("Open Settings") { openURL(url) }
+  /// The screen's floating controls on glass in the bottom-right corner: Settings, and the
+  /// Live Activity button beside it while CarPlay is connected. One glass container, so the
+  /// two render as a group and the button can appear and leave beside the gear.
+  private func floatingControls(compact: Bool) -> some View {
+    // Capped below the guide's 80pt so the row leaves the compass room at the largest text
+    // sizes; the large content viewer shows each control's name instead.
+    let diameter = max(44, min(compact ? floatingControlDiameter - 8 : floatingControlDiameter, 60))
+    return HStack {
+      Spacer(minLength: 0)
+      GlassEffectContainer(spacing: 12) {
+        HStack(spacing: 12) {
+          if carPlayReady || tourShowsLiveActivityControl {
+            liveActivityButton(diameter: diameter)
           }
-          Button("OK", role: .cancel) {}
-        } message: {
-          Text("Make sure Live Activities are allowed for Compasslet in the Settings app.")
+          settingsButton(diameter: diameter)
         }
       }
-      .padding(.horizontal, 16).padding(.bottom, 8)
-      .opacity(liveActivityControlFaded ? 0 : 1)
-      .accessibilityHidden(liveActivityControlFaded)
-      .animation(.easeOut(duration: reduceMotion ? 0.2 : 0.8), value: liveActivityControlFaded)
+      .animation(reduceMotion ? nil : .smooth, value: carPlayReady)
+    }
+    .padding(.horizontal, 16).padding(.bottom, 8)
+  }
+
+  private func settingsButton(diameter: CGFloat) -> some View {
+    Button {
+      settingsOpenedFromGear = true
+      openSettings()
+    } label: {
+      FloatingControlLabel(
+        systemImage: "gear", diameter: diameter, glassID: SettingsTransition.source,
+        namespace: glassNamespace)
+    }
+    .buttonStyle(FloatingControlStyle())
+    .matchedTransitionSource(id: SettingsTransition.source, in: glassNamespace)
+    .accessibilityLabel("Settings")
+    .accessibilityShowsLargeContentViewer {
+      Label("Settings", systemImage: "gear")
+    }
+    .accessibilityFocused($settingsButtonFocused)
+  }
+
+  /// The manual fallback for the automatic CarPlay start, shown while CarPlay is connected.
+  private func liveActivityButton(diameter: CGFloat) -> some View {
+    Button(action: toggleLiveActivity) {
+      FloatingControlLabel(
+        systemImage: liveActivitySymbol, diameter: diameter, glassID: "liveActivity",
+        namespace: glassNamespace)
+    }
+    .buttonStyle(FloatingControlStyle())
+    .onGeometryChange(for: CGRect.self) {
+      $0.frame(in: .global)
+    } action: {
+      liveActivityButtonFrame = $0
+    }
+    .onDisappear { liveActivityButtonFrame = nil }
+    .popoverTip(
+      carPlayReady && !onboarding.isTouring && !settingsOnScreen
+        ? onboarding.liveActivityTip : nil,
+      arrowEdge: .bottom
+    )
+    .accessibilityLabel(liveActivityAction)
+    .accessibilityHint(liveActivityHint)
+    .accessibilityShowsLargeContentViewer {
+      Label(liveActivityAction, systemImage: liveActivitySymbol)
+    }
+    .alert("Live Activity Couldn’t Start", isPresented: $showingLiveActivityFailure) {
+      if let url = URL(string: UIApplication.openSettingsURLString) {
+        Button("Open Settings") { openURL(url) }
+      }
+      Button("OK", role: .cancel) {}
+    } message: {
+      Text("Make sure Live Activities are allowed for Compasslet in the Settings app.")
     }
   }
 
@@ -448,22 +460,62 @@ struct CompassView: View {
   }
 
   private func openSettings() {
-    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) { showingSettings = true }
+    settingsOnScreen = true
+    showingSettings = true
   }
 
-  private func closeSettings() {
-    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) { showingSettings = false }
-    menuFocused = true
-  }
-
+  /// Settings closes first, so the tour doesn't start under the sheet.
   private func replayTour() {
-    withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) {
-      showingSettings = false
-      onboarding.replay()
+    tourAfterSettings = true
+    showingSettings = false
+  }
+
+  private func settingsDismissed() {
+    settingsOnScreen = false
+    let fromGear = settingsOpenedFromGear
+    settingsOpenedFromGear = false
+    if tourAfterSettings {
+      tourAfterSettings = false
+      withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) { onboarding.replay() }
+    } else if fromGear {
+      settingsButtonFocused = true
     }
   }
 }
 
+private enum SettingsTransition {
+  static let source = "settings"
+}
+
+/// An icon-only circle on regular glass, sized by the caller within 44 to 60 points.
+private struct FloatingControlLabel: View {
+  let systemImage: String
+  let diameter: CGFloat
+  let glassID: String
+  let namespace: Namespace.ID
+
+  var body: some View {
+    Image(systemName: systemImage)
+      .font(.system(size: diameter * 0.38, weight: .semibold))
+      .foregroundStyle(.primary)
+      .frame(width: diameter, height: diameter)
+      // The glass is the control's only surface; anything drawn under it hides the glass.
+      .glassEffect(.regular.interactive(), in: .circle)
+      .glassEffectID(glassID, in: namespace)
+      .contentShape(.circle)
+  }
+}
+
+/// Leaves the press feedback to the interactive glass, which flexes under a finger, rather
+/// than also dimming the label as the plain style does.
+private struct FloatingControlStyle: ButtonStyle {
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+  }
+}
+
+/// The phone's large reading, in the bold SF Pro Rounded display voice that the organisation's
+/// iOS guide gives brand moments.
 struct PhoneCompassReadout: View {
   let bearing: Double
   let appearance: AppearanceValues
@@ -479,7 +531,7 @@ struct PhoneCompassReadout: View {
         Text("\(Int(bearing.rounded()) % 360)°").monospacedDigit()
       }
     }
-    .font(.system(size: min(textSize, maximumTextSize), weight: .light))
+    .font(.system(size: min(textSize, maximumTextSize), weight: .bold, design: .rounded))
     .lineLimit(1)
     .fixedSize(horizontal: true, vertical: true)
   }

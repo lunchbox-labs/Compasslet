@@ -3,8 +3,8 @@ import UIKit
 
 struct CompassSettingsView: View {
   @ObservedObject var drive: DriveSessionController
-  let close: () -> Void
   let showTour: () -> Void
+  @Environment(\.dismiss) private var dismiss
   @AccessibilityFocusState private var closeFocused: Bool
 
   var body: some View {
@@ -42,7 +42,7 @@ struct CompassSettingsView: View {
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
         ToolbarItem(placement: .confirmationAction) {
-          Button("Done", action: close)
+          Button("Done") { dismiss() }
             .frame(minWidth: 44, minHeight: 44)
             // Filled with the accent: white on the light-mode plum, dark on the dark-mode pink,
             // where white would be only 2.14:1. The style is explicit so the fill doesn't
