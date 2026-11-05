@@ -135,6 +135,11 @@ final class ScreenshotTests: XCTestCase {
     Screen(name: "live-activity-largest-text") {
       AnyView(LiveActivityScreen().environment(\.dynamicTypeSize, .accessibility5))
     },
+    Screen(name: "live-activity-status") { AnyView(LiveActivityScreen(status: .slow)) },
+    Screen(name: "live-activity-status-largest-text") {
+      AnyView(LiveActivityScreen(status: .slow).environment(\.dynamicTypeSize, .accessibility5))
+    },
+    Screen(name: "carplay-dial") { AnyView(CarPlayDialScreen()) },
   ]
 
   private var directory: URL?
@@ -397,14 +402,16 @@ private final class IdleActivity: CompassActivityPresenting {
 /// simulator can't show a running Live Activity without CarPlay.
 private struct LiveActivityScreen: View {
   var mode: ActivityTimestampMode = .time
+  /// Anything but `.usable` shows that status instead of a reading.
+  var status: CompassActivityAttributes.Status = .usable
 
   private var state: CompassActivityAttributes.ContentState {
     var appearance = AppearanceValues()
     appearance.lockScreenTimestamp = mode
     appearance.carPlayActivityTimestamp = mode
     return .init(
-      bearing: 47, status: .usable, sampleTime: .now.addingTimeInterval(-12), expiry: nil,
-      appearance: appearance)
+      bearing: status == .usable ? 47 : nil, status: status,
+      sampleTime: .now.addingTimeInterval(-12), expiry: nil, appearance: appearance)
   }
 
   var body: some View {
@@ -418,5 +425,22 @@ private struct LiveActivityScreen: View {
     .padding(.horizontal, 11)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(Color(uiColor: .systemGroupedBackground))
+  }
+}
+
+/// The CarPlay dial thumbnail as the car receives it, drawn in the window's appearance.
+private struct CarPlayDialScreen: View {
+  @Environment(\.colorScheme) private var colorScheme
+
+  var body: some View {
+    let image = CarPlayCompassTemplate.dialImage(
+      course: 59,
+      traits: UITraitCollection { traits in
+        traits.displayScale = 3
+        traits.userInterfaceStyle = colorScheme == .dark ? .dark : .light
+      })
+    Image(uiImage: image)
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .background(Color(uiColor: .systemGroupedBackground))
   }
 }

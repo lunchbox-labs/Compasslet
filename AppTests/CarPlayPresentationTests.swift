@@ -170,6 +170,54 @@ final class CarPlayPresentationTests: XCTestCase {
     XCTAssertEqual(fallback.size, light.size)
   }
 
+  func testDialArrowUsesTheAccentForTheCarsAppearance() throws {
+    let accent = try XCTUnwrap(UIColor(named: "AccentColor"))
+    for style in [UIUserInterfaceStyle.light, .dark] {
+      let car = UITraitCollection { traits in
+        traits.displayScale = 1
+        traits.userInterfaceStyle = style
+      }
+      let image = CarPlayCompassTemplate.dialImage(course: 59, traits: car)
+      // The dial's centre lies on the arrow's shaft whatever the course.
+      let drawn = try XCTUnwrap(centerPixel(of: image))
+      let expected = try XCTUnwrap(rgb(accent.resolvedColor(with: car)))
+      for (channel, value) in zip(drawn, expected) {
+        XCTAssertEqual(channel, value, accuracy: 3, "\(style.rawValue): \(drawn)")
+      }
+    }
+  }
+
+  /// The red, green and blue of the image's center pixel, from 0 to 255, in sRGB.
+  private func centerPixel(of image: UIImage) -> [Double]? {
+    guard let cgImage = image.cgImage,
+      let space = CGColorSpace(name: CGColorSpace.sRGB)
+    else { return nil }
+    var pixel = [UInt8](repeating: 0, count: 4)
+    let drawn = pixel.withUnsafeMutableBytes { buffer -> Bool in
+      guard
+        let context = CGContext(
+          data: buffer.baseAddress, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+          space: space, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
+      else { return false }
+      context.draw(
+        cgImage,
+        in: CGRect(
+          x: -CGFloat(cgImage.width / 2), y: -CGFloat(cgImage.height / 2),
+          width: CGFloat(cgImage.width), height: CGFloat(cgImage.height)))
+      return true
+    }
+    return drawn ? pixel.prefix(3).map(Double.init) : nil
+  }
+
+  /// A color's red, green and blue from 0 to 255, in sRGB.
+  private func rgb(_ color: UIColor) -> [Double]? {
+    guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+      let converted = color.cgColor.converted(to: space, intent: .defaultIntent, options: nil),
+      let components = converted.components, components.count >= 3
+    else { return nil }
+    return components.prefix(3).map { ($0 * 255).rounded() }
+  }
+
   private func dialValue(_ degrees: Double, at timestamp: Date, now: Date? = nil)
     -> CarPlayPresentation
   {
