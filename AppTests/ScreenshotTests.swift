@@ -101,11 +101,26 @@ final class ScreenshotTests: XCTestCase {
             .environment(\.dynamicTypeSize, .accessibility5)
         })
     },
+    Screen(name: "settings-appearance-global-largest-text") {
+      AnyView(
+        NavigationStack { AppearanceDetailView(surface: nil) }
+          .environment(\.dynamicTypeSize, .accessibility5))
+    },
     Screen(name: "settings-appearance-iphone") {
       AnyView(NavigationStack { AppearanceDetailView(surface: .phone) })
     },
+    Screen(name: "settings-appearance-iphone-largest-text") {
+      AnyView(
+        NavigationStack { AppearanceDetailView(surface: .phone) }
+          .environment(\.dynamicTypeSize, .accessibility5))
+    },
     Screen(name: "settings-appearance-live-activity") {
       AnyView(NavigationStack { AppearanceDetailView(surface: .activity) })
+    },
+    Screen(name: "settings-appearance-live-activity-largest-text") {
+      AnyView(
+        NavigationStack { AppearanceDetailView(surface: .activity) }
+          .environment(\.dynamicTypeSize, .accessibility5))
     },
     Screen(name: "settings-appearance-minor-ticks") { ScreenshotTests.editor(.minorTicks) },
     Screen(name: "settings-appearance-cardinal-labels") { ScreenshotTests.editor(.labels) },
@@ -115,6 +130,8 @@ final class ScreenshotTests: XCTestCase {
     Screen(name: "settings-appearance-rotation") { ScreenshotTests.editor(.rotation) },
     Screen(name: "settings-appearance-reduce-motion") { ScreenshotTests.editor(.reduceMotion) },
     Screen(name: "live-activity") { AnyView(LiveActivityScreen()) },
+    Screen(name: "live-activity-hidden-time") { AnyView(LiveActivityScreen(mode: .hidden)) },
+    Screen(name: "live-activity-elapsed-time") { AnyView(LiveActivityScreen(mode: .elapsed)) },
     Screen(name: "live-activity-largest-text") {
       AnyView(LiveActivityScreen().environment(\.dynamicTypeSize, .accessibility5))
     },
@@ -379,14 +396,22 @@ private final class IdleActivity: CompassActivityPresenting {
 /// The Lock Screen and CarPlay Live Activity cards as the app renders them, since the
 /// simulator can't show a running Live Activity without CarPlay.
 private struct LiveActivityScreen: View {
-  private let state = CompassActivityAttributes.ContentState(
-    bearing: 47, status: .usable, sampleTime: .now.addingTimeInterval(-12), expiry: nil)
+  var mode: ActivityTimestampMode = .time
+
+  private var state: CompassActivityAttributes.ContentState {
+    var appearance = AppearanceValues()
+    appearance.lockScreenTimestamp = mode
+    appearance.carPlayActivityTimestamp = mode
+    return .init(
+      bearing: 47, status: .usable, sampleTime: .now.addingTimeInterval(-12), expiry: nil,
+      appearance: appearance)
+  }
 
   var body: some View {
     VStack(spacing: 32) {
       Spacer()
-      LiveActivityExample(presentation: .lockScreen, state: state)
-      LiveActivityExample(presentation: .carPlay, state: state)
+      LiveActivityExample(presentation: .lockScreen, state: state, title: "Lock Screen")
+      LiveActivityExample(presentation: .carPlay, state: state, title: "CarPlay")
       Spacer()
     }
     // The Lock Screen banner is 22 points narrower than the screen.

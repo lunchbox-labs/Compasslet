@@ -1,7 +1,7 @@
 import CompassCore
 import SwiftUI
 
-/// The Live Activity on the Lock Screen and in CarPlay: the reading on one line, with Last Travel
+/// The Live Activity on the Lock Screen and in CarPlay: the reading on one line, with Last Updated
 /// beneath it. The Lock Screen card uses a larger readout and stays within the 84 to 160 point
 /// height Apple allows; the small card fills the size CarPlay gives it.
 struct CompassActivityCard: View {
@@ -41,8 +41,8 @@ struct CompassActivityCard: View {
   }
 
   /// The tallest layout that fits: diagnostics (Lock Screen only), then the reading between
-  /// balanced lines, then (Lock Screen only) the reading above its Last Travel line, then a bare
-  /// Last Travel, then (Lock Screen only, so it never grows past 160 points) the reading alone.
+  /// balanced lines, then (Lock Screen only) the reading above its Last Updated line, then a bare
+  /// Last Updated, then (Lock Screen only, so it never grows past 160 points) the reading alone.
   private var layouts: some View {
     ViewThatFits(in: .vertical) {
       if !isSmall, let update = state.debugUpdateTime {
@@ -63,7 +63,7 @@ struct CompassActivityCard: View {
       VStack(spacing: 1) {
         readout
         if presentation.reading != nil, timestampMode != .hidden {
-          Text("Last Travel").font(.caption2).foregroundStyle(.secondary)
+          Text("Last Updated").font(.caption2).foregroundStyle(.secondary)
         }
       }
       if !isSmall {
@@ -128,13 +128,12 @@ struct CompassActivityCard: View {
 
   private var secondaryLine: some View {
     Group {
-      if presentation.reading != nil, let sample = state.sampleTime,
-        isSmall || timestampMode != .hidden
-      {
-        ActivityTimestamp(sample: sample, mode: timestampMode)
-      } else {
-        // Without a reading, or on the Lock Screen with Last Travel hidden, say what this is.
-        Text("Travel · True North")
+      if timestampMode != .hidden {
+        if presentation.reading != nil, let sample = state.sampleTime {
+          ActivityTimestamp(sample: sample, mode: timestampMode)
+        } else {
+          Text("Travel · True North")
+        }
       }
     }
     .font(.caption2).foregroundStyle(.secondary).monospacedDigit()
@@ -236,10 +235,10 @@ struct ActivityTimestamp: View {
     case .hidden:
       EmptyView()
     case .time:
-      Text("Last Travel \(sample, style: .time)")
+      Text("Last Updated \(sample, style: .time)")
     case .elapsed:
       HStack(spacing: 4) {
-        Text("Last Travel")
+        Text("Last Updated")
         Text(timerInterval: sample...Date.distantFuture, countsDown: false)
           .monospacedDigit().fixedSize()
       }
