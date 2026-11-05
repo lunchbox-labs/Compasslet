@@ -1,13 +1,6 @@
 import SwiftUI
 import UIKit
 
-struct LiveActivityControlBoundsKey: PreferenceKey {
-  static var defaultValue: Anchor<CGRect>? { nil }
-  static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
-    value = value ?? nextValue()
-  }
-}
-
 struct WelcomeTourOverlay: View {
   @ObservedObject var onboarding: OnboardingState
   /// The button's frame in this view's coordinates, while the button is on screen.
@@ -184,7 +177,7 @@ struct WelcomeTourOverlay: View {
         "Compasslet shows your heading from magnetic north on iPhone, and your travel direction on CarPlay."
     case .liveActivity:
       let shown =
-        "When you open Compasslet on CarPlay, the Live Activity starts on its own and shows your travel direction on the Lock Screen and in the Dynamic Island. Until CarPlay disconnects, this button appears in the bottom-right corner so you can end it or start it again."
+        "When you open Compasslet on CarPlay, the Live Activity starts on its own and shows your travel direction on the Lock Screen and in the Dynamic Island. Until CarPlay disconnects, this button appears beside Settings in the bottom-right corner so you can end it or start it again."
       return carPlayConnected
         ? shown : shown + " You’re seeing a preview. It hides when you move on."
     case .shortcuts:
