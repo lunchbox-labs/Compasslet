@@ -90,6 +90,16 @@ final class ScreenshotTests: XCTestCase {
     Screen(name: "settings-appearance-global") {
       AnyView(NavigationStack { AppearanceDetailView(surface: nil) })
     },
+    Screen(name: "settings-appearance-global-reset") {
+      AnyView(NavigationStack { AppearanceDetailView(surface: nil).defaultScrollAnchor(.bottom) })
+    },
+    Screen(name: "settings-appearance-global-reset-largest-text") {
+      AnyView(
+        NavigationStack {
+          AppearanceDetailView(surface: nil).defaultScrollAnchor(.bottom)
+            .environment(\.dynamicTypeSize, .accessibility5)
+        })
+    },
     Screen(name: "settings-appearance-iphone") {
       AnyView(NavigationStack { AppearanceDetailView(surface: .phone) })
     },
