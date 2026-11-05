@@ -36,6 +36,13 @@ and you can ask Siri to "Start Compasslet Live Activity". Starting it this way o
 Compasslet on iPhone, so unlock the phone first, while parked. A Live Activity started from
 Shortcuts or Siri ends after a minute unless you open Compasslet on CarPlay.
 
+## Trouble with CarPlay?
+
+If the Live Activity doesn't start when you drive with CarPlay, add the
+[Live Activity Shortcuts](shortcuts.md). They start the Live Activity when CarPlay
+connects and end it when CarPlay disconnects. The page explains how to add them on your
+iPhone and set them to run on their own.
+
 ## Diagnostics
 
 If you are asked for diagnostics, follow
