@@ -27,15 +27,18 @@ Live Activity action.
 
 ## Run Them with CarPlay
 
-Turn each shortcut into an automation so it runs on its own:
+Each shortcut comes with its CarPlay automation already set up: Start Compass runs when
+CarPlay connects, and End Compass runs when it disconnects. The automations arrive turned
+off, so turn them on:
 
-1. In the Shortcuts app, tap **Start Compass**, tap **Edit**, then tap **Automation**.
-2. Choose the **CarPlay** trigger and set it to run when CarPlay **Connects**.
-3. So it runs without asking first, tap **Edit**, tap the Info button, tap **Privacy**, then
-   turn on **Allow Running When Locked**.
-4. Repeat these steps for **End Compass**, set to run when CarPlay **Disconnects**.
+1. In the Shortcuts app, tap **Automation**. If you don't see it, tap the Back button first.
+2. Start Compass and End Compass are in the list, turned off. Tap **Start Compass** and turn
+   its automation on.
+3. So it runs without asking first, tap **Start Compass**, tap **Edit**, tap the Info
+   button, tap **Privacy**, then turn on **Allow Running When Locked**.
+4. Repeat these steps for **End Compass**.
 
-Automations stay on the iPhone where you set them up, so repeat this on each iPhone you
+Automations stay on the iPhone where you turn them on, so repeat this on each iPhone you
 drive with.
 
 ## Before You Drive
