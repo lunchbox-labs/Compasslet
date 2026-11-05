@@ -14,6 +14,7 @@ struct WelcomeTourOverlay: View {
   let buttonFrame: CGRect?
   let carPlayConnected: Bool
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.colorScheme) private var colorScheme
   @AccessibilityFocusState private var titleFocused: Bool
 
   var body: some View {
@@ -34,7 +35,14 @@ struct WelcomeTourOverlay: View {
               card(step).frame(maxWidth: .infinity, alignment: .trailing)
               Pointer()
                 .fill(Self.cardBackground)
+                .overlay {
+                  if colorScheme == .dark {
+                    PointerEdge().stroke(Color(uiColor: .separator), lineWidth: 1)
+                  }
+                }
                 .frame(width: 22, height: 11)
+                // Overlaps the card by a point so the fill covers the card's edge at its base.
+                .offset(y: -1)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.leading, max(20, min(spotlight.midX - 16 - 11, proxy.size.width - 64)))
                 .accessibilityHidden(true)
@@ -77,8 +85,16 @@ struct WelcomeTourOverlay: View {
     }
     .padding(20)
     .frame(maxWidth: 440)
-    .background(Self.cardBackground, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-    .shadow(color: .black.opacity(0.2), radius: 16, y: 6)
+    .background(Self.cardBackground, in: cardShape)
+    .overlay {
+      if colorScheme == .dark {
+        cardShape.strokeBorder(Color(uiColor: .separator), lineWidth: 1)
+      }
+    }
+  }
+
+  private var cardShape: RoundedRectangle {
+    RoundedRectangle(cornerRadius: 20, style: .continuous)
   }
 
   private func explanation(_ step: OnboardingState.Step) -> some View {
@@ -86,6 +102,7 @@ struct WelcomeTourOverlay: View {
       artwork(step)
       Text(title(step))
         .font(.title3.bold())
+        .fontDesign(.rounded)
         .accessibilityAddTraits(.isHeader)
         .accessibilityFocused($titleFocused)
       Text(message(step))
@@ -209,6 +226,17 @@ private struct Pointer: Shape {
       path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
       path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
       path.closeSubpath()
+    }
+  }
+}
+
+/// The pointer's two slanted sides, outlined in dark mode to match the card's edge.
+private struct PointerEdge: Shape {
+  func path(in rect: CGRect) -> Path {
+    Path { path in
+      path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+      path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+      path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
     }
   }
 }

@@ -321,7 +321,7 @@ struct CompassView: View {
       } else {
         if details {
           Text(compass.status.title).font(.headline)
-          Text(compass.status.detail).foregroundStyle(.secondary)
+          Text(compass.status.detail).foregroundStyle(.primary)
         } else {
           // Without room for the hint, the title opens it, as in the last layout.
           Button(action: { showingHeadingStatus = true }) {

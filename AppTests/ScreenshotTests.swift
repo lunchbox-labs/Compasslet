@@ -14,6 +14,7 @@ import XCTest
 final class ScreenshotTests: XCTestCase {
   struct Screen {
     let name: String
+    var increasedContrast = false
     let content: @MainActor () async -> AnyView
   }
 
@@ -66,6 +67,20 @@ final class ScreenshotTests: XCTestCase {
       await ScreenshotTests.compass(tour: .shortcuts, carPlay: .connected)
     },
     Screen(name: "settings") { ScreenshotTests.settings() },
+    Screen(name: "settings-largest-text") {
+      AnyView(ScreenshotTests.settings().environment(\.dynamicTypeSize, .accessibility5))
+    },
+    Screen(name: "settings-increased-contrast", increasedContrast: true) {
+      ScreenshotTests.settings()
+    },
+    Screen(name: "tour-welcome-increased-contrast", increasedContrast: true) {
+      await ScreenshotTests.compass(tour: .compass)
+    },
+    Screen(name: "tour-live-activity-button-largest-text") {
+      AnyView(
+        await ScreenshotTests.compass(tour: .liveActivity)
+          .environment(\.dynamicTypeSize, .accessibility5))
+    },
     Screen(name: "settings-bottom") {
       AnyView(ScreenshotTests.settings().defaultScrollAnchor(.bottom))
     },
@@ -121,7 +136,8 @@ final class ScreenshotTests: XCTestCase {
     }
     XCTAssertFalse(selected.isEmpty, "No screen name starts with \(nameFilter)")
     for screen in selected {
-      let window = try makeWindow(await screen.content())
+      let window = try makeWindow(
+        await screen.content(), increasedContrast: screen.increasedContrast)
       // Long enough for the first readings, navigation titles and any appearance animation.
       try await Task.sleep(for: .seconds(2))
       try await requestScreenshot(screen.name, in: directory)
@@ -129,16 +145,17 @@ final class ScreenshotTests: XCTestCase {
     }
   }
 
-  private func makeWindow(_ view: AnyView) throws -> UIWindow {
+  private func makeWindow(_ view: AnyView, increasedContrast: Bool) throws -> UIWindow {
     let scene = try XCTUnwrap(
       UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
     let window = UIWindow(windowScene: scene)
     window.overrideUserInterfaceStyle = interfaceStyle
+    window.traitOverrides.accessibilityContrast = increasedContrast ? .high : .normal
     window.windowLevel = .alert + 1
     // A window outside the app's SwiftUI scene reports itself inactive, which pauses the
-    // compass, so the screens render as the active app does.
+    // compass, so the screens render as the active app does, with the app root's tint.
     window.rootViewController = UIHostingController(
-      rootView: view.environment(\.scenePhase, .active))
+      rootView: view.environment(\.scenePhase, .active).tint(Color.accentColor))
     window.makeKeyAndVisible()
     return window
   }

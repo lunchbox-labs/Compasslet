@@ -14,8 +14,10 @@ struct CompassSettingsView: View {
           NavigationLink("Appearance") { AppearanceSettingsView() }
         }
         Section("Location") {
-          LabeledContent("Location Enabled", value: locationEnabled ? "Yes" : "No")
-          Text(locationDetail).foregroundStyle(.secondary)
+          LabeledContent("Location Enabled") {
+            Text(locationEnabled ? "Yes" : "No").foregroundStyle(.primary)
+          }
+          Text(locationDetail).foregroundStyle(.primary)
           if canOpenSettings, let url = URL(string: UIApplication.openSettingsURLString) {
             Link("Open Settings", destination: url).foregroundStyle(.tint)
           }
@@ -111,11 +113,11 @@ struct PhoneLocationReadout: View {
           Text("\(Self.formattedElevation(elevation)) Elevation")
             .accessibilityLabel("Elevation \(Self.formattedElevation(elevation, spoken: true))")
         } else {
-          Text("Elevation unavailable").foregroundStyle(.secondary)
+          Text("Elevation unavailable").foregroundStyle(.primary)
         }
       } else {
         Text(location.approximate ? "Approximate location" : "Location unavailable")
-          .foregroundStyle(.secondary)
+          .foregroundStyle(.primary)
       }
     }
   }
