@@ -1,15 +1,20 @@
 import AppIntents
 
-/// Starts location from the foreground, because When In Use access can't begin in the
-/// background. Without a connected CarPlay scene, the drive ends after the absence limit.
-struct StartLiveActivityIntent: AppIntent {
+/// Runs in the background, as from a CarPlay automation on a locked iPhone, because a Live
+/// Activity intent can start a Live Activity there. When In Use location may not start in the
+/// background, so if no reading arrives the intent asks to continue in the foreground and
+/// starts again there. Without CarPlay, the drive ends after the absence limit.
+struct StartLiveActivityIntent: LiveActivityIntent {
   static var title: LocalizedStringResource { "Start Live Activity" }
   static var description: IntentDescription? {
     IntentDescription(
-      "Starts the Compasslet Live Activity for a CarPlay drive. Open Compasslet on CarPlay within a minute to keep it. It ends a minute after CarPlay disconnects."
+      "Starts the Compasslet Live Activity for a CarPlay drive. It ends a minute after CarPlay disconnects."
     )
   }
-  static var supportedModes: IntentModes { .foreground(.immediate) }
+  static var supportedModes: IntentModes { [.background, .foreground(.dynamic)] }
+
+  /// How long a background start waits for its first location reading.
+  static let backgroundReadingTimeout: Duration = .seconds(5)
 
   @MainActor
   func perform() async throws -> some IntentResult & ProvidesDialog {
@@ -20,7 +25,26 @@ struct StartLiveActivityIntent: AppIntent {
     guard !wasRunning || !drive.isDriving else {
       return .result(dialog: "The Live Activity is already running.")
     }
+    if drive.isDriving, systemContext.currentMode.canContinueInForeground,
+      !(await Self.receivesReading(drive))
+    {
+      // Location didn't start without the app in use, so start again in the foreground.
+      await drive.endLiveActivity()
+      try await continueInForeground(
+        "Unlock your iPhone to start the Compasslet Live Activity.", alwaysConfirm: false)
+      await drive.startLiveActivity()
+    }
     return .result(dialog: Self.outcome(of: drive))
+  }
+
+  @MainActor
+  private static func receivesReading(_ drive: DriveSessionController) async -> Bool {
+    let clock = ContinuousClock()
+    let deadline = clock.now + backgroundReadingTimeout
+    while drive.isDriving, !drive.hasReceivedReading, clock.now < deadline {
+      do { try await Task.sleep(for: .milliseconds(250)) } catch { break }
+    }
+    return drive.hasReceivedReading
   }
 
   @MainActor
@@ -34,8 +58,8 @@ struct StartLiveActivityIntent: AppIntent {
       return
         "The Live Activity couldn’t start. Make sure Live Activities are allowed for Compasslet in the Settings app."
     }
-    guard drive.isCarPlayConnected else {
-      return "Live Activity started. Open Compasslet on CarPlay within a minute to keep it."
+    guard drive.isCarPlayConnected || drive.isCarAudioConnected else {
+      return "Live Activity started. It ends in a minute unless CarPlay connects."
     }
     return "Live Activity started."
   }

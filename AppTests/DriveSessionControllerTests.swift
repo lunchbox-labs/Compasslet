@@ -541,6 +541,78 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertEqual(sensor.stops, 1)
   }
 
+  func testCarAudioKeepsAShortcutStartWithoutTheCarPlayScreen() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    controller.carAudioChanged(connected: true)
+    await controller.startLiveActivity()
+    XCTAssertTrue(controller.isDriving)
+    XCTAssertFalse(controller.isCarPlayConnected)
+    time += 10 * 60
+    controller.tick()
+    XCTAssertTrue(controller.isDriving)
+    controller.carAudioChanged(connected: false)
+    time += DriveSessionController.carPlayAbsenceLimit
+    controller.tick()
+    XCTAssertTrue(controller.isDriving)
+    time += 1
+    controller.tick()
+    await controller.waitForPendingOperations()
+    XCTAssertFalse(controller.isDriving)
+    XCTAssertEqual(sensor.stops, 1)
+    XCTAssertEqual(activity.ends, 2)
+  }
+
+  func testCarAudioConnectingWithinTheLimitKeepsAnEarlierStart() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    await controller.startLiveActivity()
+    time += DriveSessionController.carPlayAbsenceLimit - 1
+    controller.carAudioChanged(connected: true)
+    time += 10 * 60
+    controller.tick()
+    XCTAssertTrue(controller.isDriving)
+    await controller.endDrive()
+  }
+
+  func testCarPlayScreenDisconnectKeepsTheDriveWhileCarAudioRemains() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    controller.carAudioChanged(connected: true)
+    await controller.carPlayActivated()
+    controller.carPlayResignedActive()
+    controller.carPlayDisconnected()
+    time += 10 * 60
+    controller.tick()
+    XCTAssertTrue(controller.isDriving)
+    controller.carAudioChanged(connected: false)
+    time += DriveSessionController.carPlayAbsenceLimit + 1
+    controller.tick()
+    XCTAssertFalse(controller.isDriving)
+  }
+
+  func testCarAudioLossDuringACarPlayScreenDriveKeepsTheDrive() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    controller.carAudioChanged(connected: true)
+    await controller.carPlayActivated()
+    controller.carAudioChanged(connected: false)
+    time += 10 * 60
+    controller.tick()
+    XCTAssertTrue(controller.isDriving)
+    await disconnectPastTheAbsenceLimit(controller)
+    XCTAssertFalse(controller.isDriving)
+  }
+
+  func testFirstReadingIsRecordedPerDrive() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    await controller.carPlayActivated()
+    XCTAssertFalse(controller.hasReceivedReading)
+    sensor.receive?(reading())
+    XCTAssertTrue(controller.hasReceivedReading)
+    await controller.endDrive()
+    XCTAssertFalse(controller.hasReceivedReading)
+    await controller.startLiveActivity()
+    XCTAssertFalse(controller.hasReceivedReading)
+    await controller.endDrive()
+  }
+
   func testManualStartNeedsReadyLocation() async {
     let sensor = Sensor(), activity = Activity()
     sensor.fullAccuracy = false

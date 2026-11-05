@@ -12,6 +12,7 @@
 		5CC09A1F88FC413F597763FB /* OnboardingState.swift in Sources */ = {isa = PBXBuildFile; fileRef = D61327A3FD18FBBDF030A402 /* OnboardingState.swift */; };
 		AB1310000000000000000001 /* CompassActivityCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB1310000000000000000003 /* CompassActivityCard.swift */; };
 		AB1310000000000000000002 /* CompassActivityCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB1310000000000000000003 /* CompassActivityCard.swift */; };
+		CA4D10A0000000000000A002 /* CarAudioRouteMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA4D10A0000000000000A001 /* CarAudioRouteMonitor.swift */; };
 		020F1378FBC3CA202F0BD64E /* TravelLocationSensor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B8C91614F79675159741862 /* TravelLocationSensor.swift */; };
 		0838A3A568319EC0360654D0 /* HeadingController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A46DD5AFEAE45BDDC8C05D /* HeadingController.swift */; };
 		10A9C1012AD54E0AA0676C01 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 10A9C1012AD54E0AA0676C02 /* Assets.xcassets */; };
@@ -118,6 +119,7 @@
 		43DECBF43D00BEAEEF7E2CD8 /* DriveSessionControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveSessionControllerTests.swift; sourceTree = "<group>"; };
 		477ECA488466B5E09ABBE0F2 /* AppearanceStoreTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppearanceStoreTests.swift; sourceTree = "<group>"; };
 		5C4EE0A1D2B3C4D5E6F70812 /* ScreenshotTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScreenshotTests.swift; sourceTree = "<group>"; };
+		CA4D10A0000000000000A001 /* CarAudioRouteMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarAudioRouteMonitor.swift; sourceTree = "<group>"; };
 		4B8C91614F79675159741862 /* TravelLocationSensor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TravelLocationSensor.swift; sourceTree = "<group>"; };
 		4C6B9391E9371285A195C789 /* CarPlaySceneDelegate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CarPlaySceneDelegate.swift; sourceTree = "<group>"; };
 		517E687B4D6CA25B3C156124 /* AppearanceStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppearanceStore.swift; sourceTree = "<group>"; };
@@ -217,6 +219,7 @@
 		5FF69E94E9E7C6A94754E828 /* Driving */ = {
 			isa = PBXGroup;
 			children = (
+				CA4D10A0000000000000A001 /* CarAudioRouteMonitor.swift */,
 				F3323475E7B406064067E6C2 /* DriveSessionController.swift */,
 				4B8C91614F79675159741862 /* TravelLocationSensor.swift */,
 			);
@@ -505,6 +508,7 @@
 				7DAFBB08145E36C20B9711CD /* PhoneLocationController.swift in Sources */,
 				F48727869BD5AB3FA5D5F667 /* CompassSettingsView.swift in Sources */,
 				B37CF85048BCC053467427CB /* DriveSessionController.swift in Sources */,
+				CA4D10A0000000000000A002 /* CarAudioRouteMonitor.swift in Sources */,
 				35807C85FCA4AFD3E7A5EE80 /* CompassActivityPresenting.swift in Sources */,
 				020F1378FBC3CA202F0BD64E /* TravelLocationSensor.swift in Sources */,
 				A16441B24DE8B285E778387C /* CompassActivityAttributes.swift in Sources */,

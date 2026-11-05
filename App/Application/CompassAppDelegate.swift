@@ -10,9 +10,14 @@ final class CompassAppDelegate: NSObject, UIApplicationDelegate {
     {
       try? RetiredWidgetData.remove(from: directory)
     }
-    return DriveSessionController(
+    let drive = DriveSessionController(
       sensor: DeviceTravelLocationSensor(), activity: CompassActivityController())
+    carAudio = CarAudioRouteMonitor { [weak drive] connected in
+      drive?.carAudioChanged(connected: connected)
+    }
+    return drive
   }()
+  private static var carAudio: CarAudioRouteMonitor?
 
   var drive: DriveSessionController { Self.sharedDrive }
 

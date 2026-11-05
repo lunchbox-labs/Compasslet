@@ -15,8 +15,13 @@ final class DriveSessionController: ObservableObject {
   @Published private(set) var compactStatus: CompactStatus = .inactive
   /// Whether Compasslet's CarPlay scene is connected, whether or not it's in front.
   @Published private(set) var isCarPlayConnected = false
+  /// Whether the iPhone's audio goes to CarPlay, which shows that the car is connected even
+  /// when Compasslet isn't open on CarPlay, as when a CarPlay automation starts the drive.
+  @Published private(set) var isCarAudioConnected = false
+  /// Whether this drive has had a location reading, which shows location started.
+  private(set) var hasReceivedReading = false
 
-  /// How long a drive keeps running without a connected CarPlay scene before it ends.
+  /// How long a drive keeps running without CarPlay before it ends.
   static let carPlayAbsenceLimit: TimeInterval = 60
 
   private let sensor: any TravelLocationSensor
@@ -90,6 +95,17 @@ final class DriveSessionController: ObservableObject {
     carPlayAbsentSince = nil
   }
 
+  /// Car audio keeps a drive going without Compasslet's CarPlay scene, and its loss starts the
+  /// same absence limit as a CarPlay disconnect.
+  func carAudioChanged(connected: Bool) {
+    isCarAudioConnected = connected
+    if connected {
+      carPlayAbsentSince = nil
+    } else if isDriving, !isCarPlayConnected, carPlayAbsentSince == nil {
+      carPlayAbsentSince = now()
+    }
+  }
+
   func carPlayActivated() async {
     active = true
     carPlayConnected()
@@ -103,10 +119,11 @@ final class DriveSessionController: ObservableObject {
   }
 
   /// The manual fallback for when the automatic CarPlay start doesn't produce a Live Activity.
-  /// With no drive running, it starts one. Started before CarPlay connects, as from Shortcuts,
-  /// the drive ends unless CarPlay connects within the absence limit. During a drive whose Live
-  /// Activity was dismissed or couldn't start, it starts only the Live Activity again. Call it
-  /// from the foreground app, because ActivityKit only starts activities there.
+  /// With no drive running, it starts one. Started without CarPlay, as from Shortcuts away
+  /// from the car, the drive ends unless CarPlay connects within the absence limit. During a
+  /// drive whose Live Activity was dismissed or couldn't start, it starts only the Live
+  /// Activity again. Call it from the foreground app or a Live Activity intent, because
+  /// ActivityKit only starts activities there.
   func startLiveActivity() async {
     await prepare()
     refreshSetupStatus()
@@ -140,9 +157,10 @@ final class DriveSessionController: ObservableObject {
     }
     isDriving = true
     startedAt = now()
-    carPlayAbsentSince = isCarPlayConnected ? nil : startedAt
+    carPlayAbsentSince = isCarPlayConnected || isCarAudioConnected ? nil : startedAt
     filter.reset()
     lastReading = nil
+    hasReceivedReading = false
     presentation = TravelPresentation(sample: nil, status: .waiting)
     compactStatus = .starting
     startTicker()
@@ -195,11 +213,12 @@ final class DriveSessionController: ObservableObject {
   }
 
   /// A brief disconnect keeps the drive; `tick` ends it once CarPlay stays away too long.
+  /// Car audio that stays connected keeps the drive too.
   func carPlayDisconnected() {
     active = false
     suppressed = false
     isCarPlayConnected = false
-    if isDriving, carPlayAbsentSince == nil { carPlayAbsentSince = now() }
+    if isDriving, !isCarAudioConnected, carPlayAbsentSince == nil { carPlayAbsentSince = now() }
   }
 
   func endDrive() async {
@@ -278,6 +297,7 @@ final class DriveSessionController: ObservableObject {
       publish(filter.update(nil, now: now()))
     case .reading(let reading):
       lastReading = reading
+      hasReceivedReading = true
       publish(filter.update(reading, now: now()))
     }
   }
@@ -328,6 +348,7 @@ final class DriveSessionController: ObservableObject {
     observeAuthorization()
     startedAt = nil
     lastReading = nil
+    hasReceivedReading = false
     filter.reset()
     presentation = TravelPresentation(sample: nil, status: .unavailable)
     compactStatus = .inactive
