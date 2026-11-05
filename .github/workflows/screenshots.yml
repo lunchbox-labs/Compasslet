@@ -31,8 +31,9 @@ jobs:
   capture:
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' && github.event.action == 'labeled' &&
-       github.event.label.name == 'screenshots')
+      (github.event_name == 'pull_request' &&
+       contains(github.event.pull_request.labels.*.name, 'screenshots') &&
+       (github.event.action != 'labeled' || github.event.label.name == 'screenshots'))
     runs-on: xcode-27
     # A full run takes about 30 minutes on hosted runners, mostly simulator boots and captures.
     timeout-minutes: 75

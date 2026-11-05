@@ -28,11 +28,12 @@ class ScreenshotWorkflowTests(unittest.TestCase):
                 capture_output=True, text=True)
             return result, output.read_text()
 
-    def test_label_capture_uses_immutable_event_head(self):
-        head = 'a1' * 20
-        result, output = self.choose_ref('pull_request', ref='main', head=head)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(output, 'ref=' + head + '\n')
+    def test_each_pr_capture_uses_its_immutable_event_head(self):
+        for head in ('a1' * 20, 'b2' * 20):
+            with self.subTest(head=head):
+                result, output = self.choose_ref('pull_request', ref='main', head=head)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(output, 'ref=' + head + '\n')
 
     def test_missing_or_malformed_pr_head_fails_without_output(self):
         for head in ('', 'feature', 'a' * 39, 'a' * 40 + '\nref=main'):
