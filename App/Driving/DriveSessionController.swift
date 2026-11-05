@@ -15,14 +15,22 @@ final class DriveSessionController: ObservableObject {
   @Published private(set) var compactStatus: CompactStatus = .inactive
   /// Whether Compasslet's CarPlay scene is connected, whether or not it's in front.
   @Published private(set) var isCarPlayConnected = false
+  /// Whether the iPhone's audio goes to CarPlay, which shows that the car is connected even
+  /// when Compasslet isn't open on CarPlay, as when a CarPlay automation starts the drive.
+  @Published private(set) var isCarAudioConnected = false
+  /// Whether this drive has had a location reading, which shows location started.
+  private(set) var hasReceivedReading = false
+  /// Whether location reported that it can't run until the app is in use.
+  private(set) var locationNeedsForeground = false
 
-  /// How long a drive keeps running without a connected CarPlay scene before it ends.
+  /// How long a drive keeps running without CarPlay before it ends.
   static let carPlayAbsenceLimit: TimeInterval = 60
 
   private let sensor: any TravelLocationSensor
   private let activity: any CompassActivityPresenting
   private let now: () -> Date
   private let automaticTick: Bool
+  private let readCarAudioRoute: @MainActor () -> Bool
   private var filter = TravelCourseFilter()
   private var lastReading: TravelReading?
   private var startedAt: Date?
@@ -40,12 +48,14 @@ final class DriveSessionController: ObservableObject {
 
   init(
     sensor: any TravelLocationSensor, activity: any CompassActivityPresenting,
-    now: @escaping () -> Date = Date.init, automaticTick: Bool = true
+    now: @escaping () -> Date = Date.init, automaticTick: Bool = true,
+    carAudioRoute: @escaping @MainActor () -> Bool = { false }
   ) {
     self.sensor = sensor
     self.activity = activity
     self.now = now
     self.automaticTick = automaticTick
+    self.readCarAudioRoute = carAudioRoute
     refreshSetupStatus()
     observeAuthorization()
   }
@@ -90,6 +100,17 @@ final class DriveSessionController: ObservableObject {
     carPlayAbsentSince = nil
   }
 
+  /// Car audio keeps a drive going without Compasslet's CarPlay scene, and its loss starts the
+  /// same absence limit as a CarPlay disconnect.
+  func carAudioChanged(connected: Bool) {
+    isCarAudioConnected = connected
+    if connected {
+      carPlayAbsentSince = nil
+    } else if isDriving, !isCarPlayConnected, carPlayAbsentSince == nil {
+      carPlayAbsentSince = now()
+    }
+  }
+
   func carPlayActivated() async {
     active = true
     carPlayConnected()
@@ -103,10 +124,11 @@ final class DriveSessionController: ObservableObject {
   }
 
   /// The manual fallback for when the automatic CarPlay start doesn't produce a Live Activity.
-  /// With no drive running, it starts one. Started before CarPlay connects, as from Shortcuts,
-  /// the drive ends unless CarPlay connects within the absence limit. During a drive whose Live
-  /// Activity was dismissed or couldn't start, it starts only the Live Activity again. Call it
-  /// from the foreground app, because ActivityKit only starts activities there.
+  /// With no drive running, it starts one. Started without CarPlay, as from Shortcuts away
+  /// from the car, the drive ends unless CarPlay connects within the absence limit. During a
+  /// drive whose Live Activity was dismissed or couldn't start, it starts only the Live
+  /// Activity again. Call it from the foreground app or a Live Activity intent, because
+  /// ActivityKit only starts activities there.
   func startLiveActivity() async {
     await prepare()
     refreshSetupStatus()
@@ -138,11 +160,15 @@ final class DriveSessionController: ObservableObject {
       setupStatus = .unavailable
       return
     }
+    // A notification can be missed while the app is suspended, so read the route itself.
+    isCarAudioConnected = readCarAudioRoute()
     isDriving = true
     startedAt = now()
-    carPlayAbsentSince = isCarPlayConnected ? nil : startedAt
+    carPlayAbsentSince = isCarPlayConnected || isCarAudioConnected ? nil : startedAt
     filter.reset()
     lastReading = nil
+    hasReceivedReading = false
+    locationNeedsForeground = false
     presentation = TravelPresentation(sample: nil, status: .waiting)
     compactStatus = .starting
     startTicker()
@@ -195,11 +221,12 @@ final class DriveSessionController: ObservableObject {
   }
 
   /// A brief disconnect keeps the drive; `tick` ends it once CarPlay stays away too long.
+  /// Car audio that stays connected keeps the drive too.
   func carPlayDisconnected() {
     active = false
     suppressed = false
     isCarPlayConnected = false
-    if isDriving, carPlayAbsentSince == nil { carPlayAbsentSince = now() }
+    if isDriving, !isCarAudioConnected, carPlayAbsentSince == nil { carPlayAbsentSince = now() }
   }
 
   func endDrive() async {
@@ -216,6 +243,8 @@ final class DriveSessionController: ObservableObject {
 
   func tick() {
     guard isDriving, let startedAt else { return }
+    let carAudio = readCarAudioRoute()
+    if carAudio != isCarAudioConnected { carAudioChanged(connected: carAudio) }
     refreshSetupStatus()
     let elapsed = now().timeIntervalSince(startedAt)
     guard setupStatus == .ready, elapsed.isFinite, elapsed >= 0, elapsed < 8 * 60 * 60 else {
@@ -238,6 +267,27 @@ final class DriveSessionController: ObservableObject {
   }
 
   func waitForPendingOperations() async { await activityOperation?.value }
+
+  /// After a start from the background, waits for location and reports whether it couldn't
+  /// start without the app in use. A drive that ended meanwhile, or one with Compasslet's
+  /// CarPlay scene, never needs a foreground start.
+  func needsForegroundStart(waitingUpTo timeout: Duration) async -> Bool {
+    guard isDriving, !isCarPlayConnected else { return false }
+    let token = generation
+    let clock = ContinuousClock()
+    let start = clock.now
+    // A reading can arrive before the session reports that the app isn't in use.
+    func settled() -> Bool {
+      locationNeedsForeground || (hasReceivedReading && clock.now - start >= .seconds(1))
+    }
+    while isDriving, generation == token, !isCarPlayConnected, !settled(),
+      clock.now - start < timeout
+    {
+      do { try await Task.sleep(for: .milliseconds(100)) } catch { return false }
+    }
+    guard isDriving, generation == token, !isCarPlayConnected else { return false }
+    return locationNeedsForeground || !hasReceivedReading
+  }
 
   private func observeAuthorization() {
     sensor.receive = { [weak self] event in
@@ -272,12 +322,15 @@ final class DriveSessionController: ObservableObject {
     case .authorizationLost:
       setupStatus = .denied
       _ = stopDrive()
+    case .notInUse:
+      locationNeedsForeground = true
     case .interrupted:
       pendingActivityInvalidation = true
       lastReading = nil
       publish(filter.update(nil, now: now()))
     case .reading(let reading):
       lastReading = reading
+      hasReceivedReading = true
       publish(filter.update(reading, now: now()))
     }
   }
@@ -328,6 +381,8 @@ final class DriveSessionController: ObservableObject {
     observeAuthorization()
     startedAt = nil
     lastReading = nil
+    hasReceivedReading = false
+    locationNeedsForeground = false
     filter.reset()
     presentation = TravelPresentation(sample: nil, status: .unavailable)
     compactStatus = .inactive

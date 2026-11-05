@@ -190,7 +190,11 @@ struct CompassView: View {
     }
   }
 
-  private var carPlayReady: Bool { drive.isCarPlayConnected && drive.setupStatus == .ready }
+  /// Car audio counts too, because a CarPlay automation can start a drive without
+  /// Compasslet's CarPlay scene.
+  private var carPlayReady: Bool {
+    (drive.isCarPlayConnected || drive.isCarAudioConnected) && drive.setupStatus == .ready
+  }
 
   /// The tour shows the button for its step without CarPlay. When the step ends, the button
   /// merges back into the gear, which keeps its place, so nothing else moves.
