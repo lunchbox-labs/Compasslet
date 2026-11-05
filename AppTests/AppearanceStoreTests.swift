@@ -139,7 +139,7 @@ struct AppearanceStoreTests {
       } else {
         expected = AnyView(
           LockScreenHeight {
-            reading.padding(.horizontal, 14).padding(.vertical, 10)
+            reading.padding(.horizontal, 14).padding(.vertical, 8)
               .frame(maxWidth: .infinity)
           })
       }

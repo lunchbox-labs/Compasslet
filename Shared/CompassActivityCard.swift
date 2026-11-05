@@ -31,7 +31,7 @@ struct CompassActivityCard: View {
         LockScreenHeight {
           layouts
             .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.vertical, 8)
             .frame(maxWidth: .infinity)
         }
       }
@@ -60,7 +60,7 @@ struct CompassActivityCard: View {
         }
         .fixedSize(horizontal: false, vertical: true)
       }
-      VStack(spacing: 1) {
+      VStack(spacing: 2) {
         readout
         if presentation.reading != nil, timestampMode != .hidden {
           Text("Last Updated").font(.caption2).foregroundStyle(.secondary)
@@ -82,7 +82,7 @@ struct CompassActivityCard: View {
   }
 
   private func diagnostics(update: Date) -> some View {
-    VStack(spacing: 1) {
+    VStack(spacing: 2) {
       Text("Update \(update, format: .dateTime.hour().minute().second())")
       if let sample = state.sampleTime {
         Text("Sample \(sample, format: .dateTime.hour().minute().second())")
@@ -94,13 +94,13 @@ struct CompassActivityCard: View {
 
   /// At large text sizes the reading drops to a shorter form (degrees, then direction) before
   /// any text is scaled down, so an enlarged size stays enlarged; the accessibility label keeps
-  /// every detail. Status text keeps its single shrinking line in CarPlay; on the Lock Screen it
-  /// uses a smaller style and may wrap to a second line, so it stays readable at large sizes.
+  /// every detail. Status text wraps to a second line before it shrinks: in CarPlay to no less
+  /// than 65%, and on the Lock Screen, where it also uses a smaller style, to no less than 80%.
   private var readout: some View {
     Group {
       if presentation.reading == nil {
         if isSmall {
-          readoutText(presentation.status).lineLimit(1).minimumScaleFactor(0.5)
+          readoutText(presentation.status).lineLimit(2).minimumScaleFactor(0.65)
         } else {
           Text(presentation.status)
             .font(.title2.weight(.semibold))
@@ -191,7 +191,7 @@ struct CompassActivityView: View {
 
   var body: some View {
     let presentation = CompassActivityReading(state: state, isStale: isStale)
-    VStack(spacing: 6) {
+    VStack(spacing: 4) {
       if presentation.reading != nil {
         CompassReadout(
           bearing: state.bearing ?? 0, appearance: presentation.appearance,
@@ -209,7 +209,7 @@ struct CompassActivityView: View {
         Text(presentation.status).font(.caption)
       }
       if let update = state.debugUpdateTime {
-        VStack(spacing: 1) {
+        VStack(spacing: 2) {
           Text("Update \(update, format: .dateTime.hour().minute().second())")
           if let sample = state.sampleTime {
             Text("Sample \(sample, format: .dateTime.hour().minute().second())")
