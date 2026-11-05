@@ -487,7 +487,7 @@ private enum SettingsTransition {
   static let source = "settings"
 }
 
-/// An icon-only circle on regular glass, sized by the caller within 44 to 80 points.
+/// An icon-only circle on regular glass, sized by the caller within 44 to 60 points.
 private struct FloatingControlLabel: View {
   let systemImage: String
   let diameter: CGFloat
