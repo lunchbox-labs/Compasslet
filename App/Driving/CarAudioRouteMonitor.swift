@@ -1,9 +1,10 @@
 import AVFoundation
 import Foundation
 
-/// Reports whether the iPhone's audio route goes to CarPlay. A CarPlay automation can start a
-/// drive before Compasslet's CarPlay scene connects, so the route is how the drive knows the
-/// car is still connected. Reading the route doesn't activate an audio session.
+/// Reports changes to whether the iPhone's audio route goes to CarPlay. A CarPlay automation
+/// can start a drive before Compasslet's CarPlay scene connects, so the route is how the drive
+/// knows the car is still connected. The drive also reads `isConnected` itself, because a
+/// suspended app can miss a notification. Reading the route doesn't activate an audio session.
 @MainActor
 final class CarAudioRouteMonitor {
   private var observer: NSObjectProtocol?
@@ -13,7 +14,7 @@ final class CarAudioRouteMonitor {
     observer = NotificationCenter.default.addObserver(
       forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main
     ) { _ in
-      MainActor.assumeIsolated { onChange(Self.isConnected) }
+      MainActor.assumeIsolated { onChange(CarAudioRouteMonitor.isConnected) }
     }
   }
 

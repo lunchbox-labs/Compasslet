@@ -20,6 +20,8 @@ final class DriveSessionController: ObservableObject {
   @Published private(set) var isCarAudioConnected = false
   /// Whether this drive has had a location reading, which shows location started.
   private(set) var hasReceivedReading = false
+  /// Whether location reported that it can't run until the app is in use.
+  private(set) var locationNeedsForeground = false
 
   /// How long a drive keeps running without CarPlay before it ends.
   static let carPlayAbsenceLimit: TimeInterval = 60
@@ -28,6 +30,7 @@ final class DriveSessionController: ObservableObject {
   private let activity: any CompassActivityPresenting
   private let now: () -> Date
   private let automaticTick: Bool
+  private let readCarAudioRoute: @MainActor () -> Bool
   private var filter = TravelCourseFilter()
   private var lastReading: TravelReading?
   private var startedAt: Date?
@@ -45,12 +48,14 @@ final class DriveSessionController: ObservableObject {
 
   init(
     sensor: any TravelLocationSensor, activity: any CompassActivityPresenting,
-    now: @escaping () -> Date = Date.init, automaticTick: Bool = true
+    now: @escaping () -> Date = Date.init, automaticTick: Bool = true,
+    carAudioRoute: @escaping @MainActor () -> Bool = { false }
   ) {
     self.sensor = sensor
     self.activity = activity
     self.now = now
     self.automaticTick = automaticTick
+    self.readCarAudioRoute = carAudioRoute
     refreshSetupStatus()
     observeAuthorization()
   }
@@ -155,12 +160,15 @@ final class DriveSessionController: ObservableObject {
       setupStatus = .unavailable
       return
     }
+    // A notification can be missed while the app is suspended, so read the route itself.
+    isCarAudioConnected = readCarAudioRoute()
     isDriving = true
     startedAt = now()
     carPlayAbsentSince = isCarPlayConnected || isCarAudioConnected ? nil : startedAt
     filter.reset()
     lastReading = nil
     hasReceivedReading = false
+    locationNeedsForeground = false
     presentation = TravelPresentation(sample: nil, status: .waiting)
     compactStatus = .starting
     startTicker()
@@ -235,6 +243,8 @@ final class DriveSessionController: ObservableObject {
 
   func tick() {
     guard isDriving, let startedAt else { return }
+    let carAudio = readCarAudioRoute()
+    if carAudio != isCarAudioConnected { carAudioChanged(connected: carAudio) }
     refreshSetupStatus()
     let elapsed = now().timeIntervalSince(startedAt)
     guard setupStatus == .ready, elapsed.isFinite, elapsed >= 0, elapsed < 8 * 60 * 60 else {
@@ -257,6 +267,27 @@ final class DriveSessionController: ObservableObject {
   }
 
   func waitForPendingOperations() async { await activityOperation?.value }
+
+  /// After a start from the background, waits for location and reports whether it couldn't
+  /// start without the app in use. A drive that ended meanwhile, or one with Compasslet's
+  /// CarPlay scene, never needs a foreground start.
+  func needsForegroundStart(waitingUpTo timeout: Duration) async -> Bool {
+    guard isDriving, !isCarPlayConnected else { return false }
+    let token = generation
+    let clock = ContinuousClock()
+    let start = clock.now
+    // A reading can arrive before the session reports that the app isn't in use.
+    func settled() -> Bool {
+      locationNeedsForeground || (hasReceivedReading && clock.now - start >= .seconds(1))
+    }
+    while isDriving, generation == token, !isCarPlayConnected, !settled(),
+      clock.now - start < timeout
+    {
+      do { try await Task.sleep(for: .milliseconds(100)) } catch { return false }
+    }
+    guard isDriving, generation == token, !isCarPlayConnected else { return false }
+    return locationNeedsForeground || !hasReceivedReading
+  }
 
   private func observeAuthorization() {
     sensor.receive = { [weak self] event in
@@ -291,6 +322,8 @@ final class DriveSessionController: ObservableObject {
     case .authorizationLost:
       setupStatus = .denied
       _ = stopDrive()
+    case .notInUse:
+      locationNeedsForeground = true
     case .interrupted:
       pendingActivityInvalidation = true
       lastReading = nil
@@ -349,6 +382,7 @@ final class DriveSessionController: ObservableObject {
     startedAt = nil
     lastReading = nil
     hasReceivedReading = false
+    locationNeedsForeground = false
     filter.reset()
     presentation = TravelPresentation(sample: nil, status: .unavailable)
     compactStatus = .inactive

@@ -2,19 +2,20 @@ import AppIntents
 
 /// Runs in the background, as from a CarPlay automation on a locked iPhone, because a Live
 /// Activity intent can start a Live Activity there. When In Use location may not start in the
-/// background, so if no reading arrives the intent asks to continue in the foreground and
-/// starts again there. Without CarPlay, the drive ends after the absence limit.
+/// background, so if location reports that the app isn't in use, or no reading arrives, the
+/// intent asks to continue in the foreground and starts again there. Without CarPlay, the
+/// drive ends after the absence limit.
 struct StartLiveActivityIntent: LiveActivityIntent {
   static var title: LocalizedStringResource { "Start Live Activity" }
   static var description: IntentDescription? {
     IntentDescription(
-      "Starts the Compasslet Live Activity for a CarPlay drive. It ends a minute after CarPlay disconnects."
+      "Starts the Compasslet Live Activity for a CarPlay drive. It ends a minute after CarPlay disconnects, or after a minute if CarPlay doesn’t connect."
     )
   }
   static var supportedModes: IntentModes { [.background, .foreground(.dynamic)] }
 
-  /// How long a background start waits for its first location reading.
-  static let backgroundReadingTimeout: Duration = .seconds(5)
+  /// How long a background start waits for location before starting in the foreground.
+  static let backgroundLocationTimeout: Duration = .seconds(5)
 
   @MainActor
   func perform() async throws -> some IntentResult & ProvidesDialog {
@@ -25,26 +26,21 @@ struct StartLiveActivityIntent: LiveActivityIntent {
     guard !wasRunning || !drive.isDriving else {
       return .result(dialog: "The Live Activity is already running.")
     }
-    if drive.isDriving, systemContext.currentMode.canContinueInForeground,
-      !(await Self.receivesReading(drive))
+    if systemContext.currentMode.canContinueInForeground,
+      await drive.needsForegroundStart(waitingUpTo: Self.backgroundLocationTimeout),
+      !Task.isCancelled
     {
-      // Location didn't start without the app in use, so start again in the foreground.
       await drive.endLiveActivity()
-      try await continueInForeground(
-        "Unlock your iPhone to start the Compasslet Live Activity.", alwaysConfirm: false)
+      do {
+        try await continueInForeground(
+          "Unlock your iPhone when you’re parked to start the Compasslet Live Activity.",
+          alwaysConfirm: false)
+      } catch {
+        return .result(dialog: "Open Compasslet when you’re parked to start the Live Activity.")
+      }
       await drive.startLiveActivity()
     }
     return .result(dialog: Self.outcome(of: drive))
-  }
-
-  @MainActor
-  private static func receivesReading(_ drive: DriveSessionController) async -> Bool {
-    let clock = ContinuousClock()
-    let deadline = clock.now + backgroundReadingTimeout
-    while drive.isDriving, !drive.hasReceivedReading, clock.now < deadline {
-      do { try await Task.sleep(for: .milliseconds(250)) } catch { break }
-    }
-    return drive.hasReceivedReading
   }
 
   @MainActor

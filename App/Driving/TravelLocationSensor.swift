@@ -9,6 +9,8 @@ enum TravelSensorEvent {
   case authorizationChanged
   case authorizationLost
   case interrupted
+  /// Location can't start because the app isn't in use, as after a start in the background.
+  case notInUse
 }
 
 @MainActor
@@ -31,6 +33,7 @@ final class DeviceTravelLocationSensor: NSObject, TravelLocationSensor,
   private let authorizationManager = CLLocationManager()
   private var manager: CLLocationManager?
   private var backgroundSession: CLBackgroundActivitySession?
+  private var diagnostics: Task<Void, Never>?
   var receive: ((TravelSensorEvent) -> Void)?
 
   override init() {
@@ -57,6 +60,7 @@ final class DeviceTravelLocationSensor: NSObject, TravelLocationSensor,
   }
 
   isolated deinit {
+    diagnostics?.cancel()
     manager?.stopUpdatingLocation()
     backgroundSession?.invalidate()
   }
@@ -78,12 +82,28 @@ final class DeviceTravelLocationSensor: NSObject, TravelLocationSensor,
     manager.allowsBackgroundLocationUpdates = true
     manager.showsBackgroundLocationIndicator = true
     // The caller revalidates drive eligibility immediately before this call.
-    backgroundSession = CLBackgroundActivitySession()
+    let session = CLBackgroundActivitySession()
+    backgroundSession = session
     self.manager = manager
+    watchDiagnostics(of: session)
     manager.startUpdatingLocation()
   }
 
+  /// A When In Use session started in the background reports that the app isn't in use.
+  private func watchDiagnostics(of session: CLBackgroundActivitySession) {
+    diagnostics = Task { @MainActor [weak self] in
+      do {
+        for try await diagnostic in session.diagnostics where diagnostic.insufficientlyInUse {
+          guard let self, self.backgroundSession === session else { return }
+          self.receive?(.notInUse)
+        }
+      } catch {}
+    }
+  }
+
   func stop() {
+    diagnostics?.cancel()
+    diagnostics = nil
     manager?.stopUpdatingLocation()
     manager?.allowsBackgroundLocationUpdates = false
     manager?.delegate = nil
