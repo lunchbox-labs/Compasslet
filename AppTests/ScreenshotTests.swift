@@ -96,6 +96,11 @@ final class ScreenshotTests: XCTestCase {
     Screen(name: "settings-appearance-live-activity") {
       AnyView(NavigationStack { AppearanceDetailView(surface: .activity) })
     },
+    Screen(name: "settings-appearance-live-activity-largest-text") {
+      AnyView(
+        NavigationStack { AppearanceDetailView(surface: .activity) }
+          .environment(\.dynamicTypeSize, .accessibility5))
+    },
     Screen(name: "settings-appearance-minor-ticks") { ScreenshotTests.editor(.minorTicks) },
     Screen(name: "settings-appearance-cardinal-labels") { ScreenshotTests.editor(.labels) },
     Screen(name: "settings-appearance-cardinal-labels-largest-text") {

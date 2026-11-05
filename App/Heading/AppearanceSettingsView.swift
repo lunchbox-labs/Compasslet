@@ -450,7 +450,8 @@ struct AppearancePreview: View {
         // Only the Lock Screen card is shown. CarPlay's card has the same layout at a smaller
         // size and follows the CarPlay Last Travel setting; the live-activity screenshot shows
         // both.
-        LiveActivityExample(presentation: .lockScreen, state: activityState)
+        LiveActivityExample(
+          presentation: .lockScreen, state: activityState, showsTitle: surface != .activity)
       }
     }
     .accessibilityElement(children: .contain)
@@ -483,10 +484,13 @@ struct LiveActivityExample: View {
 
   let presentation: Presentation
   let state: CompassActivityAttributes.ContentState
+  var showsTitle = true
 
   var body: some View {
     VStack(spacing: 8) {
-      Text(presentation.title).font(.caption).foregroundStyle(.secondary)
+      if showsTitle {
+        Text(presentation.title).font(.caption).foregroundStyle(.secondary)
+      }
       card.exampleCard()
     }
   }
