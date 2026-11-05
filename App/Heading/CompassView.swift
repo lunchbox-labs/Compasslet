@@ -30,8 +30,6 @@ struct CompassView: View {
   /// Set when Settings asks for the tour, which starts once the sheet has gone.
   @State private var tourAfterSettings = false
   @State private var showingHeadingStatus = false
-  /// The main screen's side margin, also subtracted when measuring its text.
-  private let contentMargin: CGFloat = 24
   @State private var debugEnabled = false
   @State private var showingLiveActivityFailure = false
   /// The Live Activity button's frame in global coordinates, for the tour's spotlight.
@@ -104,11 +102,17 @@ struct CompassView: View {
     }
   }
 
+  /// The system's side margin, matching UIKit's minimum layout margins and the Settings list
+  /// insets: 20pt on iPhones at least 414pt wide, 16pt on the rest.
+  private static func sideMargin(forWidth width: CGFloat) -> CGFloat { width >= 414 ? 20 : 16 }
+
   private var compassScreen: some View {
     GeometryReader { geometry in
+      // Also subtracted when measuring the text, and shared with the floating controls.
+      let margin = Self.sideMargin(forWidth: geometry.size.width)
       VStack(spacing: 0) {
         GeometryReader { content in
-          let textWidth = (content.size.width - 2 * contentMargin).rounded(.down)
+          let textWidth = (content.size.width - 2 * margin).rounded(.down)
           let sideDial = min(content.size.height - 24, content.size.width * 0.42).rounded(.down)
           ViewThatFits(in: [.horizontal, .vertical]) {
             if content.size.width > content.size.height {
@@ -137,12 +141,12 @@ struct CompassView: View {
             // is a deliberate non-scrolling design choice rather than a Dynamic Type gap.
             essentialReading(height: content.size.height)
           }
-          .padding(.horizontal, contentMargin)
+          .padding(.horizontal, margin)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         // Measured below the 44pt navigation bar, so the same phones count as short as when
         // the whole screen was measured against 700pt.
-        floatingControls(compact: geometry.size.height < 656)
+        floatingControls(compact: geometry.size.height < 656, margin: margin)
       }
       .frame(width: geometry.size.width, height: geometry.size.height)
     }
@@ -195,7 +199,7 @@ struct CompassView: View {
   /// The screen's floating controls on glass in the bottom-right corner: Settings, and the
   /// Live Activity button beside it while CarPlay is connected. One glass container, so the
   /// two render as a group and the button can appear and leave beside the gear.
-  private func floatingControls(compact: Bool) -> some View {
+  private func floatingControls(compact: Bool, margin: CGFloat) -> some View {
     // Capped below the guide's 80pt so the row leaves the compass room at the largest text
     // sizes; the large content viewer shows each control's name instead.
     let diameter = max(44, min(compact ? floatingControlDiameter - 8 : floatingControlDiameter, 60))
@@ -211,7 +215,7 @@ struct CompassView: View {
       }
       .animation(reduceMotion ? nil : .smooth, value: carPlayReady)
     }
-    .padding(.horizontal, 16).padding(.bottom, 8)
+    .padding(.horizontal, margin).padding(.bottom, 8)
   }
 
   private func settingsButton(diameter: CGFloat) -> some View {
