@@ -514,6 +514,8 @@ private struct FloatingControlStyle: ButtonStyle {
   }
 }
 
+/// The phone's large reading, in the bold SF Pro Rounded display voice that the organisation's
+/// iOS guide gives brand moments.
 struct PhoneCompassReadout: View {
   let bearing: Double
   let appearance: AppearanceValues
@@ -529,7 +531,7 @@ struct PhoneCompassReadout: View {
         Text("\(Int(bearing.rounded()) % 360)°").monospacedDigit()
       }
     }
-    .font(.system(size: min(textSize, maximumTextSize), weight: .light))
+    .font(.system(size: min(textSize, maximumTextSize), weight: .bold, design: .rounded))
     .lineLimit(1)
     .fixedSize(horizontal: true, vertical: true)
   }
