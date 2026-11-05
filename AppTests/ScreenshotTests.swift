@@ -119,6 +119,8 @@ final class ScreenshotTests: XCTestCase {
     Screen(name: "settings-appearance-rotation") { ScreenshotTests.editor(.rotation) },
     Screen(name: "settings-appearance-reduce-motion") { ScreenshotTests.editor(.reduceMotion) },
     Screen(name: "live-activity") { AnyView(LiveActivityScreen()) },
+    Screen(name: "live-activity-hidden-time") { AnyView(LiveActivityScreen(mode: .hidden)) },
+    Screen(name: "live-activity-elapsed-time") { AnyView(LiveActivityScreen(mode: .elapsed)) },
     Screen(name: "live-activity-largest-text") {
       AnyView(LiveActivityScreen().environment(\.dynamicTypeSize, .accessibility5))
     },
@@ -356,8 +358,16 @@ private final class IdleActivity: CompassActivityPresenting {
 /// The Lock Screen and CarPlay Live Activity cards as the app renders them, since the
 /// simulator can't show a running Live Activity without CarPlay.
 private struct LiveActivityScreen: View {
-  private let state = CompassActivityAttributes.ContentState(
-    bearing: 47, status: .usable, sampleTime: .now.addingTimeInterval(-12), expiry: nil)
+  var mode: ActivityTimestampMode = .time
+
+  private var state: CompassActivityAttributes.ContentState {
+    var appearance = AppearanceValues()
+    appearance.lockScreenTimestamp = mode
+    appearance.carPlayActivityTimestamp = mode
+    return .init(
+      bearing: 47, status: .usable, sampleTime: .now.addingTimeInterval(-12), expiry: nil,
+      appearance: appearance)
+  }
 
   var body: some View {
     VStack(spacing: 32) {
