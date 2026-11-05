@@ -32,14 +32,14 @@ CarPlay connects, and End Compass runs when it disconnects. The automations arri
 off, so turn them on:
 
 1. In the Shortcuts app, tap **Automation**. If you don't see it, tap the Back button first.
-2. Start Compass and End Compass are in the list, turned off. Tap **Start Compass** and turn
-   its automation on.
-3. So it runs without asking first, tap **Start Compass**, tap **Edit**, tap the Info
-   button, tap **Privacy**, then turn on **Allow Running When Locked**.
+2. Start Compass and End Compass are in the list, turned off. If you don't see them, tap the
+   Filter button and choose **Turned Off**. Tap **Start Compass** and turn its automation on.
+3. So it runs without asking first, go back to your shortcuts, tap **Start Compass**, tap
+   **Edit**, tap the Info button, tap **Privacy**, then turn on **Allow Running When Locked**.
 4. Repeat these steps for **End Compass**.
 
-Automations stay on the iPhone where you turn them on, so repeat this on each iPhone you
-drive with.
+Automations stay on the iPhone where you turn them on, so repeat these steps on each iPhone
+you drive with.
 
 ## Before You Drive
 
