@@ -126,7 +126,13 @@ struct AppearanceStoreTests {
       let card = CompassActivityCard(state: state, isSmall: small)
       let reading = Text("NE 45°")
         .font((small ? Font.title2 : Font.largeTitle).weight(.semibold)).monospacedDigit()
-      #expect(try render(card) == render(reading))
+      let actual = try render(card)
+      let expected = try render(reading)
+      if actual != expected {
+        print("Hidden timestamp small=\(small) actual PNG: \(actual.base64EncodedString())")
+        print("Hidden timestamp small=\(small) expected PNG: \(expected.base64EncodedString())")
+      }
+      #expect(actual == expected, "small=\(small)")
     }
   }
 
