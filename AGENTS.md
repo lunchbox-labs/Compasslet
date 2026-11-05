@@ -19,6 +19,16 @@ the app on an available iOS 27+ iPhone simulator:
 bash scripts/test-ios
 ```
 
+The experimental Watch app targets watchOS 27.0 (`CompassWatch` scheme). Build it, then test
+it on an available paired Watch simulator:
+
+```sh
+bash scripts/simulator-xcodebuild -project Compass.xcodeproj -scheme CompassWatch \
+  -destination 'generic/platform=watchOS Simulator' -derivedDataPath .build/watch \
+  CODE_SIGNING_ALLOWED=NO build
+bash scripts/test-watch
+```
+
 The `CompassCore` package and formatting checks need Swift 6.4.1 and its bundled
 swift-format 6.4.1; CI runs them on Linux in the `swift:6.4.1` container:
 
