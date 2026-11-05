@@ -113,7 +113,8 @@ final class CarPlayCompassTemplate {
     context.saveGState()
     context.translateBy(x: center.x, y: center.y)
     context.rotate(by: CGFloat(course) * .pi / 180)
-    UIColor.systemTeal.setFill()
+    // The app's accent, resolved like the colours above for the car's appearance.
+    (UIColor(named: "AccentColor") ?? .tintColor).setFill()
     context.move(to: CGPoint(x: 0, y: -radius * 0.78))
     context.addLine(to: CGPoint(x: radius * 0.26, y: -radius * 0.25))
     context.addLine(to: CGPoint(x: radius * 0.08, y: -radius * 0.3))
