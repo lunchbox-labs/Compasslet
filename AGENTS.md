@@ -9,6 +9,36 @@ Before working in this repository, read and follow these shared Lunchbox Labs do
 
 Read these documents explicitly; GitHub does not automatically inherit them into this repository.
 
+## Commands
+
+The app targets iOS 27.0 and builds with Xcode 27.1 (`Compass.xcodeproj`, `Compass` scheme).
+On macOS with Xcode 27.1 selected, build and test the app on an available iOS 27+ iPhone
+simulator:
+
+```sh
+bash scripts/test-ios
+```
+
+The `CompassCore` package and formatting checks also run on Linux with Swift 6.4.1 and its
+bundled swift-format 6.4.1:
+
+```sh
+bash scripts/swift-style check   # `format` applies the formatting
+swift build --jobs 4 -c release
+swift test --jobs 4
+```
+
+The helper scripts have offline tests that need Python 3 and OpenSSL, but no Apple credentials
+or network access:
+
+```sh
+python3 -m unittest discover -s scripts/tests -v
+```
+
+The simulator has no heading sensor and cannot exercise CarPlay operation; physical-device
+checks are on the [Development](https://github.com/lunchbox-labs/compasslet/wiki/Developer-Development)
+wiki page.
+
 ## UI capitalization
 
 Use title case for visible headings, navigation titles, short control labels and
