@@ -413,7 +413,10 @@ struct AppearancePreview: View {
   }
 
   private var phoneAccessibilityDescription: String {
-    var parts = ["Phone, magnetic north", phone.showsDial ? "Dial visible" : "Dial hidden"]
+    var parts = [
+      surface == nil ? "App, magnetic north" : "In-App Compass, magnetic north",
+      phone.showsDial ? "Dial visible" : "Dial hidden",
+    ]
     if phone.appearance.showDirection { parts.append("northeast") }
     if phone.appearance.showDegrees { parts.append("45 degrees") }
     if !phone.appearance.hasReadout { parts.append("Readout hidden") }
@@ -424,8 +427,10 @@ struct AppearancePreview: View {
     VStack(spacing: 16) {
       if surface != .activity {
         VStack(spacing: 4) {
-          Text("Phone · Magnetic North")
-            .font(.caption2).foregroundStyle(.secondary)
+          if surface == nil {
+            Text("App")
+              .font(.caption2).foregroundStyle(.secondary)
+          }
           if phone.showsDial {
             CompassDial(
               bearing: 45, appearance: phone.appearance,
@@ -451,7 +456,8 @@ struct AppearancePreview: View {
         // size and follows the CarPlay Last Travel setting; the live-activity screenshot shows
         // both.
         LiveActivityExample(
-          presentation: .lockScreen, state: activityState, showsTitle: surface != .activity)
+          presentation: .lockScreen, state: activityState,
+          title: surface == nil ? "Live Activity" : nil)
       }
     }
     .accessibilityElement(children: .contain)
@@ -473,23 +479,16 @@ struct AppearancePreview: View {
 struct LiveActivityExample: View {
   enum Presentation {
     case lockScreen, carPlay
-
-    var title: String {
-      switch self {
-      case .lockScreen: "Lock Screen"
-      case .carPlay: "CarPlay"
-      }
-    }
   }
 
   let presentation: Presentation
   let state: CompassActivityAttributes.ContentState
-  var showsTitle = true
+  var title: String? = nil
 
   var body: some View {
     VStack(spacing: 8) {
-      if showsTitle {
-        Text(presentation.title).font(.caption).foregroundStyle(.secondary)
+      if let title {
+        Text(title).font(.caption).foregroundStyle(.secondary)
       }
       card.exampleCard()
     }
@@ -535,7 +534,7 @@ extension View {
 extension AppearanceSurface {
   fileprivate var title: String {
     switch self {
-    case .phone: "iPhone Compass"
+    case .phone: "In-App Compass"
     case .activity: "Live Activity"
     }
   }
