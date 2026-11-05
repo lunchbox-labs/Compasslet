@@ -57,8 +57,9 @@ struct CompassView: View {
   private var accessibilitySummary: String {
     guard let sample = compass.sample, let roundedDegrees else { return compass.status.title }
     let direction = CompassPoint(angle: sample.angle).name
+    let prefix = compass.status == .inactive ? "Last reading. " : ""
     return
-      "\(roundedDegrees) degrees, \(direction), magnetic heading. Accuracy plus or minus \(Int(min(sample.accuracyDegrees, 360).rounded())) degrees."
+      "\(prefix)\(roundedDegrees) degrees, \(direction), magnetic heading. Accuracy plus or minus \(Int(min(sample.accuracyDegrees, 360).rounded())) degrees."
   }
 
   var body: some View {
@@ -137,8 +138,8 @@ struct CompassView: View {
     .background(Color(uiColor: .systemBackground))
     .task(id: scenePhase) {
       guard scenePhase == .active else {
-        compass.stop()
-        location.stop()
+        compass.stop(preservingLastReading: true)
+        location.stop(preservingLastReading: true)
         return
       }
       // The phone readouts don't depend on ending leftover Live Activities, so the sensors
@@ -148,8 +149,8 @@ struct CompassView: View {
         requestingPermission: !onboarding.isTouring)
       guard !Task.isCancelled else { return }
       compass.setReducedMotion(stepsHeading)
-      async let heading: Void = compass.run()
-      async let phoneLocation: Void = location.run()
+      async let heading: Void = compass.run(preservingLastReadingOnStop: true)
+      async let phoneLocation: Void = location.run(preservingLastReadingOnStop: true)
       while !Task.isCancelled {
         debugEnabled = (try? CompassDiagnostics.shared?.isEnabled()) ?? false
         do { try await Task.sleep(for: .seconds(1)) } catch { break }
@@ -310,10 +311,12 @@ struct CompassView: View {
       if let sample = compass.sample {
         // The readout already speaks its accuracy. With both center readouts hidden,
         // this line becomes the single VoiceOver stop for the heading instead.
-        Text("Accuracy ±\(Int(min(sample.accuracyDegrees, 360).rounded()))°")
-          .font(.subheadline).foregroundStyle(.secondary)
-          .accessibilityHidden(appearance.hasReadout)
-          .accessibilityLabel(accessibilitySummary)
+        Text(
+          "\(compass.status == .inactive ? "Last reading · " : "")Accuracy ±\(Int(min(sample.accuracyDegrees, 360).rounded()))°"
+        )
+        .font(.subheadline).foregroundStyle(.secondary)
+        .accessibilityHidden(appearance.hasReadout)
+        .accessibilityLabel(accessibilitySummary)
         if steadyReading {
           Text("Dial hidden while Reduce Motion is on")
             .font(.caption2).foregroundStyle(.secondary)
@@ -351,6 +354,10 @@ struct CompassView: View {
   private func essentialReading(height: CGFloat) -> some View {
     VStack(spacing: 8) {
       if compass.sample != nil {
+        if compass.status == .inactive {
+          Text("Last reading").font(.caption).foregroundStyle(.secondary)
+            .accessibilityHidden(true)
+        }
         GeometryReader { available in
           PhoneCompassReadout(
             bearing: compass.sample?.angle.degrees ?? 0, appearance: appearance,

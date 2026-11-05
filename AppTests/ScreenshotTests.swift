@@ -21,6 +21,15 @@ final class ScreenshotTests: XCTestCase {
 
   static let screens: [Screen] = [
     Screen(name: "compass") { await ScreenshotTests.compass() },
+    Screen(name: "compass-inactive") { await ScreenshotTests.compass(inactive: true) },
+    Screen(name: "compass-inactive-largest-text") {
+      AnyView(
+        await ScreenshotTests.compass(inactive: true).environment(
+          \.dynamicTypeSize, .accessibility5))
+    },
+    Screen(name: "compass-inactive-no-reading") {
+      await ScreenshotTests.compass(heading: nil, inactive: true)
+    },
     Screen(name: "compass-large-text") {
       AnyView(await ScreenshotTests.compass().environment(\.dynamicTypeSize, .accessibility3))
     },
@@ -240,15 +249,35 @@ final class ScreenshotTests: XCTestCase {
     location: FixedTravelSensor.Access = .allowed,
     tour: OnboardingState.Step? = nil,
     carPlay: CarPlay = .disconnected,
-    showsTip: Bool = false
+    showsTip: Bool = false,
+    inactive: Bool = false
   ) async -> AnyView {
     CompassView.makeHeadingController = {
-      HeadingController(sensor: FixedHeadingSensor(reading: heading))
+      let sensor = FixedHeadingSensor(reading: heading)
+      let controller = HeadingController(sensor: sensor)
+      if inactive {
+        controller.start()
+        if let heading {
+          sensor.receive?(
+            .reading(degrees: heading.degrees, accuracy: heading.accuracy, timestamp: .now))
+        }
+        controller.stop(preservingLastReading: true)
+      }
+      return controller
     }
     CompassView.makeLocationController = {
-      PhoneLocationController(
-        sensor: FixedPhoneLocationSensor(allowed: location == .allowed),
-        cityLookup: FixedCityLookup())
+      let sensor = FixedPhoneLocationSensor(allowed: location == .allowed)
+      let controller = PhoneLocationController(sensor: sensor, cityLookup: FixedCityLookup())
+      if inactive {
+        controller.start()
+        sensor.receive?(
+          .location(
+            CLLocation(
+              coordinate: CLLocationCoordinate2D(latitude: 37.3349, longitude: -122.009),
+              altitude: 48, horizontalAccuracy: 5, verticalAccuracy: 3, timestamp: .now)))
+        controller.stop(preservingLastReading: true)
+      }
+      return controller
     }
     let drive = drive(location: location)
     switch carPlay {
@@ -258,7 +287,9 @@ final class ScreenshotTests: XCTestCase {
     }
     let onboarding = onboarding(at: tour)
     if !showsTip { onboarding.liveActivityTip.invalidate(reason: .actionPerformed) }
-    return AnyView(CompassView(drive: drive, onboarding: onboarding))
+    return AnyView(
+      CompassView(drive: drive, onboarding: onboarding)
+        .environment(\.scenePhase, inactive ? .inactive : .active))
   }
 
   /// TipKit remembers a shown tip across runs on the same simulator, so each screen gets a tip

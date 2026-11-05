@@ -114,20 +114,27 @@ final class HeadingController: ObservableObject {
     sensor.start()
   }
 
-  func stop() {
+  func stop(preservingLastReading: Bool = false) {
+    if preservingLastReading { tick() }
     active = false
     sensor.stop()
-    clear(.inactive)
+    if preservingLastReading {
+      smoother?.reset()
+      if sample != nil || status == .waiting { status = .inactive }
+    } else {
+      clear(.inactive)
+    }
   }
 
-  /// Owned by the view task; cancellation stops the sensor and removes its readout.
-  func run() async {
+  /// Cancellation stops sensing; the phone may retain a last reading for its inactive preview.
+  func run(preservingLastReadingOnStop: Bool = false) async {
+    guard !Task.isCancelled else { return }
     let token = UUID()
     session = token
     start()
     defer {
       if session == token {
-        stop()
+        stop(preservingLastReading: preservingLastReadingOnStop)
         session = nil
       }
     }
@@ -144,7 +151,10 @@ final class HeadingController: ObservableObject {
   }
 
   private func receive(_ event: HeadingEvent) {
-    guard active else { return }
+    guard active else {
+      if case .denied = event { clear(.denied) }
+      return
+    }
     switch event {
     case .denied: clear(.denied)
     case .interrupted: clear(.interrupted)

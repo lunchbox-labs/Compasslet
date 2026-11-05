@@ -133,6 +133,94 @@ final class PhoneLocationControllerTests: XCTestCase {
     XCTAssertEqual(sensor.starts, 2)
   }
 
+  func testSnapshotRetainsLocationAndCityButRejectsLateCallbacks() {
+    let sensor = Sensor()
+    let lookup = CityLookup()
+    let controller = PhoneLocationController(sensor: sensor, cityLookup: lookup, now: { self.time })
+    controller.start()
+    sensor.receive?(.location(fix(at: time)))
+    lookup.completions[0]("Sample City")
+    controller.stop(preservingLastReading: true)
+    XCTAssertEqual(sensor.stops, 1)
+    XCTAssertNotNil(controller.location)
+    XCTAssertEqual(controller.city, "Sample City")
+    lookup.completions[0]("Late City")
+    sensor.receive?(.unavailable)
+    XCTAssertEqual(controller.city, "Sample City")
+    controller.stop(preservingLastReading: true)
+    XCTAssertNotNil(controller.location)
+    controller.start()
+    XCTAssertNil(controller.location)
+    XCTAssertNil(controller.city)
+  }
+
+  func testInactiveSnapshotClearsOnPermissionOrPrecisionLoss() {
+    for change in 0..<3 {
+      let sensor = Sensor()
+      let lookup = CityLookup()
+      let controller = PhoneLocationController(
+        sensor: sensor, cityLookup: lookup, now: { self.time })
+      controller.start()
+      sensor.receive?(.location(fix(at: time)))
+      lookup.completions[0]("Sample City")
+      controller.stop(preservingLastReading: true)
+      if change == 0 { sensor.authorized = false }
+      if change == 1 { sensor.precise = false }
+      if change == 2 { sensor.servicesEnabled = false }
+      sensor.receive?(.authorizationChanged)
+      XCTAssertNil(controller.location)
+      XCTAssertNil(controller.city)
+      XCTAssertEqual(sensor.starts, 1)
+    }
+  }
+
+  func testSnapshotDoesNotRetainExpiredOrUnavailableFix() {
+    let sensor = Sensor()
+    var now = time
+    let controller = PhoneLocationController(sensor: sensor, cityLookup: CityLookup(), now: { now })
+    controller.start()
+    controller.stop(preservingLastReading: true)
+    XCTAssertNil(controller.location)
+    controller.start()
+    sensor.receive?(.location(fix(at: time)))
+    now += 31
+    controller.stop(preservingLastReading: true)
+    XCTAssertNil(controller.location)
+    controller.start()
+    sensor.receive?(.location(fix(at: now)))
+    sensor.receive?(.unavailable)
+    controller.stop(preservingLastReading: true)
+    XCTAssertNil(controller.location)
+  }
+
+  func testAlreadyCancelledRunDoesNotRestartOrEraseSnapshot() async {
+    let sensor = Sensor()
+    let controller = PhoneLocationController(sensor: sensor, cityLookup: CityLookup())
+    controller.start()
+    sensor.receive?(.location(fix(at: .now)))
+    controller.stop(preservingLastReading: true)
+    let task = Task { await controller.run(preservingLastReadingOnStop: true) }
+    task.cancel()
+    await task.value
+    XCTAssertEqual(sensor.starts, 1)
+    XCTAssertNotNil(controller.location)
+  }
+
+  func testCancellationRetainsLocationAndResumeClearsIt() async {
+    let sensor = Sensor()
+    let controller = PhoneLocationController(sensor: sensor, cityLookup: CityLookup())
+    let task = Task { await controller.run(preservingLastReadingOnStop: true) }
+    for _ in 0..<100 where sensor.starts == 0 { await Task.yield() }
+    XCTAssertEqual(sensor.starts, 1)
+    sensor.receive?(.location(fix(at: .now)))
+    task.cancel()
+    await task.value
+    XCTAssertNotNil(controller.location)
+    XCTAssertEqual(sensor.stops, 1)
+    controller.start()
+    XCTAssertNil(controller.location)
+  }
+
   func testFutureAndExpiredFixesNeverRemainVisible() {
     let sensor = Sensor()
     var now = time

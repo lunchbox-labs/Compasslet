@@ -150,24 +150,33 @@ final class PhoneLocationController: ObservableObject {
   }
 
   func start() {
+    clearLocation()
     active = true
     refreshAuthorization()
   }
 
-  func stop() {
+  func stop(preservingLastReading: Bool = false) {
+    if preservingLastReading { tick() }
     session = nil
     active = false
     if acquiring { sensor.stop() }
     acquiring = false
-    clearLocation()
-    approximate = false
+    cityToken = nil
+    cityLookup.cancel()
+    if !preservingLastReading {
+      clearLocation()
+      approximate = false
+    }
   }
 
-  func run() async {
+  func run(preservingLastReadingOnStop: Bool = false) async {
+    guard !Task.isCancelled else { return }
     let token = UUID()
     session = token
     start()
-    defer { if session == token { stop() } }
+    defer {
+      if session == token { stop(preservingLastReading: preservingLastReadingOnStop) }
+    }
     while !Task.isCancelled, session == token {
       tick()
       do { try await Task.sleep(for: .seconds(1)) } catch { break }
@@ -196,7 +205,13 @@ final class PhoneLocationController: ObservableObject {
   }
 
   private func receive(_ event: PhoneLocationEvent) {
-    guard active else { return }
+    guard active else {
+      if case .authorizationChanged = event {
+        approximate = sensor.authorized && sensor.servicesEnabled && !sensor.precise
+        if !sensor.authorized || !sensor.servicesEnabled || !sensor.precise { clearLocation() }
+      }
+      return
+    }
     refreshAuthorization()
     switch event {
     case .authorizationChanged: break
