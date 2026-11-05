@@ -124,15 +124,26 @@ struct AppearanceStoreTests {
     }
     for small in [false, true] {
       let card = CompassActivityCard(state: state, isSmall: small)
-      let reading = Text("NE 45°")
+      let reading = Text(verbatim: "NE 45°")
         .font((small ? Font.title2 : Font.largeTitle).weight(.semibold)).monospacedDigit()
-      let actual = try render(card)
-      let expected = try render(reading)
-      if actual != expected {
-        print("Hidden timestamp small=\(small) actual PNG: \(actual.base64EncodedString())")
-        print("Hidden timestamp small=\(small) expected PNG: \(expected.base64EncodedString())")
+        .multilineTextAlignment(.center)
+        .lineLimit(1).minimumScaleFactor(0.8)
+        .frame(maxWidth: .infinity)
+      // Match the card's text proposal and placement; a bare Text can rasterize its trailing
+      // degree symbol differently even when the visible content and center are identical.
+      let expected: AnyView
+      if small {
+        expected = AnyView(
+          reading.padding(.horizontal, 8).padding(.vertical, 4)
+            .frame(maxWidth: .infinity, maxHeight: .infinity))
+      } else {
+        expected = AnyView(
+          LockScreenHeight {
+            reading.padding(.horizontal, 14).padding(.vertical, 10)
+              .frame(maxWidth: .infinity)
+          })
       }
-      #expect(actual == expected, "small=\(small)")
+      #expect(try render(card) == render(expected), "small=\(small)")
     }
   }
 
