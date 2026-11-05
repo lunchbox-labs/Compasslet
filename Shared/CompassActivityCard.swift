@@ -43,6 +43,7 @@ struct CompassActivityCard: View {
   /// The tallest layout that fits: diagnostics (Lock Screen only), then the reading between
   /// balanced lines, then (Lock Screen only) the reading above its Last Updated line, then a bare
   /// Last Updated, then (Lock Screen only, so it never grows past 160 points) the reading alone.
+  /// In CarPlay, a status long enough to wrap leaves no room for the line beneath it.
   private var layouts: some View {
     ViewThatFits(in: .vertical) {
       if !isSmall, let update = state.debugUpdateTime {

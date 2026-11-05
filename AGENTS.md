@@ -42,15 +42,15 @@ cover the file layout, invocation in each tool and reviewer permissions.
 ## Screenshots
 
 `AppTests/ScreenshotTests.swift` lists the app's screens and states, with fixed heading and
-location input; CarPlay itself is not captured. A pull request that adds or changes a screen
-adds or updates its entry there. Add the `screenshots` label to capture the current PR head,
-using the largest and smallest simulators in light and dark. While the label remains, each
-push or reopening requests another capture; a push containing several commits captures only
-the resulting PR head. Adding unrelated labels does not request a capture. Remove `screenshots`
-to stop future automatic captures. Without it, the capture job is skipped on PR updates.
-Requested captures run independently, so later pushes and label removal do not cancel an active
-capture. Each run checks out the head commit recorded in its event and reports that exact commit
-in the run summary.
+location input. CarPlay templates are not captured, though the dial thumbnail they show is
+(`carplay-dial`). A pull request that adds or changes a screen adds or updates its entry there.
+Add the `screenshots` label to capture the current PR head, using the largest and smallest
+simulators in light and dark. While the label remains, each push or reopening requests another
+capture; a push containing several commits captures only the resulting PR head. Adding unrelated
+labels does not request a capture. Remove `screenshots` to stop future automatic captures.
+Without it, the capture job is skipped on PR updates. Requested captures run independently, so
+later pushes and label removal do not cancel an active capture. Each run checks out the head
+commit recorded in its event and reports that exact commit in the run summary.
 
 For custom captures, use Actions → Screenshots → Run workflow. Set `ref` to a branch, tag,
 commit or pull request number (empty uses the run's branch), choose `devices` and `appearances`,
