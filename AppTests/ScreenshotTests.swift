@@ -15,6 +15,7 @@ final class ScreenshotTests: XCTestCase {
   struct Screen {
     let name: String
     var increasedContrast = false
+    var showsLastRow = false
     let content: @MainActor () async -> AnyView
   }
 
@@ -90,6 +91,16 @@ final class ScreenshotTests: XCTestCase {
     Screen(name: "settings-appearance-global") {
       AnyView(NavigationStack { AppearanceDetailView(surface: nil) })
     },
+    Screen(name: "settings-appearance-global-reset", showsLastRow: true) {
+      AnyView(NavigationStack { AppearanceDetailView(surface: nil) })
+    },
+    Screen(name: "settings-appearance-global-reset-largest-text", showsLastRow: true) {
+      AnyView(
+        NavigationStack {
+          AppearanceDetailView(surface: nil)
+            .environment(\.dynamicTypeSize, .accessibility5)
+        })
+    },
     Screen(name: "settings-appearance-global-largest-text") {
       AnyView(
         NavigationStack { AppearanceDetailView(surface: nil) }
@@ -157,9 +168,36 @@ final class ScreenshotTests: XCTestCase {
         await screen.content(), increasedContrast: screen.increasedContrast)
       // Long enough for the first readings, navigation titles and any appearance animation.
       try await Task.sleep(for: .seconds(2))
+      if screen.showsLastRow { try await showLastRow(in: window) }
       try await requestScreenshot(screen.name, in: directory)
       window.isHidden = true
     }
+  }
+
+  private func showLastRow(in window: UIWindow) async throws {
+    func collections(in view: UIView) -> [UICollectionView] {
+      (view as? UICollectionView).map { [$0] }
+        ?? view.subviews.flatMap { collections(in: $0) }
+    }
+    let forms = collections(in: window)
+    XCTAssertEqual(forms.count, 1, "Expected one Form to scroll")
+    let form = try XCTUnwrap(forms.first)
+    form.layoutIfNeeded()
+    let section = try XCTUnwrap((0..<form.numberOfSections).last)
+    let item = try XCTUnwrap((0..<form.numberOfItems(inSection: section)).last)
+    let lastRow = IndexPath(item: item, section: section)
+    let deadline = ContinuousClock.now + .seconds(3)
+    repeat {
+      form.scrollToItem(at: lastRow, at: .bottom, animated: false)
+      try await Task.sleep(for: .milliseconds(100))
+      form.layoutIfNeeded()
+      let row = try XCTUnwrap(form.layoutAttributesForItem(at: lastRow))
+      let viewport = form.bounds.inset(by: form.adjustedContentInset)
+      if form.cellForItem(at: lastRow) != nil, viewport.contains(row.frame) { return }
+    } while ContinuousClock.now < deadline
+    struct LastRowNotVisible: Error {}
+    XCTFail("The reset row must be fully visible before capture")
+    throw LastRowNotVisible()
   }
 
   private func makeWindow(_ view: AnyView, increasedContrast: Bool) throws -> UIWindow {

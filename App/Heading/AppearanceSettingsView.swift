@@ -172,6 +172,8 @@ struct AppearanceDetailView: View {
               }
             }
           }
+          .buttonStyle(.bordered)
+          .controlSize(.large)
         }
       }
     }
