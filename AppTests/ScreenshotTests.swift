@@ -33,6 +33,7 @@ final class ScreenshotTests: XCTestCase {
     Screen(name: "compass-large-text") {
       AnyView(await ScreenshotTests.compass().environment(\.dynamicTypeSize, .accessibility3))
     },
+    Screen(name: "compass-settings-sheet") { await ScreenshotTests.compass(showsSettings: true) },
     Screen(name: "compass-finding-north") { await ScreenshotTests.compass(heading: nil) },
     Screen(name: "compass-calibration") {
       await ScreenshotTests.compass(heading: .calibrationNeeded)
@@ -250,7 +251,8 @@ final class ScreenshotTests: XCTestCase {
     tour: OnboardingState.Step? = nil,
     carPlay: CarPlay = .disconnected,
     showsTip: Bool = false,
-    inactive: Bool = false
+    inactive: Bool = false,
+    showsSettings: Bool = false
   ) async -> AnyView {
     CompassView.makeHeadingController = {
       let sensor = FixedHeadingSensor(reading: heading)
@@ -288,7 +290,7 @@ final class ScreenshotTests: XCTestCase {
     let onboarding = onboarding(at: tour)
     if !showsTip { onboarding.liveActivityTip.invalidate(reason: .actionPerformed) }
     return AnyView(
-      CompassView(drive: drive, onboarding: onboarding)
+      CompassView(drive: drive, onboarding: onboarding, showingSettings: showsSettings)
         .environment(\.scenePhase, inactive ? .inactive : .active))
   }
 
@@ -310,7 +312,7 @@ final class ScreenshotTests: XCTestCase {
   }
 
   private static func settings() -> AnyView {
-    AnyView(CompassSettingsView(drive: drive(location: .allowed), close: {}, showTour: {}))
+    AnyView(CompassSettingsView(drive: drive(location: .allowed), showTour: {}))
   }
 
   private static func editor(_ option: AppearanceOption) -> AnyView {
