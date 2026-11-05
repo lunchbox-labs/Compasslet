@@ -80,6 +80,91 @@ final class HeadingControllerTests: XCTestCase {
     XCTAssertEqual(controller.sample?.angle.degrees, 180)
   }
 
+  func testInactiveSnapshotStopsSensingAndResumeRequiresFreshReading() {
+    let sensor = Sensor()
+    var time = Date(timeIntervalSince1970: 1_000)
+    let controller = HeadingController(sensor: sensor, now: { time })
+    controller.start()
+    sensor.receive?(.reading(degrees: 90, accuracy: 1, timestamp: time))
+    let stops = sensor.stops
+    controller.stop(preservingLastReading: true)
+    XCTAssertEqual(sensor.stops, stops + 1)
+    XCTAssertEqual(controller.status, .inactive)
+    XCTAssertEqual(controller.sample?.angle.degrees, 90)
+    time += 60
+    controller.stop(preservingLastReading: true)
+    controller.tick()
+    sensor.receive?(.reading(degrees: 180, accuracy: 1, timestamp: time))
+    XCTAssertEqual(controller.sample?.angle.degrees, 90)
+    controller.start()
+    XCTAssertNil(controller.sample)
+    XCTAssertEqual(controller.status, .waiting)
+    sensor.receive?(.reading(degrees: 180, accuracy: 1, timestamp: time - 60))
+    XCTAssertEqual(controller.status, .stale)
+    sensor.receive?(.reading(degrees: 180, accuracy: 1, timestamp: time))
+    XCTAssertEqual(controller.sample?.angle.degrees, 180)
+  }
+
+  func testSnapshotNeverResurrectsRejectedOrExpiredReadings() {
+    let time = Date(timeIntervalSince1970: 1_000)
+    for event in [
+      HeadingEvent.denied, .interrupted,
+      .reading(degrees: 0, accuracy: -1, timestamp: time),
+      .reading(degrees: 90, accuracy: 1, timestamp: time - 6),
+    ] {
+      let sensor = Sensor()
+      let controller = HeadingController(sensor: sensor, now: { time })
+      controller.start()
+      sensor.receive?(.reading(degrees: 90, accuracy: 1, timestamp: time))
+      sensor.receive?(event)
+      let status = controller.status
+      controller.stop(preservingLastReading: true)
+      XCTAssertNil(controller.sample)
+      XCTAssertEqual(controller.status, status)
+    }
+    let sensor = Sensor()
+    var now = time
+    let controller = HeadingController(sensor: sensor, now: { now })
+    controller.start()
+    controller.stop(preservingLastReading: true)
+    XCTAssertNil(controller.sample)
+    controller.start()
+    sensor.receive?(.reading(degrees: 90, accuracy: 1, timestamp: time))
+    now += 6
+    controller.stop(preservingLastReading: true)
+    XCTAssertNil(controller.sample)
+    XCTAssertEqual(controller.status, .stale)
+  }
+
+  func testAlreadyCancelledRunDoesNotRestartOrEraseSnapshot() async {
+    let sensor = Sensor()
+    let controller = HeadingController(sensor: sensor)
+    controller.start()
+    sensor.receive?(.reading(degrees: 90, accuracy: 1, timestamp: .now))
+    controller.stop(preservingLastReading: true)
+    let task = Task { await controller.run(preservingLastReadingOnStop: true) }
+    task.cancel()
+    await task.value
+    XCTAssertEqual(sensor.starts, 1)
+    XCTAssertEqual(controller.sample?.angle.degrees, 90)
+  }
+
+  func testCancellationRetainsSnapshotAndDenialClearsIt() async {
+    let sensor = Sensor()
+    let controller = HeadingController(sensor: sensor)
+    let task = Task { await controller.run(preservingLastReadingOnStop: true) }
+    for _ in 0..<100 where sensor.starts == 0 { await Task.yield() }
+    XCTAssertEqual(sensor.starts, 1)
+    sensor.receive?(.reading(degrees: 90, accuracy: 1, timestamp: .now))
+    task.cancel()
+    await task.value
+    XCTAssertEqual(controller.status, .inactive)
+    XCTAssertEqual(controller.sample?.angle.degrees, 90)
+    sensor.receive?(.denied)
+    XCTAssertNil(controller.sample)
+    XCTAssertEqual(controller.status, .denied)
+  }
+
   func testReducedMotionHoldsSmallChangeAcrossNorthWithNewestMetadata() {
     let sensor = Sensor()
     var time = Date(timeIntervalSince1970: 1_000)
