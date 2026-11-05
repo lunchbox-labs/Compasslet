@@ -23,13 +23,13 @@ The `CompassCore` package and formatting checks need Swift 6.4.1 and its bundled
 swift-format 6.4.1; CI runs them on Linux in the `swift:6.4.1` container:
 
 ```sh
-bash scripts/swift-style check   # `format` applies the formatting
+bash scripts/swift-style check   # or format, to apply the formatting
 swift build --jobs 4 -c release
 swift test --jobs 4
 ```
 
-The helper scripts have offline tests that need Python 3 and OpenSSL, but no Apple credentials
-or network access:
+The helper scripts have offline tests that need Python 3, Git and OpenSSL, but no Apple
+credentials or network access:
 
 ```sh
 python3 -m unittest discover -s scripts/tests -v
@@ -42,8 +42,9 @@ npm ci --prefix scripts/tests/workflows --ignore-scripts --no-audit --no-fund
 npm test --prefix scripts/tests/workflows
 ```
 
-The simulator has no heading sensor and cannot exercise CarPlay operation; physical-device
-checks are on the [Development](https://github.com/lunchbox-labs/compasslet/wiki/Developer-Development)
+Simulator tests inject heading and location input, so they don't validate the physical sensors
+or in-car CarPlay operation. Physical-device checks are on the
+[Development](https://github.com/lunchbox-labs/compasslet/wiki/Developer-Development#device-validation)
 wiki page.
 
 ## UI capitalization
