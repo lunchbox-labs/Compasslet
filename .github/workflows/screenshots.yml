@@ -8,6 +8,11 @@ on:
         description: Branch, tag, commit or pull request number to capture (empty for this run's branch)
         required: false
         default: ""
+      set:
+        description: What to capture; the accessibility set chooses its own simulators and appearances
+        type: choice
+        options: [every screen, accessibility]
+        default: every screen
       devices:
         description: Simulators, as largest, smallest or exact names, separated by commas
         required: false
@@ -36,7 +41,7 @@ jobs:
        (github.event.action != 'labeled' || github.event.label.name == 'screenshots'))
     runs-on: xcode-27
     # A full run takes about 30 minutes on hosted runners, mostly simulator boots and captures.
-    timeout-minutes: 75
+    timeout-minutes: 90
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
     steps:
@@ -67,14 +72,21 @@ jobs:
           revision=$(git rev-parse HEAD)
           echo "Capturing commit $revision"
           echo "Capturing commit \`$revision\`." >> "$GITHUB_STEP_SUMMARY"
-      - name: Capture every screen on each simulator and appearance
+      - name: Capture the screens
         env:
+          CAPTURE_SET: ${{ inputs.set }}
           DEVICES: ${{ inputs.devices || 'largest,smallest' }}
           APPEARANCES: ${{ inputs.appearances == 'light' && 'light' || inputs.appearances == 'dark' && 'dark' || 'light,dark' }}
           SCREEN_FILTER: ${{ inputs.filter }}
-        run: >-
-          python3 scripts/screenshots capture --devices "$DEVICES" --appearances "$APPEARANCES"
-          --filter "$SCREEN_FILTER" --output "$RUNNER_TEMP/screenshots"
+        run: |
+          if [[ "$CAPTURE_SET" == accessibility ]]; then
+            python3 scripts/screenshots capture --set accessibility --filter "$SCREEN_FILTER" \
+              --output "$RUNNER_TEMP/screenshots"
+          else
+            python3 scripts/screenshots capture --devices "$DEVICES" \
+              --appearances "$APPEARANCES" --filter "$SCREEN_FILTER" \
+              --output "$RUNNER_TEMP/screenshots"
+          fi
       # A failed run still uploads what it captured, to show what went wrong.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() }}

@@ -95,7 +95,7 @@ struct DiagnosticsSettingsSection: View {
 
 }
 
-private struct DiagnosticsShareSheet: UIViewControllerRepresentable {
+struct DiagnosticsShareSheet: UIViewControllerRepresentable {
   let url: URL
   func makeUIViewController(context: Context) -> UIActivityViewController {
     UIActivityViewController(activityItems: [url], applicationActivities: nil)

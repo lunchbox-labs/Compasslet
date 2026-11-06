@@ -1,5 +1,6 @@
 """Exercise simulator selection and screenshot answers of the screenshot script."""
 import plistlib
+import re
 import runpy
 import tempfile
 import time
@@ -101,6 +102,75 @@ class ResponderTests(unittest.TestCase):
             self.assertEqual(responder.failed, ["largest-dark-settings.png"])
             self.assertTrue((requests / "compass.done").exists())
             self.assertTrue((requests / "settings.done").exists())
+
+
+class CaptureSetTests(unittest.TestCase):
+    def test_every_screen_in_a_set_is_one_the_test_can_show(self):
+        source = (SCRIPTS.parent / "AppTests/ScreenshotTests.swift").read_text()
+        known = set(re.findall(r'Screen\(name: "([^"]+)"', source))
+        for set_name, passes in MODULE["SETS"].items():
+            for item in passes:
+                with self.subTest(set=set_name, device=item.device, tag=item.tag):
+                    self.assertTrue(item.screens or item.captures_launch)
+                    self.assertEqual(set(item.screens) - known, set())
+                    self.assertEqual(set(item.system_settings) - set(MODULE["SYSTEM_SETTINGS"]),
+                                     set())
+
+    def test_the_location_prompt_runs_last_on_its_simulator(self):
+        passes = MODULE["SETS"]["accessibility"]
+        for index, item in enumerate(passes):
+            if item.undecided_location:
+                later = [other for other in passes[index + 1:] if other.device == item.device]
+                self.assertEqual(later, [])
+
+    def test_a_filter_narrows_each_pass_and_drops_empty_ones(self):
+        passes = MODULE["passes_for"]("accessibility", "live-activity")
+        self.assertTrue(passes)
+        for item in passes:
+            self.assertFalse(item.captures_launch)
+            self.assertTrue(all(screen.startswith("live-activity") for screen in item.screens))
+
+    def test_the_launch_frame_is_kept_only_when_the_filter_matches_it(self):
+        passes = MODULE["passes_for"]("accessibility", "launch")
+        self.assertEqual([(item.screens, item.captures_launch) for item in passes], [((), True)])
+
+    def test_a_filter_that_matches_nothing_stops_before_building(self):
+        with self.assertRaises(SystemExit):
+            MODULE["passes_for"]("accessibility", "no-such-screen")
+
+    def test_a_set_refuses_its_own_devices_and_appearances(self):
+        for option in (["--devices", "largest"], ["--appearances", "dark"]):
+            with self.subTest(option=option), tempfile.TemporaryDirectory() as output, \
+                    patch("subprocess.run") as run:
+                with self.assertRaises(SystemExit):
+                    MODULE["main"](["capture", "--set", "accessibility", "--output", output,
+                                    *option])
+                run.assert_not_called()
+
+    def test_tagged_images_name_the_setting_after_the_appearance(self):
+        self.assertEqual(MODULE["image_name"]("iphone-17", "dark", "settings", "increase-contrast"),
+                         "iphone-17-dark-increase-contrast-settings.png")
+        self.assertEqual(MODULE["image_name"]("largest", "light", "settings"),
+                         "largest-light-settings.png")
+
+
+class CreatableDeviceTests(unittest.TestCase):
+    @staticmethod
+    def runtime(identifier, names, available=True):
+        return {"identifier": identifier, "isAvailable": available,
+                "supportedDeviceTypes": [{"name": name, "identifier": "type." + name}
+                                         for name in names]}
+
+    def test_missing_iphones_are_created_on_the_newest_supported_runtime(self):
+        offered = MODULE["creatable_iphones"]([
+            self.runtime(RUNTIME_26, ["iPhone SE (3rd generation)", "iPhone 16e"]),
+            self.runtime(RUNTIME_27, ["iPhone 13 mini", "iPhone 17", "iPad Pro"]),
+            self.runtime(RUNTIME_27_1, ["iPhone 17"]),
+            self.runtime("com.apple.CoreSimulator.SimRuntime.iOS-27-2", ["iPhone Duo"],
+                         available=False),
+        ])
+        self.assertEqual(offered, {"iPhone 17": ("type.iPhone 17", RUNTIME_27_1),
+                                   "iPhone 13 mini": ("type.iPhone 13 mini", RUNTIME_27)})
 
 
 if __name__ == "__main__":

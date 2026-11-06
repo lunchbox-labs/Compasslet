@@ -93,6 +93,10 @@ commit recorded in its event and reports that exact commit in the run summary.
 For custom captures, use Actions → Screenshots → Run workflow. Set `ref` to a branch, tag,
 commit or pull request number (empty uses the run's branch), choose `devices` and `appearances`,
 and narrow it with `filter` when only a few screens matter. Each run keeps its images
-for 7 days as a `screenshots-run-<number>` artifact. Use these captures for mock-ups; don't push
+for 7 days as a `screenshots-run-<number>` artifact. Choose the `accessibility` set to capture
+the simulator part of the App Store accessibility evidence (#147) instead:
+`scripts/screenshots capture --set accessibility` picks its own simulators and appearances, applies
+text sizes and Bold Text in the test, and turns on Increase Contrast and Reduce Transparency in the
+simulator, which the test confirms before capturing. `ACCESSIBILITY_SET` in the script lists it. Use these captures for mock-ups; don't push
 other branches to produce them. Clients that can't download artifacts can set `log-images` and
 read the images from the job log.

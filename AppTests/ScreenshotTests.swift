@@ -16,8 +16,46 @@ final class ScreenshotTests: XCTestCase {
     let name: String
     var increasedContrast = false
     var showsLastRow = false
+    /// Captured only when a capture set names it, because it needs simulator state that the
+    /// set prepares, such as location access that hasn't been decided.
+    var onlyWhenNamed = false
     let content: @MainActor () async -> AnyView
   }
+
+  /// A text size and Bold Text combination applied to the window as the system would apply it.
+  struct TextVariant {
+    let name: String
+    let contentSize: UIContentSizeCategory?
+    let bold: Bool
+
+    static let standard = TextVariant(name: "", contentSize: nil, bold: false)
+
+    /// `ax3` and `ax5` are the third and fifth accessibility sizes; `-bold` adds Bold Text.
+    init?(named name: String) {
+      let bold = name.hasSuffix("-bold")
+      let size = bold ? String(name.dropLast("-bold".count)) : name
+      switch size {
+      case "ax3": contentSize = .accessibilityExtraLarge
+      case "ax5": contentSize = .accessibilityExtraExtraExtraLarge
+      default: return nil
+      }
+      self.name = name
+      self.bold = bold
+    }
+
+    private init(name: String, contentSize: UIContentSizeCategory?, bold: Bool) {
+      self.name = name
+      self.contentSize = contentSize
+      self.bold = bold
+    }
+  }
+
+  /// System settings a capture set turns on in the simulator before the test starts. The test
+  /// checks each against what the system reports, so an image is never taken without it.
+  static let systemSettings: [String: @MainActor () -> Bool] = [
+    "increase-contrast": { UIAccessibility.isDarkerSystemColorsEnabled },
+    "reduce-transparency": { UIAccessibility.isReduceTransparencyEnabled },
+  ]
 
   static let screens: [Screen] = [
     Screen(name: "compass") { await ScreenshotTests.compass() },
@@ -49,6 +87,11 @@ final class ScreenshotTests: XCTestCase {
           .environment(\.dynamicTypeSize, .accessibility5))
     },
     Screen(name: "compass-location-denied") { await ScreenshotTests.compass(location: .denied) },
+    // The compass asks for location as the app does on its first use, and the simulator shows
+    // its real permission prompt over it.
+    Screen(name: "compass-location-prompt", onlyWhenNamed: true) {
+      await ScreenshotTests.compass(location: .notDetermined)
+    },
     Screen(name: "compass-live-activity-start") {
       await ScreenshotTests.compass(carPlay: .connected)
     },
@@ -94,6 +137,12 @@ final class ScreenshotTests: XCTestCase {
     },
     Screen(name: "settings-bottom") {
       AnyView(ScreenshotTests.settings().defaultScrollAnchor(.bottom))
+    },
+    Screen(name: "settings-diagnostics-export", onlyWhenNamed: true) {
+      AnyView(
+        ScreenshotTests.settings().sheet(isPresented: .constant(true)) {
+          DiagnosticsShareSheet(url: ScreenshotTests.sampleDiagnosticsExport())
+        })
     },
     Screen(name: "settings-appearance") {
       AnyView(NavigationStack { AppearanceSettingsView() })
@@ -154,6 +203,8 @@ final class ScreenshotTests: XCTestCase {
 
   private var directory: URL?
   private var nameFilter: [String] = []
+  private var namedScreens: [String] = []
+  private var textVariants = [TextVariant.standard]
   private var interfaceStyle = UIUserInterfaceStyle.light
 
   override func setUp() async throws {
@@ -162,9 +213,43 @@ final class ScreenshotTests: XCTestCase {
       throw XCTSkip("Captured only by scripts/screenshots")
     }
     directory = URL(fileURLWithPath: path, isDirectory: true)
-    nameFilter = (environment["SCREENSHOT_FILTER"] ?? "").split(separator: ",")
-      .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    nameFilter = Self.list(environment["SCREENSHOT_FILTER"])
+    namedScreens = Self.list(environment["SCREENSHOT_SCREENS"])
     interfaceStyle = environment["SCREENSHOT_APPEARANCE"] == "dark" ? .dark : .light
+    let variantNames = Self.list(environment["SCREENSHOT_TEXT_VARIANTS"])
+    if !variantNames.isEmpty {
+      textVariants = try variantNames.map { name in
+        try XCTUnwrap(TextVariant(named: name), "Unknown text variant \(name)")
+      }
+    }
+    if let expected = environment["SCREENSHOT_SYSTEM_SETTINGS"] {
+      try checkSystemSettings(expectedOn: Self.list(expected))
+    }
+  }
+
+  private static func list(_ value: String?) -> [String] {
+    (value ?? "").split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+      .filter { !$0.isEmpty }
+  }
+
+  /// Fails before any capture when the simulator doesn't report a setting the run asked for, or
+  /// reports one it didn't, so no image claims a setting it wasn't taken with.
+  private func checkSystemSettings(expectedOn: [String]) throws {
+    struct SystemSettingMismatch: Error {}
+    for name in expectedOn where Self.systemSettings[name] == nil {
+      XCTFail("Unknown system setting \(name)")
+      throw SystemSettingMismatch()
+    }
+    for (name, isOn) in Self.systemSettings.sorted(by: { $0.key < $1.key }) {
+      let expected = expectedOn.contains(name)
+      let reported = isOn()
+      if reported != expected {
+        XCTFail(
+          "The simulator reports \(name) \(reported ? "on" : "off"), "
+            + "but this run expects it \(expected ? "on" : "off")")
+        throw SystemSettingMismatch()
+      }
+    }
   }
 
   override func tearDown() async throws {
@@ -174,18 +259,32 @@ final class ScreenshotTests: XCTestCase {
 
   func testCaptureScreens() async throws {
     let directory = try XCTUnwrap(directory)
-    let selected = Self.screens.filter { screen in
+    let unknown = namedScreens.filter { name in !Self.screens.contains { $0.name == name } }
+    XCTAssertTrue(unknown.isEmpty, "No screen is named \(unknown)")
+    let listed =
+      namedScreens.isEmpty
+      ? Self.screens.filter { !$0.onlyWhenNamed }
+      : namedScreens.compactMap { name in Self.screens.first { $0.name == name } }
+    let selected = listed.filter { screen in
       nameFilter.isEmpty || nameFilter.contains { screen.name.hasPrefix($0) }
     }
     XCTAssertFalse(selected.isEmpty, "No screen name starts with \(nameFilter)")
-    for screen in selected {
-      let window = try makeWindow(
-        await screen.content(), increasedContrast: screen.increasedContrast)
-      // Long enough for the first readings, navigation titles and any appearance animation.
-      try await Task.sleep(for: .seconds(2))
-      if screen.showsLastRow { try await showLastRow(in: window) }
-      try await requestScreenshot(screen.name, in: directory)
-      window.isHidden = true
+    if selected.contains(where: { $0.name == "compass-location-prompt" }) {
+      XCTAssertEqual(
+        CLLocationManager().authorizationStatus, .notDetermined,
+        "The location prompt needs location access that hasn't been decided")
+    }
+    for variant in textVariants {
+      for screen in selected {
+        let window = try makeWindow(
+          await screen.content(), increasedContrast: screen.increasedContrast, text: variant)
+        // Long enough for the first readings, navigation titles and any appearance animation.
+        try await Task.sleep(for: .seconds(2))
+        if screen.showsLastRow { try await showLastRow(in: window) }
+        let name = variant.name.isEmpty ? screen.name : screen.name + "-" + variant.name
+        try await requestScreenshot(name, in: directory)
+        window.isHidden = true
+      }
     }
   }
 
@@ -215,12 +314,19 @@ final class ScreenshotTests: XCTestCase {
     throw LastRowNotVisible()
   }
 
-  private func makeWindow(_ view: AnyView, increasedContrast: Bool) throws -> UIWindow {
+  private func makeWindow(_ view: AnyView, increasedContrast: Bool, text: TextVariant) throws
+    -> UIWindow
+  {
     let scene = try XCTUnwrap(
       UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
     let window = UIWindow(windowScene: scene)
     window.overrideUserInterfaceStyle = interfaceStyle
-    window.traitOverrides.accessibilityContrast = increasedContrast ? .high : .normal
+    // Without an override the window follows the simulator's Increase Contrast setting.
+    if increasedContrast { window.traitOverrides.accessibilityContrast = .high }
+    if let contentSize = text.contentSize {
+      window.traitOverrides.preferredContentSizeCategory = contentSize
+    }
+    if text.bold { window.traitOverrides.legibilityWeight = .bold }
     window.windowLevel = .alert + 1
     // A window outside the app's SwiftUI scene reports itself inactive, which pauses the
     // compass, so the screens render as the active app does, with the app root's tint.
@@ -315,6 +421,16 @@ final class ScreenshotTests: XCTestCase {
     AnyView(CompassSettingsView(drive: drive(location: .allowed), showTour: {}))
   }
 
+  /// A small file with the real export's name, since the share sheet previews its name and type.
+  private static func sampleDiagnosticsExport() -> URL {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "screenshot-diagnostics", isDirectory: true)
+    let url = directory.appendingPathComponent("compass-diagnostics.json")
+    try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try? Data("{\"entries\":[]}\n".utf8).write(to: url, options: .atomic)
+    return url
+  }
+
   private static func editor(_ option: AppearanceOption) -> AnyView {
     AnyView(
       NavigationStack { AppearanceOptionEditor(surface: nil, option: option, store: .shared) })
@@ -406,18 +522,31 @@ private final class FixedCityLookup: PhoneCityLookup {
 /// Travel location for the drive controller; it only decides the phone's location status here.
 @MainActor
 private final class FixedTravelSensor: TravelLocationSensor {
-  enum Access { case allowed, denied }
+  enum Access { case allowed, denied, notDetermined }
 
   let access: Access
   var receive: ((TravelSensorEvent) -> Void)?
-  var authorization: TravelAuthorization { access == .allowed ? .authorized : .denied }
+  /// Asks the system for real, so the simulator shows its prompt while access is undecided.
+  private var permissionManager: CLLocationManager?
+  var authorization: TravelAuthorization {
+    switch access {
+    case .allowed: .authorized
+    case .denied: .denied
+    case .notDetermined: .notDetermined
+    }
+  }
   var fullAccuracy: Bool { true }
   var servicesEnabled: Bool { true }
   var available: Bool { true }
 
   init(access: Access) { self.access = access }
 
-  func requestAuthorization() {}
+  func requestAuthorization() {
+    guard access == .notDetermined else { return }
+    let manager = CLLocationManager()
+    permissionManager = manager
+    manager.requestWhenInUseAuthorization()
+  }
   func start() throws {}
   func stop() {}
 }
