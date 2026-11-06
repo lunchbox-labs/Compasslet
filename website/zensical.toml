@@ -9,6 +9,7 @@ site_dir = "site"
 nav = [
   "index.md",
   "support.md",
+  "shortcuts.md",
   "privacy.md",
 ]
 extra_css = ["stylesheets/brand.css"]
@@ -50,7 +51,7 @@ accent = "custom"
 toggle.icon = "lucide/moon"
 toggle.name = "Switch to System Preference"
 
-# The site has three short pages, so search adds nothing. Turning the plugin
+# The site has four short pages, so search adds nothing. Turning the plugin
 # off removes the header search box and leaves the search index empty.
 [project.plugins.search]
 enabled = false
