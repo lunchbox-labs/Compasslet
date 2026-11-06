@@ -46,7 +46,7 @@ private struct ActivityCard: View {
     let isSmall = family == .small
     CompassActivityCard(state: context.state, isStale: context.isStale, isSmall: isSmall)
       // The Lock Screen card draws its own see-through backdrop, so the system tint is clear
-      // there. The small card in CarPlay and the Smart Stack keeps the system's background.
+      // there. The small card in CarPlay and the Apple Watch Smart Stack keeps the system's.
       .lockScreenBackdrop(isActive: !isSmall)
       .activityBackgroundTint(isSmall ? nil : Color.clear)
       .activitySystemActionForegroundColor(isSmall ? nil : Color.primary)
