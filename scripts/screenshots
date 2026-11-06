@@ -4,6 +4,9 @@
 capture     Build the app once, then run ScreenshotTests on each device and appearance. The
             test shows one screen at a time and asks for a screenshot by writing a request
             file; this script answers with a full simulator screenshot and a done file.
+            --set accessibility captures the simulator part of the App Store accessibility
+            evidence instead: fixed devices, text sizes, Bold Text, Increase Contrast,
+            Reduce Transparency and Dark Mode, as listed in ACCESSIBILITY_SET.
 """
 import argparse
 import json
@@ -15,6 +18,7 @@ import sys
 import tempfile
 import threading
 import time
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 ALIASES = ("largest", "smallest")
@@ -22,6 +26,70 @@ APPEARANCES = ("light", "dark")
 BUNDLE_IDENTIFIER = "dev.lunchbox-labs.carplay-compass"
 MANIFEST = "screenshots.json"
 MINIMUM_IOS = 27
+LAUNCH_SCREEN = "launch-first-frame"
+
+
+@dataclass(frozen=True)
+class CapturePass:
+    """One test run on one simulator: the screens to show and the settings to show them with.
+
+    text_variants are applied by the test to each screen (ax3, ax5, either with -bold).
+    system_settings are turned on in the simulator first; the test checks the system reports
+    them. undecided_location resets location access so the app's permission prompt appears.
+    captures_launch saves the app's first frame after a cold launch before the test runs.
+    """
+    device: str
+    appearance: str
+    screens: tuple
+    text_variants: tuple = ()
+    system_settings: tuple = ()
+    undecided_location: bool = False
+    captures_launch: bool = False
+    tag: str = ""
+
+
+SYSTEM_SETTINGS = {
+    "increase-contrast": lambda udid, on: ["xcrun", "simctl", "ui", udid, "increase_contrast",
+                                           "enabled" if on else "disabled"],
+    "reduce-transparency": lambda udid, on: [
+        "xcrun", "simctl", "spawn", udid, "defaults", "write", "com.apple.Accessibility",
+        "EnhancedBackgroundContrastEnabled", "-bool", "YES" if on else "NO"],
+}
+
+TOUR = ("tour-welcome", "tour-live-activity-button", "tour-live-activity-button-carplay",
+        "tour-shortcuts", "tour-shortcuts-carplay")
+# The Live Activity button shows only while CarPlay is connected.
+COMPASS_WITH_LIVE_ACTIVITY_BUTTON = "compass-live-activity-start"
+APPEARANCE_PAGES = ("settings-appearance", "settings-appearance-global",
+                    "settings-appearance-iphone", "settings-appearance-live-activity",
+                    "settings-appearance-minor-ticks", "settings-appearance-cardinal-labels",
+                    "settings-appearance-rotation", "settings-appearance-reduce-motion")
+LARGER_TEXT = (COMPASS_WITH_LIVE_ACTIVITY_BUTTON, *TOUR, "settings", "settings-bottom",
+               *APPEARANCE_PAGES, "compass-location-denied")
+CONTRAST = (COMPASS_WITH_LIVE_ACTIVITY_BUTTON, "compass-settings-sheet", "settings")
+DARK_INTERFACE = (*TOUR, "compass", COMPASS_WITH_LIVE_ACTIVITY_BUTTON, "compass-location-denied",
+                  "compass-settings-sheet", "settings", "settings-bottom",
+                  "settings-diagnostics-export", "live-activity")
+
+SMALL_PHONE = "iPhone SE (3rd generation)"
+SECOND_SMALL_PHONE = "iPhone 13 mini"
+CURRENT_PHONE = "iPhone 17"
+ACCESSIBILITY_SET = (
+    CapturePass(SMALL_PHONE, "light", LARGER_TEXT,
+                text_variants=("ax3", "ax3-bold", "ax5", "ax5-bold")),
+    CapturePass(SECOND_SMALL_PHONE, "light",
+                (COMPASS_WITH_LIVE_ACTIVITY_BUTTON, *TOUR, "settings", "settings-bottom",
+                 "compass-location-denied", "live-activity"), text_variants=("ax5-bold",)),
+    CapturePass(CURRENT_PHONE, "light", ("live-activity", "live-activity-status"),
+                text_variants=("ax5",)),
+    CapturePass(CURRENT_PHONE, "light", CONTRAST),
+    *(CapturePass(CURRENT_PHONE, appearance, CONTRAST, system_settings=(setting,), tag=setting)
+      for setting in SYSTEM_SETTINGS for appearance in APPEARANCES),
+    CapturePass(CURRENT_PHONE, "dark", DARK_INTERFACE, captures_launch=True),
+    # Last on its simulator: the prompt stays up until the run ends.
+    CapturePass(CURRENT_PHONE, "dark", ("compass-location-prompt",), undecided_location=True),
+)
+SETS = {"accessibility": ACCESSIBILITY_SET}
 
 
 def split_list(value):
@@ -59,7 +127,7 @@ def available_iphones(devices_by_runtime, device_types):
                 continue
             device_type = types.get(device.get("deviceTypeIdentifier"), {})
             phones[device["name"]] = {"udid": device["udid"], "name": device["name"],
-                                      "points": screen_points(device_type)}
+                                      "runtime": runtime, "points": screen_points(device_type)}
     return list(phones.values())
 
 
@@ -97,24 +165,69 @@ def select_devices(requested, phones):
                 names = ", ".join(sorted(phone["name"] for phone in phones))
                 raise SystemExit("No available simulator named " + request + "; found " + names)
             phone = matches[0]
-            label = re.sub(r"[^a-z0-9]+", "-", request.lower()).strip("-")
+            label = device_label(request)
         if any(item["udid"] == phone["udid"] for item in selected):
             continue
         selected.append(dict(phone, label=label))
     return selected
 
 
-def image_name(label, appearance, screen):
-    return label + "-" + appearance + "-" + screen + ".png"
+def image_name(label, appearance, screen, tag=""):
+    return "-".join(part for part in (label, appearance, tag, screen) if part) + ".png"
+
+
+def device_label(name):
+    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+
+
+def creatable_iphones(runtimes):
+    """iPhone device types each iOS MINIMUM_IOS+ runtime supports, newest runtime first."""
+    creatable = {}
+    for runtime in sorted(runtimes, key=lambda runtime: runtime_version(runtime["identifier"])
+                          or (0, 0), reverse=True):
+        version = runtime_version(runtime["identifier"])
+        if not runtime.get("isAvailable") or version is None or version[0] < MINIMUM_IOS:
+            continue
+        for device_type in runtime.get("supportedDeviceTypes", []):
+            if device_type["name"].startswith("iPhone"):
+                creatable.setdefault(device_type["name"], (device_type["identifier"],
+                                                           runtime["identifier"]))
+    return creatable
+
+
+def passes_for(set_name, screen_filter):
+    """The set's passes, each narrowed to the screens the filter's prefixes match."""
+    prefixes = split_list(screen_filter)
+
+    def matches_filter(screen):
+        return not prefixes or any(screen.startswith(prefix) for prefix in prefixes)
+
+    narrowed = []
+    for capture_pass in SETS[set_name]:
+        screens = tuple(screen for screen in capture_pass.screens if matches_filter(screen))
+        launch = capture_pass.captures_launch and matches_filter(LAUNCH_SCREEN)
+        if screens or launch:
+            narrowed.append(replace(capture_pass, screens=screens, captures_launch=launch))
+    if not narrowed:
+        raise SystemExit("No screen in the " + set_name + " set starts with " + screen_filter)
+    return narrowed
+
+
+def split_text_variant(request, text_variants):
+    """The screen and text variant a request names, as the test joins them: screen-variant."""
+    for variant in sorted(text_variants, key=len, reverse=True):
+        if request.endswith("-" + variant):
+            return request[:-len(variant) - 1], variant
+    return request, "standard"
 
 
 class ScreenshotResponder(threading.Thread):
     """Takes a simulator screenshot for each request file the test writes."""
 
-    def __init__(self, udid, requests, output, label, appearance):
+    def __init__(self, udid, requests, output, label, appearance, tag=""):
         super().__init__(daemon=True)
         self.udid, self.requests, self.output = udid, requests, output
-        self.label, self.appearance = label, appearance
+        self.label, self.appearance, self.tag = label, appearance, tag
         self.captured = []
         self.failed = []
         self.stopping = threading.Event()
@@ -124,7 +237,7 @@ class ScreenshotResponder(threading.Thread):
             for request in sorted(self.requests.glob("*.request")):
                 screen = request.stem
                 request.unlink()
-                name = image_name(self.label, self.appearance, screen)
+                name = image_name(self.label, self.appearance, screen, self.tag)
                 result = subprocess.run(["xcrun", "simctl", "io", self.udid, "screenshot",
                                          str(self.output / name)], check=False)
                 if result.returncode == 0 and (self.output / name).exists():
@@ -139,62 +252,194 @@ class ScreenshotResponder(threading.Thread):
         self.join()
 
 
-def capture(arguments):
-    output = Path(arguments.output).resolve()
-    output.mkdir(parents=True, exist_ok=True)
-    appearances = split_list(arguments.appearances)
-    for appearance in appearances:
-        if appearance not in APPEARANCES:
-            raise SystemExit("Unknown appearance " + appearance + "; use light or dark")
-    listing = json.loads(run(["xcrun", "simctl", "list", "--json", "devices", "available"],
-                             capture_output=True).stdout)
-    types = json.loads(run(["xcrun", "simctl", "list", "--json", "devicetypes"],
-                           capture_output=True).stdout)
-    devices = select_devices(split_list(arguments.devices),
-                             available_iphones(listing["devices"], types["devicetypes"]))
-    if not devices:
-        raise SystemExit("No devices requested")
-    derived_data = Path(arguments.derived_data).resolve()
-    xcodebuild = ["bash", "scripts/simulator-xcodebuild", "-project", "Compass.xcodeproj",
-                  "-scheme", "Compass", "-derivedDataPath", str(derived_data),
-                  "CODE_SIGNING_ALLOWED=NO"]
-    # Build once before any simulator boots, so a boot never competes with the compile.
-    run(xcodebuild + ["-destination", "generic/platform=iOS Simulator", "build-for-testing"])
-    app = derived_data / "Build/Products/Debug-iphonesimulator/Compass.app"
-    manifest = []
-    failed = False
-    for device in devices:
-        udid = device["udid"]
-        subprocess.run(["xcrun", "simctl", "boot", udid], check=False)
-        run(["xcrun", "simctl", "bootstatus", udid, "-b"])
-        run(["xcrun", "simctl", "status_bar", udid, "override", "--time", "9:41",
-             "--dataNetwork", "wifi", "--wifiMode", "active", "--wifiBars", "3",
-             "--cellularMode", "active", "--cellularBars", "4",
-             "--batteryState", "charged", "--batteryLevel", "100"])
-        # Granting location first keeps the host app's permission prompt off the screenshots.
-        run(["xcrun", "simctl", "install", udid, str(app)])
-        run(["xcrun", "simctl", "privacy", udid, "grant", "location", BUNDLE_IDENTIFIER])
-        for appearance in appearances:
-            run(["xcrun", "simctl", "ui", udid, "appearance", appearance])
+def simctl_json(*arguments):
+    return json.loads(run(["xcrun", "simctl", "list", "--json", *arguments],
+                          capture_output=True).stdout)
+
+
+def quietly(arguments):
+    """Runs a cleanup command whose failure, such as nothing to terminate, doesn't matter."""
+    subprocess.run(arguments, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def find_devices(names, created):
+    """Available simulators for exact names or aliases. A named iPhone that is missing but
+    supported by an iOS MINIMUM_IOS+ runtime is created and its id added to created, so the
+    caller can delete it afterwards, even when this raises."""
+    types = simctl_json("devicetypes")["devicetypes"]
+    phones = available_iphones(simctl_json("devices", "available")["devices"], types)
+    missing = [name for name in names
+               if name not in ALIASES and name not in {phone["name"] for phone in phones}]
+    if missing:
+        creatable = creatable_iphones(simctl_json("runtimes")["runtimes"])
+        unknown = [name for name in missing if name not in creatable]
+        if unknown:
+            found = ", ".join(sorted(phone["name"] for phone in phones))
+            raise SystemExit("No available simulator named " + ", ".join(unknown) + "; found "
+                             + found + "; iOS " + str(MINIMUM_IOS) + " also supports "
+                             + ", ".join(sorted(creatable)))
+        for name in missing:
+            type_identifier, runtime = creatable[name]
+            created.append(run(["xcrun", "simctl", "create", name, type_identifier, runtime],
+                               capture_output=True).stdout.strip())
+        phones = available_iphones(simctl_json("devices", "available")["devices"], types)
+    return select_devices(names, phones)
+
+
+def set_system_setting(udid, setting, on):
+    run(SYSTEM_SETTINGS[setting](udid, on))
+
+
+def prepare_device(udid, app):
+    subprocess.run(["xcrun", "simctl", "boot", udid], check=False)
+    run(["xcrun", "simctl", "bootstatus", udid, "-b"])
+    run(["xcrun", "simctl", "status_bar", udid, "override", "--time", "9:41",
+         "--dataNetwork", "wifi", "--wifiMode", "active", "--wifiBars", "3",
+         "--cellularMode", "active", "--cellularBars", "4",
+         "--batteryState", "charged", "--batteryLevel", "100"])
+    # Granting location first keeps the host app's permission prompt off the screenshots.
+    run(["xcrun", "simctl", "install", udid, str(app)])
+    run(["xcrun", "simctl", "privacy", udid, "grant", "location", BUNDLE_IDENTIFIER])
+    # The test fails if either setting is on unasked, so a reused simulator starts clean.
+    for setting in SYSTEM_SETTINGS:
+        set_system_setting(udid, setting, False)
+
+
+def capture_launch(device, capture_pass, output):
+    """Saves the launch screen as a cold launch shows it. The app is held before its first line
+    of code runs, so the system's generated launch screen stays up until the capture."""
+    udid = device["udid"]
+    quietly(["xcrun", "simctl", "terminate", udid, BUNDLE_IDENTIFIER])
+    name = image_name(device["label"], capture_pass.appearance, LAUNCH_SCREEN, capture_pass.tag)
+    try:
+        run(["xcrun", "simctl", "launch", "--wait-for-debugger", udid, BUNDLE_IDENTIFIER],
+            capture_output=True)
+        # Long enough for the launch animation to finish.
+        time.sleep(2)
+        result = subprocess.run(["xcrun", "simctl", "io", udid, "screenshot",
+                                 str(output / name)], check=False)
+    finally:
+        quietly(["xcrun", "simctl", "terminate", udid, BUNDLE_IDENTIFIER])
+    if result.returncode == 0 and (output / name).exists():
+        return {"screen": LAUNCH_SCREEN, "file": name}
+    print("No screenshot was saved for " + name, file=sys.stderr)
+    return None
+
+
+def run_pass(xcodebuild, device, capture_pass, output, screen_filter):
+    """Runs ScreenshotTests once; returns the captured entries and whether anything failed."""
+    udid = device["udid"]
+    captured, failed = [], False
+    try:
+        run(["xcrun", "simctl", "ui", udid, "appearance", capture_pass.appearance])
+        for setting in capture_pass.system_settings:
+            set_system_setting(udid, setting, True)
+        if capture_pass.undecided_location:
+            run(["xcrun", "simctl", "privacy", udid, "reset", "location", BUNDLE_IDENTIFIER])
+        if capture_pass.captures_launch:
+            launch = capture_launch(device, capture_pass, output)
+            captured += [launch] if launch else []
+            failed = launch is None
+        if capture_pass.screens or not capture_pass.captures_launch:
             with tempfile.TemporaryDirectory() as requests:
                 responder = ScreenshotResponder(udid, Path(requests), output, device["label"],
-                                                appearance)
+                                                capture_pass.appearance, capture_pass.tag)
                 responder.start()
-                environment = dict(os.environ, TEST_RUNNER_SCREENSHOT_DIRECTORY=requests,
-                                   TEST_RUNNER_SCREENSHOT_APPEARANCE=appearance,
-                                   TEST_RUNNER_SCREENSHOT_FILTER=arguments.filter)
-                result = subprocess.run(
-                    xcodebuild + ["-destination", "platform=iOS Simulator,id=" + udid,
-                                  "-only-testing:CompassTests/ScreenshotTests",
-                                  "test-without-building"], env=environment, check=False)
-                responder.stop()
+                environment = dict(
+                    os.environ, TEST_RUNNER_SCREENSHOT_DIRECTORY=requests,
+                    TEST_RUNNER_SCREENSHOT_APPEARANCE=capture_pass.appearance,
+                    TEST_RUNNER_SCREENSHOT_FILTER=screen_filter,
+                    TEST_RUNNER_SCREENSHOT_SCREENS=",".join(capture_pass.screens),
+                    TEST_RUNNER_SCREENSHOT_TEXT_VARIANTS=",".join(capture_pass.text_variants),
+                    TEST_RUNNER_SCREENSHOT_SYSTEM_SETTINGS=",".join(capture_pass.system_settings))
+                try:
+                    result = subprocess.run(
+                        xcodebuild + ["-destination", "platform=iOS Simulator,id=" + udid,
+                                      "-only-testing:CompassTests/ScreenshotTests",
+                                      "test-without-building"], env=environment, check=False)
+                finally:
+                    responder.stop()
             failed = failed or result.returncode != 0 or bool(responder.failed)
             for name in responder.failed:
                 print("No screenshot was saved for " + name, file=sys.stderr)
-            manifest += [dict(item, device=device["name"], label=device["label"],
-                              appearance=appearance) for item in responder.captured]
-        subprocess.run(["xcrun", "simctl", "shutdown", udid], check=False)
-    (output / MANIFEST).write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+            for entry in responder.captured:
+                if capture_pass.text_variants:
+                    screen, variant = split_text_variant(entry["screen"],
+                                                         capture_pass.text_variants)
+                    entry = dict(entry, screen=screen, text_variant=variant)
+                captured.append(entry)
+    finally:
+        for setting in capture_pass.system_settings:
+            set_system_setting(udid, setting, False)
+        if capture_pass.undecided_location:
+            quietly(["xcrun", "simctl", "terminate", udid, BUNDLE_IDENTIFIER])
+            run(["xcrun", "simctl", "privacy", udid, "grant", "location", BUNDLE_IDENTIFIER])
+    details = {"device": device["name"], "runtime": device["runtime"], "label": device["label"],
+               "appearance": capture_pass.appearance,
+               "system_settings": list(capture_pass.system_settings)}
+    if capture_pass.tag:
+        details["tag"] = capture_pass.tag
+    # A failed pass may still have saved images, which can't be trusted to show its settings.
+    if failed:
+        details["pass_failed"] = True
+    return [dict(entry, **details) for entry in captured], failed
+
+
+def capture(arguments):
+    output = Path(arguments.output).resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    if arguments.set:
+        if arguments.devices is not None or arguments.appearances is not None:
+            raise SystemExit("--set chooses its own devices and appearances; leave out "
+                             "--devices and --appearances")
+        passes = passes_for(arguments.set, arguments.filter)
+        # The set lists exact screens; the filter has already narrowed them.
+        screen_filter = ""
+        requested = list(dict.fromkeys(capture_pass.device for capture_pass in passes))
+    else:
+        appearances = split_list(arguments.appearances or "light,dark")
+        for appearance in appearances:
+            if appearance not in APPEARANCES:
+                raise SystemExit("Unknown appearance " + appearance + "; use light or dark")
+        requested = split_list(arguments.devices or "largest,smallest")
+        passes = None
+        screen_filter = arguments.filter
+    created = []
+    manifest = []
+    failed = False
+    try:
+        devices = find_devices(requested, created)
+        if not devices:
+            raise SystemExit("No devices requested")
+        derived_data = Path(arguments.derived_data).resolve()
+        xcodebuild = ["bash", "scripts/simulator-xcodebuild", "-project", "Compass.xcodeproj",
+                      "-scheme", "Compass", "-derivedDataPath", str(derived_data),
+                      "CODE_SIGNING_ALLOWED=NO"]
+        # Build once before any simulator boots, so a boot never competes with the compile.
+        run(xcodebuild + ["-destination", "generic/platform=iOS Simulator", "build-for-testing"])
+        app = derived_data / "Build/Products/Debug-iphonesimulator/Compass.app"
+        for device in devices:
+            if passes is None:
+                device_passes = [CapturePass(device["name"], appearance, ())
+                                 for appearance in appearances]
+            else:
+                device_passes = [capture_pass for capture_pass in passes
+                                 if capture_pass.device == device["name"]]
+            prepare_device(device["udid"], app)
+            try:
+                for capture_pass in device_passes:
+                    entries, pass_failed = run_pass(xcodebuild, device, capture_pass, output,
+                                                    screen_filter)
+                    manifest += entries
+                    failed = failed or pass_failed
+            finally:
+                quietly(["xcrun", "simctl", "shutdown", device["udid"]])
+    finally:
+        (output / MANIFEST).write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+        for udid in created:
+            print("+ xcrun simctl delete " + udid, flush=True)
+            if subprocess.run(["xcrun", "simctl", "delete", udid], check=False).returncode != 0:
+                print("Couldn't delete the simulator created as " + udid, file=sys.stderr)
     print("Captured " + str(len(manifest)) + " screenshots in " + str(output))
     if failed or not manifest:
         raise SystemExit("The screenshot test failed, a screenshot is missing, or nothing was "
@@ -206,9 +451,14 @@ def main(argv=None):
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
     capture_parser = commands.add_parser("capture")
-    capture_parser.add_argument("--devices", default="largest,smallest",
-                                help="aliases (largest, smallest) or exact simulator names")
-    capture_parser.add_argument("--appearances", default="light,dark")
+    capture_parser.add_argument("--set", choices=sorted(SETS),
+                                help="capture a predefined set of devices, settings and screens "
+                                     "instead of every screen")
+    capture_parser.add_argument("--devices",
+                                help="aliases (largest, smallest) or exact simulator names, "
+                                     "default largest,smallest; a named iPhone that iOS 27 "
+                                     "supports but isn't set up is created and then deleted")
+    capture_parser.add_argument("--appearances", help="light, dark or both; default light,dark")
     capture_parser.add_argument("--filter", default="",
                                 help="comma-separated screen name prefixes; empty for all")
     capture_parser.add_argument("--output", default=".build/screenshots")

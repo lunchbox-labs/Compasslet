@@ -76,6 +76,39 @@ class ScreenshotWorkflowTests(unittest.TestCase):
             self.assertIn(revision, result.stdout)
             self.assertIn(revision, summary.read_text())
 
+    def capture_arguments(self, capture_set):
+        with tempfile.TemporaryDirectory() as directory:
+            bin_directory = Path(directory) / 'bin'
+            bin_directory.mkdir()
+            record = Path(directory) / 'arguments'
+            fake = bin_directory / 'python3'
+            fake.write_text('#!/bin/bash\nprintf "%s\\n" "$@" > "$RECORD"\n')
+            fake.chmod(0o755)
+            result = subprocess.run(
+                ['bash', '-e', '-c', shell_step('Capture the screens')],
+                env=dict(os.environ, PATH=str(bin_directory) + os.pathsep + os.environ['PATH'],
+                         RECORD=str(record), CAPTURE_SET=capture_set, DEVICES='largest',
+                         APPEARANCES='dark', SCREEN_FILTER='tour; exit 3',
+                         RUNNER_TEMP=directory),
+                capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            return record.read_text().splitlines()[1:]
+
+    def test_the_accessibility_set_leaves_devices_and_appearances_to_the_script(self):
+        arguments = self.capture_arguments('accessibility')
+        self.assertEqual(arguments[:3], ['capture', '--set', 'accessibility'])
+        self.assertNotIn('--devices', arguments)
+        self.assertNotIn('--appearances', arguments)
+        self.assertEqual(arguments[arguments.index('--filter') + 1], 'tour; exit 3')
+
+    def test_pull_requests_and_the_default_choice_capture_every_screen(self):
+        for capture_set in ('', 'every screen'):
+            with self.subTest(capture_set=capture_set):
+                arguments = self.capture_arguments(capture_set)
+                self.assertNotIn('--set', arguments)
+                self.assertEqual(arguments[arguments.index('--devices') + 1], 'largest')
+                self.assertEqual(arguments[arguments.index('--appearances') + 1], 'dark')
+
 
 if __name__ == '__main__':
     unittest.main()
