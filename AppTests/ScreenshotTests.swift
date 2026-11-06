@@ -19,7 +19,7 @@ final class ScreenshotTests: XCTestCase {
     /// Captured only when a capture set names it, as for a screen that needs simulator state the
     /// set prepares, such as location access that hasn't been decided.
     var onlyWhenNamed = false
-    /// Presents a sheet whose content loads after it appears, such as the system share sheet.
+    /// Presents the system share sheet, whose content loads after the sheet appears.
     var presentsSheet = false
     let content: @MainActor () async -> AnyView
   }
@@ -309,15 +309,19 @@ final class ScreenshotTests: XCTestCase {
       var top = window.rootViewController
       while let next = top?.presentedViewController { top = next }
       if let sheet = top, sheet !== window.rootViewController, !sheet.isBeingPresented,
-        sheet.view.window != nil, sheet.view.frame.height > 0
+        sheet.view.window != nil, sheet.view.frame.height > 0, holdsShareSheet(sheet)
       {
-        try await Task.sleep(for: .seconds(4))
+        try await Task.sleep(for: .seconds(5))
         return
       }
       try await Task.sleep(for: .milliseconds(200))
     }
-    XCTFail("The sheet wasn't presented within 10 seconds")
+    XCTFail("The share sheet wasn't presented within 10 seconds")
     throw SheetNotPresented()
+  }
+
+  private func holdsShareSheet(_ controller: UIViewController) -> Bool {
+    controller is UIActivityViewController || controller.children.contains(where: holdsShareSheet)
   }
 
   private func showLastRow(in window: UIWindow) async throws {
