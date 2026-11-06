@@ -69,21 +69,28 @@ struct WelcomeTourOverlay: View {
   }
 
   private func card(_ step: OnboardingState.Step) -> some View {
-    VStack(alignment: .leading, spacing: 16) {
-      ViewThatFits(in: .vertical) {
-        explanation(step)
-        ScrollingExplanation { explanation(step) }.id(step)
-      }
-      controls(step)
+    // When the step doesn't fit, the whole card scrolls with its controls, as an alert does at
+    // the largest text sizes, so the explanation gets the card's full height to show in.
+    ViewThatFits(in: .vertical) {
+      cardContent(step)
+      ScrollingCardContent { cardContent(step) }.id(step)
     }
-    .padding(20)
     .frame(maxWidth: 440)
     .background(Self.cardBackground, in: cardShape)
+    .clipShape(cardShape)
     .overlay {
       if colorScheme == .dark {
         cardShape.strokeBorder(Color(uiColor: .separator), lineWidth: 1)
       }
     }
+  }
+
+  private func cardContent(_ step: OnboardingState.Step) -> some View {
+    VStack(alignment: .leading, spacing: 16) {
+      explanation(step)
+      controls(step)
+    }
+    .padding(20)
   }
 
   private var cardShape: RoundedRectangle {
@@ -187,11 +194,11 @@ struct WelcomeTourOverlay: View {
   }
 }
 
-/// An explanation too long for the tour card, which fades at the bottom edge while more text is
-/// below it, so it doesn't read as if the sentence just stops.
-private struct ScrollingExplanation<Content: View>: View {
+/// A tour step too long for the card, which fades at the bottom edge while more of it is below,
+/// so it doesn't read as if the sentence just stops.
+private struct ScrollingCardContent<Content: View>: View {
   @ViewBuilder let content: Content
-  // Starts true: the card only scrolls when its text overflows, and it opens at the top.
+  // Starts true: the card only scrolls when its step overflows, and it opens at the top.
   @State private var moreBelow = true
 
   var body: some View {
