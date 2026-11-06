@@ -1,4 +1,6 @@
 """Exercise simulator selection and screenshot answers of the screenshot script."""
+import json
+import os
 import plistlib
 import re
 import runpy
@@ -171,6 +173,105 @@ class CreatableDeviceTests(unittest.TestCase):
         ])
         self.assertEqual(offered, {"iPhone 17": ("type.iPhone 17", RUNTIME_27_1),
                                    "iPhone 13 mini": ("type.iPhone 13 mini", RUNTIME_27)})
+
+
+class FakeSimulators:
+    """Answers the simctl and xcodebuild commands capture() runs, and records each one."""
+
+    def __init__(self, test_result=0, requests=()):
+        self.test_result, self.requests = test_result, requests
+        self.devices = [{"udid": "17-id", "name": "iPhone 17", "isAvailable": True,
+                         "deviceTypeIdentifier": "type.17"}]
+        self.commands = []
+
+    def __call__(self, arguments, **options):
+        self.commands.append(list(arguments))
+        stdout = ""
+        if arguments[:4] == ["xcrun", "simctl", "list", "--json"]:
+            stdout = json.dumps({
+                "devicetypes": {"devicetypes": []},
+                "devices": {"devices": {RUNTIME_27: self.devices}},
+                "runtimes": {"runtimes": [
+                    {"identifier": RUNTIME_27, "isAvailable": True, "supportedDeviceTypes": [
+                        {"name": "iPhone SE (3rd generation)", "identifier": "type.se"},
+                        {"name": "iPhone 17", "identifier": "type.17"}]}]},
+            }[arguments[4]])
+        elif arguments[:3] == ["xcrun", "simctl", "create"]:
+            self.devices.append({"udid": "se-id", "name": arguments[3], "isAvailable": True,
+                                 "deviceTypeIdentifier": arguments[4]})
+            stdout = "se-id\n"
+        elif arguments[:4] == ["xcrun", "simctl", "io", arguments[3]]:
+            Path(arguments[-1]).write_bytes(b"png")
+        elif arguments[-1] == "test-without-building":
+            directory = Path(options["env"]["TEST_RUNNER_SCREENSHOT_DIRECTORY"])
+            for name in self.requests:
+                (directory / (name + ".request")).touch()
+                for _ in range(200):
+                    if (directory / (name + ".done")).exists():
+                        break
+                    time.sleep(0.01)
+            return subprocess.CompletedProcess(arguments, self.test_result, "", "")
+        return subprocess.CompletedProcess(arguments, 0, stdout, "")
+
+    def index(self, *fragment):
+        matches = [index for index, command in enumerate(self.commands)
+                   if all(part in command for part in fragment)]
+        return matches
+
+
+class CaptureRunTests(unittest.TestCase):
+    PASS = MODULE["CapturePass"]("iPhone SE (3rd generation)", "dark", ("settings",),
+                                 text_variants=("ax3", "ax3-bold"),
+                                 system_settings=("increase-contrast",), tag="increase-contrast",
+                                 undecided_location=True)
+
+    def capture(self, simulators):
+        output = tempfile.TemporaryDirectory()
+        self.addCleanup(output.cleanup)
+        globals_ = MODULE["capture"].__globals__
+        with patch.dict(globals_, {"SETS": {"test": (self.PASS,)}}), \
+                patch("subprocess.run", side_effect=simulators):
+            try:
+                MODULE["main"](["capture", "--set", "test", "--output", output.name])
+                error = None
+            except SystemExit as raised:
+                error = raised
+        manifest = json.loads((Path(output.name) / "screenshots.json").read_text())
+        return error, manifest
+
+    def test_each_image_records_its_own_text_variant_and_settings(self):
+        simulators = FakeSimulators(requests=("settings-ax3", "settings-ax3-bold"))
+        error, manifest = self.capture(simulators)
+        self.assertIsNone(error)
+        self.assertEqual(
+            [(entry["file"], entry["screen"], entry["text_variant"]) for entry in manifest],
+            [("iphone-se-3rd-generation-dark-increase-contrast-settings-ax3.png", "settings",
+              "ax3"),
+             ("iphone-se-3rd-generation-dark-increase-contrast-settings-ax3-bold.png",
+              "settings", "ax3-bold")])
+        self.assertTrue(all(entry["system_settings"] == ["increase-contrast"]
+                            and entry["runtime"] == RUNTIME_27 for entry in manifest))
+
+    def test_a_failed_test_run_still_restores_the_simulator_and_deletes_what_it_created(self):
+        simulators = FakeSimulators(test_result=65)
+        error, manifest = self.capture(simulators)
+        self.assertIsNotNone(error)
+        self.assertEqual(manifest, [])
+        test_run = simulators.index("test-without-building")[0]
+        self.assertGreater(simulators.index("increase_contrast", "disabled")[-1], test_run)
+        self.assertGreater(simulators.index("privacy", "grant")[-1], test_run)
+        self.assertLess(simulators.index("privacy", "reset")[0], test_run)
+        self.assertEqual(simulators.commands[-1], ["xcrun", "simctl", "delete", "se-id"])
+
+    def test_no_simulator_is_created_when_any_requested_name_cant_be(self):
+        simulators = FakeSimulators()
+        with tempfile.TemporaryDirectory() as output, \
+                patch("subprocess.run", side_effect=simulators):
+            with self.assertRaises(SystemExit) as raised:
+                MODULE["main"](["capture", "--devices",
+                                "iPhone SE (3rd generation),iPhone Typo", "--output", output])
+        self.assertIn("iPhone Typo", str(raised.exception))
+        self.assertEqual(simulators.index("create"), [])
 
 
 if __name__ == "__main__":

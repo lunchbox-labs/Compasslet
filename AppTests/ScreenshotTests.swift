@@ -16,7 +16,7 @@ final class ScreenshotTests: XCTestCase {
     let name: String
     var increasedContrast = false
     var showsLastRow = false
-    /// Captured only when a capture set names it, because it needs simulator state that the
+    /// Captured only when a capture set names it, as for a screen that needs simulator state the
     /// set prepares, such as location access that hasn't been decided.
     var onlyWhenNamed = false
     let content: @MainActor () async -> AnyView
@@ -141,7 +141,7 @@ final class ScreenshotTests: XCTestCase {
     Screen(name: "settings-diagnostics-export", onlyWhenNamed: true) {
       AnyView(
         ScreenshotTests.settings().sheet(isPresented: .constant(true)) {
-          DiagnosticsShareSheet(url: ScreenshotTests.sampleDiagnosticsExport())
+          DiagnosticsShareSheet(url: ScreenshotTests.sampleDiagnosticsExport)
         })
     },
     Screen(name: "settings-appearance") {
@@ -222,9 +222,7 @@ final class ScreenshotTests: XCTestCase {
         try XCTUnwrap(TextVariant(named: name), "Unknown text variant \(name)")
       }
     }
-    if let expected = environment["SCREENSHOT_SYSTEM_SETTINGS"] {
-      try checkSystemSettings(expectedOn: Self.list(expected))
-    }
+    try checkSystemSettings(expectedOn: Self.list(environment["SCREENSHOT_SYSTEM_SETTINGS"]))
   }
 
   private static func list(_ value: String?) -> [String] {
@@ -269,13 +267,13 @@ final class ScreenshotTests: XCTestCase {
       nameFilter.isEmpty || nameFilter.contains { screen.name.hasPrefix($0) }
     }
     XCTAssertFalse(selected.isEmpty, "No screen name starts with \(nameFilter)")
-    if selected.contains(where: { $0.name == "compass-location-prompt" }) {
-      XCTAssertEqual(
-        CLLocationManager().authorizationStatus, .notDetermined,
-        "The location prompt needs location access that hasn't been decided")
+    if selected.contains(where: { $0.name == "settings-diagnostics-export" }) {
+      try Self.writeSampleDiagnosticsExport()
     }
     for variant in textVariants {
       for screen in selected {
+        let asksForLocation = screen.name == "compass-location-prompt"
+        if asksForLocation { try requireUndecidedLocation() }
         let window = try makeWindow(
           await screen.content(), increasedContrast: screen.increasedContrast, text: variant)
         // Long enough for the first readings, navigation titles and any appearance animation.
@@ -283,8 +281,19 @@ final class ScreenshotTests: XCTestCase {
         if screen.showsLastRow { try await showLastRow(in: window) }
         let name = variant.name.isEmpty ? screen.name : screen.name + "-" + variant.name
         try await requestScreenshot(name, in: directory)
+        // Still undecided means the prompt hadn't been answered or dismissed when captured.
+        if asksForLocation { try requireUndecidedLocation() }
         window.isHidden = true
       }
+    }
+  }
+
+  private func requireUndecidedLocation() throws {
+    struct LocationAlreadyDecided: Error {}
+    let status = CLLocationManager().authorizationStatus
+    if status != .notDetermined {
+      XCTFail("The location prompt needs undecided location access, not \(status.rawValue)")
+      throw LocationAlreadyDecided()
     }
   }
 
@@ -321,12 +330,12 @@ final class ScreenshotTests: XCTestCase {
       UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
     let window = UIWindow(windowScene: scene)
     window.overrideUserInterfaceStyle = interfaceStyle
-    // Without an override the window follows the simulator's Increase Contrast setting.
+    // Without an override the window follows the simulator's Increase Contrast setting, which
+    // the run has checked. Text size and Bold Text are always set, so a simulator left with
+    // either on can't change an image.
     if increasedContrast { window.traitOverrides.accessibilityContrast = .high }
-    if let contentSize = text.contentSize {
-      window.traitOverrides.preferredContentSizeCategory = contentSize
-    }
-    if text.bold { window.traitOverrides.legibilityWeight = .bold }
+    window.traitOverrides.preferredContentSizeCategory = text.contentSize ?? .large
+    window.traitOverrides.legibilityWeight = text.bold ? .bold : .regular
     window.windowLevel = .alert + 1
     // A window outside the app's SwiftUI scene reports itself inactive, which pauses the
     // compass, so the screens render as the active app does, with the app root's tint.
@@ -422,13 +431,14 @@ final class ScreenshotTests: XCTestCase {
   }
 
   /// A small file with the real export's name, since the share sheet previews its name and type.
-  private static func sampleDiagnosticsExport() -> URL {
-    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
-      "screenshot-diagnostics", isDirectory: true)
-    let url = directory.appendingPathComponent("compass-diagnostics.json")
-    try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    try? Data("{\"entries\":[]}\n".utf8).write(to: url, options: .atomic)
-    return url
+  private static let sampleDiagnosticsExport = FileManager.default.temporaryDirectory
+    .appendingPathComponent("screenshot-diagnostics", isDirectory: true)
+    .appendingPathComponent("compass-diagnostics.json")
+
+  private static func writeSampleDiagnosticsExport() throws {
+    try FileManager.default.createDirectory(
+      at: sampleDiagnosticsExport.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try Data("{\"entries\":[]}\n".utf8).write(to: sampleDiagnosticsExport, options: .atomic)
   }
 
   private static func editor(_ option: AppearanceOption) -> AnyView {

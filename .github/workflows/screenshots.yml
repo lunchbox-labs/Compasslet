@@ -41,7 +41,7 @@ jobs:
        (github.event.action != 'labeled' || github.event.label.name == 'screenshots'))
     runs-on: xcode-27
     # A full run takes about 30 minutes on hosted runners, mostly simulator boots and captures.
-    timeout-minutes: 90
+    timeout-minutes: 75
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
     steps:
