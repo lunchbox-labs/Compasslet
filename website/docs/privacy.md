@@ -16,8 +16,8 @@ drive, location gives your travel direction, including while another app is visi
 drive starts when you open Compasslet on CarPlay, or when you start the Live Activity in
 the Compasslet app, from Shortcuts or with Siri. It ends when you tap or run End Live
 Activity, a minute after CarPlay disconnects, a minute after it starts from Shortcuts or
-Siri if you don't open Compasslet on CarPlay, when location access or Precise Location is
-turned off, or after eight hours. Dismissing the Live Activity ends the drive unless
+Siri if CarPlay isn't connected, when location access or Precise Location is turned off,
+or after eight hours. Dismissing the Live Activity ends the drive unless
 Compasslet is connected on CarPlay, where travel direction continues until CarPlay
 disconnects or you end it.
 

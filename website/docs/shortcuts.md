@@ -44,7 +44,8 @@ you drive with.
 ## While You Drive
 
 - The Live Activity stays on while CarPlay is connected, whether or not you open Compasslet
-  on CarPlay.
+  on CarPlay. Dismissing it ends it unless Compasslet is open on CarPlay.
+- If your iPhone asks you to unlock it, unlock it when you're parked.
 - End Compass is optional. Without it, the Live Activity ends a minute after CarPlay
   disconnects and stays on through brief disconnects.
 
