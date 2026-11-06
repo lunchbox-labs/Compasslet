@@ -263,6 +263,13 @@ class CaptureRunTests(unittest.TestCase):
         self.assertLess(simulators.index("privacy", "reset")[0], test_run)
         self.assertEqual(simulators.commands[-1], ["xcrun", "simctl", "delete", "se-id"])
 
+    def test_images_from_a_failed_pass_are_marked_in_the_manifest(self):
+        simulators = FakeSimulators(test_result=65, requests=("settings-ax3",))
+        error, manifest = self.capture(simulators)
+        self.assertIsNotNone(error)
+        self.assertEqual([(entry["screen"], entry.get("pass_failed")) for entry in manifest],
+                         [("settings", True)])
+
     def test_no_simulator_is_created_when_any_requested_name_cant_be(self):
         simulators = FakeSimulators()
         with tempfile.TemporaryDirectory() as output, \

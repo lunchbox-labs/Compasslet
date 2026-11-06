@@ -363,8 +363,11 @@ def run_pass(xcodebuild, device, capture_pass, output, screen_filter):
             for name in responder.failed:
                 print("No screenshot was saved for " + name, file=sys.stderr)
             for entry in responder.captured:
-                screen, variant = split_text_variant(entry["screen"], capture_pass.text_variants)
-                captured.append(dict(entry, screen=screen, text_variant=variant))
+                if capture_pass.text_variants:
+                    screen, variant = split_text_variant(entry["screen"],
+                                                         capture_pass.text_variants)
+                    entry = dict(entry, screen=screen, text_variant=variant)
+                captured.append(entry)
     finally:
         for setting in capture_pass.system_settings:
             set_system_setting(udid, setting, False)
@@ -376,6 +379,9 @@ def run_pass(xcodebuild, device, capture_pass, output, screen_filter):
                "system_settings": list(capture_pass.system_settings)}
     if capture_pass.tag:
         details["tag"] = capture_pass.tag
+    # A failed pass may still have saved images, which can't be trusted to show its settings.
+    if failed:
+        details["pass_failed"] = True
     return [dict(entry, **details) for entry in captured], failed
 
 
@@ -429,9 +435,11 @@ def capture(arguments):
             finally:
                 quietly(["xcrun", "simctl", "shutdown", device["udid"]])
     finally:
-        for udid in created:
-            run(["xcrun", "simctl", "delete", udid])
         (output / MANIFEST).write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+        for udid in created:
+            print("+ xcrun simctl delete " + udid, flush=True)
+            if subprocess.run(["xcrun", "simctl", "delete", udid], check=False).returncode != 0:
+                print("Couldn't delete the simulator created as " + udid, file=sys.stderr)
     print("Captured " + str(len(manifest)) + " screenshots in " + str(output))
     if failed or not manifest:
         raise SystemExit("The screenshot test failed, a screenshot is missing, or nothing was "
