@@ -19,6 +19,8 @@ final class ScreenshotTests: XCTestCase {
     /// Captured only when a capture set names it, as for a screen that needs simulator state the
     /// set prepares, such as location access that hasn't been decided.
     var onlyWhenNamed = false
+    /// Presents a sheet whose content loads after it appears, such as the system share sheet.
+    var presentsSheet = false
     let content: @MainActor () async -> AnyView
   }
 
@@ -138,7 +140,7 @@ final class ScreenshotTests: XCTestCase {
     Screen(name: "settings-bottom") {
       AnyView(ScreenshotTests.settings().defaultScrollAnchor(.bottom))
     },
-    Screen(name: "settings-diagnostics-export", onlyWhenNamed: true) {
+    Screen(name: "settings-diagnostics-export", onlyWhenNamed: true, presentsSheet: true) {
       AnyView(
         ScreenshotTests.settings().sheet(isPresented: .constant(true)) {
           DiagnosticsShareSheet(url: ScreenshotTests.sampleDiagnosticsExport)
@@ -279,6 +281,7 @@ final class ScreenshotTests: XCTestCase {
         // Long enough for the first readings, navigation titles and any appearance animation.
         try await Task.sleep(for: .seconds(2))
         if screen.showsLastRow { try await showLastRow(in: window) }
+        if screen.presentsSheet { try await waitForSheet(in: window) }
         let name = variant.name.isEmpty ? screen.name : screen.name + "-" + variant.name
         try await requestScreenshot(name, in: directory)
         // Still undecided means the prompt hadn't been answered or dismissed when captured.
@@ -295,6 +298,26 @@ final class ScreenshotTests: XCTestCase {
       XCTFail("The location prompt needs undecided location access, not \(status.rawValue)")
       throw LocationAlreadyDecided()
     }
+  }
+
+  /// Waits for a sheet to finish presenting, then for its content: the share sheet draws its
+  /// activities out of process, a few seconds after the sheet itself is up.
+  private func waitForSheet(in window: UIWindow) async throws {
+    struct SheetNotPresented: Error {}
+    let deadline = ContinuousClock.now + .seconds(10)
+    while ContinuousClock.now < deadline {
+      var top = window.rootViewController
+      while let next = top?.presentedViewController { top = next }
+      if let sheet = top, sheet !== window.rootViewController, !sheet.isBeingPresented,
+        sheet.view.window != nil, sheet.view.frame.height > 0
+      {
+        try await Task.sleep(for: .seconds(4))
+        return
+      }
+      try await Task.sleep(for: .milliseconds(200))
+    }
+    XCTFail("The sheet wasn't presented within 10 seconds")
+    throw SheetNotPresented()
   }
 
   private func showLastRow(in window: UIWindow) async throws {
