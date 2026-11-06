@@ -1,9 +1,8 @@
 # Live Activity Shortcuts
 
 Compasslet starts its Live Activity when you open it on CarPlay. If the Live Activity
-doesn't start on your drives, these two shortcuts can start it when CarPlay connects and
-end it when CarPlay disconnects. After it starts, open Compasslet on CarPlay within a
-minute to keep it.
+doesn't start on your drives, these two shortcuts start it when CarPlay connects and end it
+when CarPlay disconnects. You don't need to unlock your iPhone or open Compasslet.
 
 Install Compasslet before you add the shortcuts.
 
@@ -34,19 +33,18 @@ off, so turn them on:
 1. In the Shortcuts app, tap **Automation**. If you don't see it, tap the Back button first.
 2. Start Compass and End Compass are in the list, turned off. If you don't see them, tap the
    Filter button and choose **Turned Off**. Tap **Start Compass** and turn its automation on.
-3. So it runs without asking first, go back to your shortcuts, tap **Start Compass**, tap
-   **Edit**, tap the Info button, tap **Privacy**, then turn on **Allow Running When Locked**.
+3. So it runs while your iPhone is locked, go back to your shortcuts, tap **Start Compass**,
+   tap **Edit**, tap the Info button, tap **Privacy**, then turn on **Allow Running When
+   Locked**.
 4. Repeat these steps for **End Compass**.
 
 Automations stay on the iPhone where you turn them on, so repeat these steps on each iPhone
 you drive with.
 
-## Before You Drive
+## While You Drive
 
-- Start Compass opens Compasslet on iPhone, so unlock your iPhone while parked, before you
-  connect to CarPlay.
-- Open Compasslet on CarPlay within a minute to keep the Live Activity. Otherwise it ends
-  after a minute.
+- The Live Activity stays on while CarPlay is connected, whether or not you open Compasslet
+  on CarPlay.
 - End Compass is optional. Without it, the Live Activity ends a minute after CarPlay
   disconnects and stays on through brief disconnects.
 

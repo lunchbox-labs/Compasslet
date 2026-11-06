@@ -28,20 +28,19 @@ you are travelling, so it updates once the car is moving.
 
 **The Live Activity doesn't appear or doesn't end.** It starts when you open Compasslet on
 CarPlay and ends a minute after CarPlay disconnects, and iOS decides when to show it.
-Make sure Live Activities are allowed for Compasslet in the Settings app. After you open
-Compasslet on CarPlay, and until CarPlay disconnects, you can also start or end it
-yourself with the round play or stop button (Start Live Activity or End Live Activity) at
-the bottom right of the compass screen on iPhone. The same actions are in the Shortcuts app,
-and you can ask Siri to "Start Compasslet Live Activity". Starting it this way opens
-Compasslet on iPhone, so unlock the phone first, while parked. A Live Activity started from
-Shortcuts or Siri ends after a minute unless you open Compasslet on CarPlay.
+Make sure Live Activities are allowed for Compasslet in the Settings app. While CarPlay is
+connected, you can also start or end it yourself with the round play or stop button (Start
+Live Activity or End Live Activity) at the bottom right of the compass screen on iPhone.
+The same actions are in the Shortcuts app, and you can ask Siri to "Start Compasslet Live
+Activity". Starting it from Shortcuts or Siri doesn't open Compasslet, and it ends after
+a minute if CarPlay isn't connected.
 
 ## Trouble with CarPlay?
 
 If the Live Activity doesn't start when you drive with CarPlay, add the
 [Live Activity Shortcuts](shortcuts.md). They start the Live Activity when CarPlay
-connects and end it when CarPlay disconnects. After it starts, open Compasslet on CarPlay
-within a minute to keep it.
+connects and end it when CarPlay disconnects, without unlocking your iPhone or opening
+Compasslet.
 
 ## Diagnostics
 
