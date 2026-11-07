@@ -53,7 +53,8 @@ These system-hosted surfaces have constraints beyond an ordinary iPhone screen.
 
 - `Shared/CompassActivityCard.swift` keeps the Lock Screen and small mirrored card text-only.
   The single-line reading shortens before scaling, with “Last Updated” and a sample time when
-  available. Keep the Lock Screen card within its 160pt height limit.
+  available. The elapsed timer never shrinks, so that line shortens its label to “Updated”
+  instead. Keep the Lock Screen card within its 160pt height limit.
 - Live Activity backgrounds belong to the system. Keep semantic primary and secondary text
   rather than copying web neutrals into the extension. Its compact readings use the system's
   text styles for legibility in the available space.

@@ -259,11 +259,20 @@ struct ActivityTimestamp: View {
     }
   }
 
+  /// The system advances the timer without a new layout, so the line is measured with the
+  /// widest the timer can grow to, and a label chosen for "0:12" still fits at "10:00:00".
   private func elapsed(label: LocalizedStringKey) -> some View {
-    HStack(spacing: 4) {
-      Text(label)
-      Text(timerInterval: sample...Date.distantFuture, countsDown: false)
-        .monospacedDigit().fixedSize()
+    VStack(spacing: 0) {
+      HStack(spacing: 4) {
+        Text(label)
+        Text(timerInterval: sample...Date.distantFuture, countsDown: false)
+          .monospacedDigit().fixedSize()
+      }
+      HStack(spacing: 4) {
+        Text(label)
+        Text(verbatim: "00:00:00").monospacedDigit().fixedSize()
+      }
+      .hidden().frame(height: 0)
     }
   }
 }
