@@ -135,8 +135,8 @@ struct CompassActivityCard: View {
   }
 
   /// How far the Last Updated line may shrink. At the largest text size with Bold Text, the
-  /// shortest line with a 12-hour time needs about 70% to fit the 270-point card a 375-point
-  /// iPhone shows with Display Zoom, and 70% is still more than twice its default size.
+  /// shortest line with a 12-hour time needs about 80% to fit the 270-point card a 375-point
+  /// iPhone shows with Display Zoom, so 70% leaves margin and is still twice its default size.
   static let captionScale: CGFloat = 0.7
 
   private var secondaryLine: some View {
