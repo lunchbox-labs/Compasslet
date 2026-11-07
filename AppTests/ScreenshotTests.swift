@@ -368,8 +368,10 @@ final class ScreenshotTests: XCTestCase {
   /// is not, so every capture of a screen agrees.
   private func waitForTip(in window: UIWindow, shown: Bool) async throws {
     struct TipNotSettled: Error {}
+    // A popover tip is a popover presentation from the hosting controller.
     func presentedTip() -> Bool {
-      guard let root = window.rootViewController, let presented = root.presentedViewController
+      guard let root = window.rootViewController, let presented = root.presentedViewController,
+        presented.popoverPresentationController != nil
       else { return false }
       return !presented.isBeingPresented && !presented.isBeingDismissed
         && presented.view.window != nil
@@ -383,7 +385,10 @@ final class ScreenshotTests: XCTestCase {
       }
       try await Task.sleep(for: .milliseconds(200))
     }
-    XCTFail(shown ? "The tip wasn't shown within 10 seconds" : "The tip was still shown")
+    let presented = window.rootViewController?.presentedViewController
+    XCTFail(
+      (shown ? "The tip wasn't shown within 10 seconds" : "The tip was still shown")
+        + "; presented: \(presented.map { String(describing: type(of: $0)) } ?? "nothing")")
     throw TipNotSettled()
   }
 
@@ -490,9 +495,11 @@ final class ScreenshotTests: XCTestCase {
     if !showsTip {
       onboarding.liveActivityTip.invalidate(reason: .actionPerformed)
       // Invalidation reaches TipKit's datastore asynchronously; until it does, the tip can
-      // still be shown.
+      // still be shown. A new tip also reads as not shown while it is pending, so wait for the
+      // invalidation itself.
       let deadline = ContinuousClock.now + .seconds(5)
-      while onboarding.liveActivityTip.shouldDisplay, ContinuousClock.now < deadline {
+      while ContinuousClock.now < deadline {
+        if case .invalidated = onboarding.liveActivityTip.status { break }
         try? await Task.sleep(for: .milliseconds(100))
       }
     }
@@ -674,8 +681,16 @@ private struct LiveActivityScreen: View {
     appearance.lockScreenTimestamp = mode
     appearance.carPlayActivityTimestamp = mode
     return .init(
-      bearing: status == .usable ? 47 : nil, status: status,
-      sampleTime: .now.addingTimeInterval(-12), expiry: nil, appearance: appearance)
+      bearing: status == .usable ? 47 : nil, status: status, sampleTime: sampleTime,
+      expiry: nil, appearance: appearance)
+  }
+
+  /// The widest text each mode shows, whatever the time of the capture: a time with a two-digit
+  /// hour, or a timer past an hour.
+  private var sampleTime: Date {
+    if mode == .elapsed { return .now.addingTimeInterval(-(3_600 + 2 * 60 + 3)) }
+    return Calendar.current.date(bySettingHour: 12, minute: 58, second: 0, of: .now)
+      ?? .now.addingTimeInterval(-12)
   }
 
   var body: some View {

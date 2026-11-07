@@ -43,6 +43,9 @@ are the shared iOS mapping, including colours that still need to be added by imp
 - Keep the compass's reduced-motion choice: steady text or a dial with reduced movement.
   Values crossing north must not animate the long way round. New custom transitions follow
   the foundation's timing and no-bounce rule, with a short fade or no movement under Reduce Motion.
+- The Live Activity button's tip is a local exception to supporting text: it sits on an opaque
+  grouped background with its message in `label`, because the system popover's material let the
+  large heading show through, and `secondaryLabel` is under 4.5:1 on the light background.
 
 ## Live Activity and CarPlay
 
@@ -63,6 +66,9 @@ These system-hosted surfaces have constraints beyond an ordinary iPhone screen.
 - `App/CarPlay/CarPlayCompassTemplate.swift` leaves template layout, text and backgrounds to
   CarPlay. Resolve custom dial colours and dimensions using the car's traits, not the phone's.
   Keep travel direction distinct from the phone's magnetic heading and from a live reading.
+- CarPlay's small card has a fixed size. When the reading and Last Updated can't both fit at
+  large text sizes, it shows the reading alone, and a status shrinks to fit rather than grow
+  past the card.
 
 ## Docs site
 

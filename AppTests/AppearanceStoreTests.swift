@@ -203,6 +203,47 @@ struct AppearanceStoreTests {
     }
   }
 
+  @Test func carPlayCardStaysWithinItsSizeAtTheLargestTextSize() {
+    let sample = Date(timeIntervalSince1970: 100)
+    let host = UIHostingController(rootView: AnyView(EmptyView()))
+    for weight in [LegibilityWeight.regular, .bold] {
+      for mode in [ActivityTimestampMode.time, .elapsed, .hidden] {
+        for status in [
+          CompassActivityAttributes.Status.usable, .slow, .waiting, .unreliable, .unavailable,
+        ] {
+          var appearance = AppearanceValues()
+          appearance.carPlayActivityTimestamp = mode
+          let state = CompassActivityAttributes.ContentState(
+            bearing: 359, status: status, sampleTime: sample, expiry: nil,
+            appearance: appearance)
+          host.rootView = AnyView(
+            CompassActivityCard(state: state, isSmall: true)
+              .environment(\.dynamicTypeSize, .accessibility5)
+              .environment(\.legibilityWeight, weight))
+          // One of CarPlay Dashboard's Live Activity sizes. The card reports its full height
+          // when its content is taller, so an overflow shows here.
+          let size = host.sizeThatFits(in: CGSize(width: 240, height: 78))
+          #expect(size.height <= 78, "\(weight) \(mode) \(status): \(size.height)")
+        }
+      }
+    }
+  }
+
+  @Test func lastUpdatedTimeFitsTheNarrowestLockScreenCard() throws {
+    // A two-digit hour is the widest 12-hour time; digits are monospaced.
+    let sample = try #require(
+      Calendar.current.date(bySettingHour: 12, minute: 58, second: 0, of: .now))
+    let host = UIHostingController(
+      rootView: ActivityTimestamp(sample: sample, mode: .time)
+        .font(.caption2).monospacedDigit()
+        .environment(\.dynamicTypeSize, .accessibility5)
+        .environment(\.legibilityWeight, .bold))
+    let unbounded = CGFloat.greatestFiniteMagnitude
+    let width = host.sizeThatFits(in: CGSize(width: unbounded, height: unbounded)).width
+    // A 375-point screen, less 22 points for the banner and 28 for the card's side insets.
+    #expect(width * CompassActivityCard.captionScale <= 325, "\(width)")
+  }
+
   @Test func phonePreviewRendersDialChoicesAndReducedMotionFallback() throws {
     func render(_ value: AppearanceValues, reduceMotion: Bool = false) throws -> UIImage {
       let renderer = ImageRenderer(

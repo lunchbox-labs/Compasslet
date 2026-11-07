@@ -69,7 +69,13 @@ struct CompassActivityCard: View {
             .lineLimit(1).minimumScaleFactor(Self.captionScale)
         }
       }
-      readout.fixedSize(horizontal: false, vertical: true)
+      // CarPlay's card has a fixed height, so a status there shrinks to fit it rather than
+      // growing past it.
+      if isSmall {
+        readout
+      } else {
+        readout.fixedSize(horizontal: false, vertical: true)
+      }
     }
   }
 
@@ -131,7 +137,7 @@ struct CompassActivityCard: View {
   /// How far the Last Updated line may shrink. At the largest text size with Bold Text, a
   /// 12-hour time needs about 80% to fit the Lock Screen card on a 375-point-wide iPhone, and
   /// even 70% is more than twice its default size.
-  private static let captionScale: CGFloat = 0.7
+  static let captionScale: CGFloat = 0.7
 
   private var secondaryLine: some View {
     Group {
@@ -244,11 +250,20 @@ struct ActivityTimestamp: View {
     case .time:
       Text("Last Updated \(sample, style: .time)")
     case .elapsed:
-      HStack(spacing: 4) {
-        Text("Last Updated")
-        Text(timerInterval: sample...Date.distantFuture, countsDown: false)
-          .monospacedDigit().fixedSize()
+      // The timer keeps its full size, so when the line is too wide the label shortens first
+      // rather than shrinking beside it.
+      ViewThatFits(in: .horizontal) {
+        elapsed(label: "Last Updated")
+        elapsed(label: "Updated")
       }
+    }
+  }
+
+  private func elapsed(label: LocalizedStringKey) -> some View {
+    HStack(spacing: 4) {
+      Text(label)
+      Text(timerInterval: sample...Date.distantFuture, countsDown: false)
+        .monospacedDigit().fixedSize()
     }
   }
 }
