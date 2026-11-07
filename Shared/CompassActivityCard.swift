@@ -134,9 +134,9 @@ struct CompassActivityCard: View {
       .multilineTextAlignment(.center)
   }
 
-  /// How far the Last Updated line may shrink. At the largest text size with Bold Text, a
-  /// 12-hour time needs about 80% to fit the Lock Screen card on a 375-point-wide iPhone, and
-  /// even 70% is more than twice its default size.
+  /// How far the Last Updated line may shrink. At the largest text size with Bold Text, the
+  /// shortest line with a 12-hour time needs about 70% to fit the 270-point card a 375-point
+  /// iPhone shows with Display Zoom, and 70% is still more than twice its default size.
   static let captionScale: CGFloat = 0.7
 
   private var secondaryLine: some View {
@@ -243,34 +243,46 @@ struct ActivityTimestamp: View {
   let sample: Date
   let mode: ActivityTimestampMode
 
+  /// The space between the label and the time.
+  static let spacing: CGFloat = 4
+  /// The widest the elapsed timer gets. An ended Live Activity can stay on the Lock Screen for
+  /// hours, and the digits are monospaced.
+  static let widestTimer = "00:00:00"
+
   var body: some View {
     switch mode {
     case .hidden:
       EmptyView()
     case .time:
-      Text("Last Updated \(sample, style: .time)")
+      // With Display Zoom a 375-point iPhone's card is only 270 points wide, too narrow for the
+      // full line at the largest text sizes even at its smallest scale.
+      ViewThatFits(in: .horizontal) {
+        Text("Last Updated \(sample, style: .time)")
+        Text("Updated \(sample, style: .time)")
+      }
     case .elapsed:
-      // The timer keeps its full size, so when the line is too wide the label shortens first
-      // rather than shrinking beside it.
+      // The timer keeps its full size, so when the line is too wide the label shortens and
+      // then goes, rather than shrinking beside it.
       ViewThatFits(in: .horizontal) {
         elapsed(label: "Last Updated")
         elapsed(label: "Updated")
+        elapsed(label: nil)
       }
     }
   }
 
   /// The system advances the timer without a new layout, so the line is measured with the
   /// widest the timer can grow to, and a label chosen for "0:12" still fits at "10:00:00".
-  private func elapsed(label: LocalizedStringKey) -> some View {
+  private func elapsed(label: LocalizedStringKey?) -> some View {
     VStack(spacing: 0) {
-      HStack(spacing: 4) {
-        Text(label)
+      HStack(spacing: Self.spacing) {
+        if let label { Text(label) }
         Text(timerInterval: sample...Date.distantFuture, countsDown: false)
           .monospacedDigit().fixedSize()
       }
-      HStack(spacing: 4) {
-        Text(label)
-        Text(verbatim: "00:00:00").monospacedDigit().fixedSize()
+      HStack(spacing: Self.spacing) {
+        if let label { Text(label) }
+        Text(verbatim: Self.widestTimer).monospacedDigit().fixedSize()
       }
       .hidden().frame(height: 0)
     }

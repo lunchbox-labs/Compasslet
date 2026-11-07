@@ -229,36 +229,33 @@ struct AppearanceStoreTests {
     }
   }
 
-  @Test func lastUpdatedTimeFitsTheNarrowestLockScreenCard() throws {
-    // A two-digit hour is the widest 12-hour time; digits are monospaced. US English uses one.
-    let sample = try #require(
-      Calendar.current.date(bySettingHour: 12, minute: 58, second: 0, of: .now))
+  /// The narrowest Lock Screen card's content: a 375-point iPhone with Display Zoom is 320
+  /// points wide, less 22 points for the banner and 28 for the card's side insets.
+  private static let narrowestLine: CGFloat = 270
+
+  private func idealWidth(_ view: some View) -> CGFloat {
     let host = UIHostingController(
-      rootView: ActivityTimestamp(sample: sample, mode: .time)
+      rootView: view
         .font(.caption2).monospacedDigit()
         .environment(\.locale, Locale(identifier: "en_US"))
         .environment(\.dynamicTypeSize, .accessibility5)
         .environment(\.legibilityWeight, .bold))
     let unbounded = CGFloat.greatestFiniteMagnitude
-    let width = host.sizeThatFits(in: CGSize(width: unbounded, height: unbounded)).width
-    // A 375-point screen, less 22 points for the banner and 28 for the card's side insets.
-    #expect(width * CompassActivityCard.captionScale <= 325, "\(width)")
+    return host.sizeThatFits(in: CGSize(width: unbounded, height: unbounded)).width
   }
 
-  @Test func shortElapsedLabelFitsTheNarrowestLockScreenCard() {
-    // The timer doesn't shrink, so the short label with the widest timer must fit as it is.
-    let host = UIHostingController(
-      rootView: HStack(spacing: 4) {
-        Text("Updated")
-        Text(verbatim: "00:00:00").monospacedDigit()
-      }
-      .font(.caption2)
-      .environment(\.locale, Locale(identifier: "en_US"))
-      .environment(\.dynamicTypeSize, .accessibility5)
-      .environment(\.legibilityWeight, .bold))
-    let unbounded = CGFloat.greatestFiniteMagnitude
-    let width = host.sizeThatFits(in: CGSize(width: unbounded, height: unbounded)).width
-    #expect(width <= 325, "\(width)")
+  @Test func shortLastUpdatedTimeFitsTheNarrowestLockScreenCard() throws {
+    // A two-digit hour is the widest 12-hour time, which US English uses.
+    let sample = try #require(
+      Calendar.current.date(bySettingHour: 12, minute: 58, second: 0, of: .now))
+    let width = idealWidth(Text("Updated \(sample, style: .time)"))
+    #expect(width * CompassActivityCard.captionScale <= Self.narrowestLine, "\(width)")
+  }
+
+  @Test func widestElapsedTimerFitsTheNarrowestLockScreenCard() {
+    // The timer never shrinks, and the line drops its label before it would truncate.
+    let width = idealWidth(Text(verbatim: ActivityTimestamp.widestTimer))
+    #expect(width <= Self.narrowestLine, "\(width)")
   }
 
   @Test func phonePreviewRendersDialChoicesAndReducedMotionFallback() throws {
