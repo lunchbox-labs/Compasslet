@@ -41,6 +41,25 @@ off, so turn them on:
 Automations stay on the iPhone where you turn them on, so repeat these steps on each iPhone
 you drive with.
 
+## Make Your Own
+
+If you'd rather make the automations yourself, create two in the Shortcuts app instead of
+downloading them:
+
+- **Start:** when CarPlay **Is Connected**, run Compasslet's **Start Live Activity**.
+- **End:** when CarPlay **Is Disconnected**, run Compasslet's **End Live Activity**.
+
+Match the settings in these samples. Keep **Open When Run** on for Start Live Activity, so
+Compasslet can ask you to unlock your iPhone if it needs to.
+
+<div class="compasslet-samples" markdown>
+
+![Sample Start automation. When CarPlay Is Connected, with Automation on and Notify off, runs Compasslet's Start Live Activity, with Show When Run off and Open When Run on.](images/start-compass-automation.png){ width="402" height="394" loading="lazy" }
+
+![Sample End automation. When CarPlay Is Disconnected, with Automation on and Notify off, runs Compasslet's End Live Activity, with Show When Run off.](images/end-compass-automation.png){ width="402" height="345" loading="lazy" }
+
+</div>
+
 ## While You Drive
 
 - The Live Activity stays on while CarPlay is connected, whether or not you open Compasslet

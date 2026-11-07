@@ -85,3 +85,24 @@
   color: var(--md-default-fg-color);
   background-color: transparent;
 }
+
+.md-typeset .compasslet-samples {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1rem;
+  margin: 1em 0;
+}
+
+.md-typeset .compasslet-samples p {
+  flex: 1 1 16rem;
+  max-width: 20rem;
+  margin: 0;
+}
+
+.md-typeset .compasslet-samples img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 0.8rem;
+}
