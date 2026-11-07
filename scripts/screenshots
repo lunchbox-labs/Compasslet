@@ -60,13 +60,16 @@ TOUR = ("tour-welcome", "tour-live-activity-button", "tour-live-activity-button-
         "tour-shortcuts", "tour-shortcuts-carplay")
 # The Live Activity button shows only while CarPlay is connected.
 COMPASS_WITH_LIVE_ACTIVITY_BUTTON = "compass-live-activity-start"
+# The button's tip, shown the first time CarPlay connects after the tour.
+LIVE_ACTIVITY_TIP = "compass-live-activity-tip"
 APPEARANCE_PAGES = ("settings-appearance", "settings-appearance-global",
                     "settings-appearance-iphone", "settings-appearance-live-activity",
                     "settings-appearance-minor-ticks", "settings-appearance-cardinal-labels",
                     "settings-appearance-rotation", "settings-appearance-reduce-motion")
-LARGER_TEXT = (COMPASS_WITH_LIVE_ACTIVITY_BUTTON, *TOUR, "settings", "settings-bottom",
-               *APPEARANCE_PAGES, "compass-location-denied")
-CONTRAST = (COMPASS_WITH_LIVE_ACTIVITY_BUTTON, "compass-settings-sheet", "settings")
+LARGER_TEXT = (COMPASS_WITH_LIVE_ACTIVITY_BUTTON, LIVE_ACTIVITY_TIP, *TOUR, "settings",
+               "settings-bottom", *APPEARANCE_PAGES, "compass-location-denied")
+CONTRAST = (COMPASS_WITH_LIVE_ACTIVITY_BUTTON, LIVE_ACTIVITY_TIP, "compass-settings-sheet",
+            "settings")
 DARK_INTERFACE = (*TOUR, "compass", COMPASS_WITH_LIVE_ACTIVITY_BUTTON, "compass-location-denied",
                   "compass-settings-sheet", "settings", "settings-bottom",
                   "settings-diagnostics-export", "live-activity")

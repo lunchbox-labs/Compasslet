@@ -100,15 +100,33 @@ struct WelcomeTourOverlay: View {
   private func explanation(_ step: OnboardingState.Step) -> some View {
     VStack(alignment: .leading, spacing: 12) {
       artwork(step)
-      Text(title(step))
+      heading(step)
         .font(.title3.bold())
         .fontDesign(.rounded)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title(step))
         .accessibilityAddTraits(.isHeader)
         .accessibilityFocused($titleFocused)
       Text(message(step))
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .fixedSize(horizontal: false, vertical: true)
+  }
+
+  /// The step's title. When the welcome title wraps, the app name gets a line of its own and
+  /// shrinks a little if it must, so the largest text sizes never hyphenate it.
+  @ViewBuilder private func heading(_ step: OnboardingState.Step) -> some View {
+    if step == .compass {
+      ViewThatFits(in: .horizontal) {
+        Text(title(step))
+        VStack(alignment: .leading, spacing: 0) {
+          Text("Welcome to")
+          Text(verbatim: "Compasslet").lineLimit(1).minimumScaleFactor(0.75)
+        }
+      }
+    } else {
+      Text(title(step))
+    }
   }
 
   @ViewBuilder private func artwork(_ step: OnboardingState.Step) -> some View {

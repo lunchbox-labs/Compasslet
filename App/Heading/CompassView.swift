@@ -259,6 +259,9 @@ struct CompassView: View {
         ? onboarding.liveActivityTip : nil,
       arrowEdge: .bottom
     )
+    // Opaque, like the welcome tour's cards: the default material lets the large heading show
+    // through behind the tip's text.
+    .tipBackground(Color(uiColor: .secondarySystemGroupedBackground))
     .accessibilityLabel(liveActivityAction)
     .accessibilityHint(liveActivityHint)
     .accessibilityShowsLargeContentViewer {

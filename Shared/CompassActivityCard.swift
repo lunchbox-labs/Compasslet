@@ -42,8 +42,9 @@ struct CompassActivityCard: View {
 
   /// The tallest layout that fits: diagnostics (Lock Screen only), then the reading between
   /// balanced lines, then (Lock Screen only) the reading above its Last Updated line, then a bare
-  /// Last Updated, then (Lock Screen only, so it never grows past 160 points) the reading alone.
-  /// In CarPlay, a status long enough to wrap leaves no room for the line beneath it.
+  /// Last Updated, then the reading alone, so the Lock Screen card never grows past 160 points
+  /// and the CarPlay card never outgrows the size CarPlay gives it. In CarPlay, a status long
+  /// enough to wrap leaves no room for the line beneath it.
   private var layouts: some View {
     ViewThatFits(in: .vertical) {
       if !isSmall, let update = state.debugUpdateTime {
@@ -65,11 +66,10 @@ struct CompassActivityCard: View {
         readout
         if presentation.reading != nil, timestampMode != .hidden {
           Text("Last Updated").font(.caption2).foregroundStyle(.secondary)
+            .lineLimit(1).minimumScaleFactor(Self.captionScale)
         }
       }
-      if !isSmall {
-        readout.fixedSize(horizontal: false, vertical: true)
-      }
+      readout.fixedSize(horizontal: false, vertical: true)
     }
   }
 
@@ -96,12 +96,13 @@ struct CompassActivityCard: View {
   /// At large text sizes the reading drops to a shorter form (degrees, then direction) before
   /// any text is scaled down, so an enlarged size stays enlarged; the accessibility label keeps
   /// every detail. Status text wraps to a second line before it shrinks: in CarPlay to no less
-  /// than 65%, and on the Lock Screen, where it also uses a smaller style, to no less than 80%.
+  /// than half size, so two lines still fit its card at the largest text sizes, and on the Lock
+  /// Screen, where it also uses a smaller style, to no less than 80%.
   private var readout: some View {
     Group {
       if presentation.reading == nil {
         if isSmall {
-          readoutText(presentation.status).lineLimit(2).minimumScaleFactor(0.65)
+          readoutText(presentation.status).lineLimit(2).minimumScaleFactor(0.5)
         } else {
           Text(presentation.status)
             .font(.title2.weight(.semibold))
@@ -127,6 +128,11 @@ struct CompassActivityCard: View {
       .multilineTextAlignment(.center)
   }
 
+  /// How far the Last Updated line may shrink. At the largest text size with Bold Text, a
+  /// 12-hour time needs about 80% to fit the Lock Screen card on a 375-point-wide iPhone, and
+  /// even 70% is more than twice its default size.
+  private static let captionScale: CGFloat = 0.7
+
   private var secondaryLine: some View {
     Group {
       if timestampMode != .hidden {
@@ -138,7 +144,7 @@ struct CompassActivityCard: View {
       }
     }
     .font(.caption2).foregroundStyle(.secondary).monospacedDigit()
-    .lineLimit(1).minimumScaleFactor(0.85)
+    .lineLimit(1).minimumScaleFactor(Self.captionScale)
   }
 }
 

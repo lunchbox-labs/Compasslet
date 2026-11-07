@@ -56,10 +56,13 @@ struct LiveActivityButtonTip: Tip {
 
   var id: String { "liveActivityButton.\(generation)" }
   var title: Text { Text("Start or End the Live Activity") }
+  /// In the primary colour: the system's secondary grey is under 4.5:1 on the tip's light
+  /// background.
   var message: Text? {
     Text(
       "It starts on its own when Compasslet opens on CarPlay. Tap here to end it, or to start it again if it’s gone."
     )
+    .foregroundStyle(Color.primary)
   }
   var options: [any TipOption] { [Tips.MaxDisplayCount(1)] }
 }
