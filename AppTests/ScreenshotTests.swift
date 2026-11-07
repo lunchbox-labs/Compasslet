@@ -16,6 +16,10 @@ final class ScreenshotTests: XCTestCase {
     let name: String
     var increasedContrast = false
     var showsLastRow = false
+    /// Scrolls the screen's one Form to its end, below its last footer.
+    var showsEnd = false
+    /// The Live Activity button's tip is up, rather than invalidated, when captured.
+    var showsTip = false
     /// Captured only when a capture set names it, as for a screen that needs simulator state the
     /// set prepares, such as location access that hasn't been decided.
     var onlyWhenNamed = false
@@ -103,7 +107,7 @@ final class ScreenshotTests: XCTestCase {
           .environment(\.dynamicTypeSize, .accessibility5))
     },
     Screen(name: "compass-live-activity-end") { await ScreenshotTests.compass(carPlay: .driving) },
-    Screen(name: "compass-live-activity-tip") {
+    Screen(name: "compass-live-activity-tip", showsTip: true) {
       await ScreenshotTests.compass(carPlay: .connected, showsTip: true)
     },
     Screen(name: "tour-welcome") { await ScreenshotTests.compass(tour: .compass) },
@@ -137,9 +141,7 @@ final class ScreenshotTests: XCTestCase {
         await ScreenshotTests.compass(tour: .liveActivity)
           .environment(\.dynamicTypeSize, .accessibility5))
     },
-    Screen(name: "settings-bottom") {
-      AnyView(ScreenshotTests.settings().defaultScrollAnchor(.bottom))
-    },
+    Screen(name: "settings-bottom", showsEnd: true) { ScreenshotTests.settings() },
     Screen(name: "settings-diagnostics-export", onlyWhenNamed: true, presentsSheet: true) {
       AnyView(
         ScreenshotTests.settings().sheet(isPresented: .constant(true)) {
@@ -281,6 +283,12 @@ final class ScreenshotTests: XCTestCase {
         // Long enough for the first readings, navigation titles and any appearance animation.
         try await Task.sleep(for: .seconds(2))
         if screen.showsLastRow { try await showLastRow(in: window) }
+        if screen.showsEnd { try await showEnd(in: window) }
+        // Every compass screen with CarPlay connected has the button the tip points to, so
+        // each either waits for the tip or checks it is gone before capturing.
+        if screen.name.hasPrefix("compass-live-activity") {
+          try await waitForTip(in: window, shown: screen.showsTip)
+        }
         if screen.presentsSheet { try await waitForSheet(in: window) }
         let name = variant.name.isEmpty ? screen.name : screen.name + "-" + variant.name
         try await requestScreenshot(name, in: directory)
@@ -324,14 +332,68 @@ final class ScreenshotTests: XCTestCase {
     controller is UIActivityViewController || controller.children.contains(where: holdsShareSheet)
   }
 
-  private func showLastRow(in window: UIWindow) async throws {
+  private func onlyForm(in window: UIWindow) throws -> UICollectionView {
     func collections(in view: UIView) -> [UICollectionView] {
       (view as? UICollectionView).map { [$0] }
         ?? view.subviews.flatMap { collections(in: $0) }
     }
     let forms = collections(in: window)
     XCTAssertEqual(forms.count, 1, "Expected one Form to scroll")
-    let form = try XCTUnwrap(forms.first)
+    return try XCTUnwrap(forms.first)
+  }
+
+  /// Scrolls to the bottom edge and waits until it stays there, since rows the Form sizes as
+  /// they appear can change its height after the first scroll.
+  private func showEnd(in window: UIWindow) async throws {
+    let form = try onlyForm(in: window)
+    func bottomOffset() -> CGFloat {
+      let inset = form.adjustedContentInset
+      return max(-inset.top, form.contentSize.height + inset.bottom - form.bounds.height)
+    }
+    let deadline = ContinuousClock.now + .seconds(3)
+    repeat {
+      form.layoutIfNeeded()
+      form.setContentOffset(CGPoint(x: form.contentOffset.x, y: bottomOffset()), animated: false)
+      try await Task.sleep(for: .milliseconds(200))
+      form.layoutIfNeeded()
+      if abs(form.contentOffset.y - bottomOffset()) < 0.5 { return }
+    } while ContinuousClock.now < deadline
+    struct EndNotVisible: Error {}
+    XCTFail("The end of the Form must be on screen before capture")
+    throw EndNotVisible()
+  }
+
+  /// TipKit decides whether to show a tip asynchronously, so a tip invalidated just before its
+  /// screen appears could still pop up. Waits until the tip's popover is presented, or until it
+  /// is not, so every capture of a screen agrees.
+  private func waitForTip(in window: UIWindow, shown: Bool) async throws {
+    struct TipNotSettled: Error {}
+    // A popover tip is a popover presentation from the hosting controller.
+    func presentedTip() -> Bool {
+      guard let root = window.rootViewController, let presented = root.presentedViewController,
+        presented.popoverPresentationController != nil
+      else { return false }
+      return !presented.isBeingPresented && !presented.isBeingDismissed
+        && presented.view.window != nil
+    }
+    let deadline = ContinuousClock.now + .seconds(10)
+    while ContinuousClock.now < deadline {
+      if presentedTip() == shown {
+        // Lets the popover's own appearance finish drawing.
+        try await Task.sleep(for: .seconds(1))
+        if presentedTip() == shown { return }
+      }
+      try await Task.sleep(for: .milliseconds(200))
+    }
+    let presented = window.rootViewController?.presentedViewController
+    XCTFail(
+      (shown ? "The tip wasn't shown within 10 seconds" : "The tip was still shown")
+        + "; presented: \(presented.map { String(describing: type(of: $0)) } ?? "nothing")")
+    throw TipNotSettled()
+  }
+
+  private func showLastRow(in window: UIWindow) async throws {
+    let form = try onlyForm(in: window)
     form.layoutIfNeeded()
     let section = try XCTUnwrap((0..<form.numberOfSections).last)
     let item = try XCTUnwrap((0..<form.numberOfItems(inSection: section)).last)
@@ -430,7 +492,17 @@ final class ScreenshotTests: XCTestCase {
     case .driving: await drive.carPlayActivated()
     }
     let onboarding = onboarding(at: tour)
-    if !showsTip { onboarding.liveActivityTip.invalidate(reason: .actionPerformed) }
+    if !showsTip {
+      onboarding.liveActivityTip.invalidate(reason: .actionPerformed)
+      // Invalidation reaches TipKit's datastore asynchronously; until it does, the tip can
+      // still be shown. A new tip also reads as not shown while it is pending, so wait for the
+      // invalidation itself.
+      let deadline = ContinuousClock.now + .seconds(5)
+      while ContinuousClock.now < deadline {
+        if case .invalidated = onboarding.liveActivityTip.status { break }
+        try? await Task.sleep(for: .milliseconds(100))
+      }
+    }
     return AnyView(
       CompassView(drive: drive, onboarding: onboarding, showingSettings: showsSettings)
         .environment(\.scenePhase, inactive ? .inactive : .active))
@@ -609,8 +681,16 @@ private struct LiveActivityScreen: View {
     appearance.lockScreenTimestamp = mode
     appearance.carPlayActivityTimestamp = mode
     return .init(
-      bearing: status == .usable ? 47 : nil, status: status,
-      sampleTime: .now.addingTimeInterval(-12), expiry: nil, appearance: appearance)
+      bearing: status == .usable ? 47 : nil, status: status, sampleTime: sampleTime,
+      expiry: nil, appearance: appearance)
+  }
+
+  /// The widest text each mode shows, whatever the time of the capture: a time with a two-digit
+  /// hour, or a timer past an hour.
+  private var sampleTime: Date {
+    if mode == .elapsed { return .now.addingTimeInterval(-(3_600 + 2 * 60 + 3)) }
+    return Calendar.current.date(bySettingHour: 12, minute: 58, second: 0, of: .now)
+      ?? .now.addingTimeInterval(-12)
   }
 
   var body: some View {

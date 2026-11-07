@@ -203,6 +203,60 @@ struct AppearanceStoreTests {
     }
   }
 
+  @Test func carPlayCardStaysWithinItsSizeAtTheLargestTextSize() {
+    let sample = Date(timeIntervalSince1970: 100)
+    let host = UIHostingController(rootView: AnyView(EmptyView()))
+    for weight in [LegibilityWeight.regular, .bold] {
+      for mode in [ActivityTimestampMode.time, .elapsed, .hidden] {
+        for status in [
+          CompassActivityAttributes.Status.usable, .slow, .waiting, .unreliable, .unavailable,
+        ] {
+          var appearance = AppearanceValues()
+          appearance.carPlayActivityTimestamp = mode
+          let state = CompassActivityAttributes.ContentState(
+            bearing: 359, status: status, sampleTime: sample, expiry: nil,
+            appearance: appearance)
+          host.rootView = AnyView(
+            CompassActivityCard(state: state, isSmall: true)
+              .environment(\.dynamicTypeSize, .accessibility5)
+              .environment(\.legibilityWeight, weight))
+          // One of CarPlay Dashboard's Live Activity sizes. The card reports its full height
+          // when its content is taller, so an overflow shows here.
+          let size = host.sizeThatFits(in: CGSize(width: 240, height: 78))
+          #expect(size.height <= 78, "\(weight) \(mode) \(status): \(size.height)")
+        }
+      }
+    }
+  }
+
+  /// The narrowest Lock Screen card's content: a 375-point iPhone with Display Zoom is 320
+  /// points wide, less 22 points for the banner and 28 for the card's side insets.
+  private static let narrowestLine: CGFloat = 270
+
+  private func idealWidth(_ view: some View) -> CGFloat {
+    let styled = view.font(.caption2).monospacedDigit()
+      .environment(\.locale, Locale(identifier: "en_US"))
+      .environment(\.dynamicTypeSize, .accessibility5)
+      .environment(\.legibilityWeight, .bold)
+    let host = UIHostingController(rootView: styled)
+    let unbounded = CGFloat.greatestFiniteMagnitude
+    return host.sizeThatFits(in: CGSize(width: unbounded, height: unbounded)).width
+  }
+
+  @Test func shortLastUpdatedTimeFitsTheNarrowestLockScreenCard() throws {
+    // A two-digit hour is the widest 12-hour time, which US English uses.
+    let sample = try #require(
+      Calendar.current.date(bySettingHour: 12, minute: 58, second: 0, of: .now))
+    let width = idealWidth(Text("Updated \(sample, style: .time)"))
+    #expect(width * CompassActivityCard.captionScale <= Self.narrowestLine, "\(width)")
+  }
+
+  @Test func widestElapsedTimerFitsTheNarrowestLockScreenCard() {
+    // The timer never shrinks, and the line drops its label before it would truncate.
+    let width = idealWidth(Text(verbatim: ActivityTimestamp.widestTimer))
+    #expect(width <= Self.narrowestLine, "\(width)")
+  }
+
   @Test func phonePreviewRendersDialChoicesAndReducedMotionFallback() throws {
     func render(_ value: AppearanceValues, reduceMotion: Bool = false) throws -> UIImage {
       let renderer = ImageRenderer(

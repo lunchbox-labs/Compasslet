@@ -42,8 +42,9 @@ struct CompassActivityCard: View {
 
   /// The tallest layout that fits: diagnostics (Lock Screen only), then the reading between
   /// balanced lines, then (Lock Screen only) the reading above its Last Updated line, then a bare
-  /// Last Updated, then (Lock Screen only, so it never grows past 160 points) the reading alone.
-  /// In CarPlay, a status long enough to wrap leaves no room for the line beneath it.
+  /// Last Updated, then the reading alone, so the Lock Screen card never grows past 160 points
+  /// and the CarPlay card never outgrows the size CarPlay gives it. In CarPlay, a status long
+  /// enough to wrap leaves no room for the line beneath it.
   private var layouts: some View {
     ViewThatFits(in: .vertical) {
       if !isSmall, let update = state.debugUpdateTime {
@@ -65,9 +66,14 @@ struct CompassActivityCard: View {
         readout
         if presentation.reading != nil, timestampMode != .hidden {
           Text("Last Updated").font(.caption2).foregroundStyle(.secondary)
+            .lineLimit(1).minimumScaleFactor(Self.captionScale)
         }
       }
-      if !isSmall {
+      // CarPlay's card has a fixed height, so a status there shrinks to fit it rather than
+      // growing past it.
+      if isSmall {
+        readout
+      } else {
         readout.fixedSize(horizontal: false, vertical: true)
       }
     }
@@ -96,12 +102,13 @@ struct CompassActivityCard: View {
   /// At large text sizes the reading drops to a shorter form (degrees, then direction) before
   /// any text is scaled down, so an enlarged size stays enlarged; the accessibility label keeps
   /// every detail. Status text wraps to a second line before it shrinks: in CarPlay to no less
-  /// than 65%, and on the Lock Screen, where it also uses a smaller style, to no less than 80%.
+  /// than half size, so two lines still fit its card at the largest text sizes, and on the Lock
+  /// Screen, where it also uses a smaller style, to no less than 80%.
   private var readout: some View {
     Group {
       if presentation.reading == nil {
         if isSmall {
-          readoutText(presentation.status).lineLimit(2).minimumScaleFactor(0.65)
+          readoutText(presentation.status).lineLimit(2).minimumScaleFactor(0.5)
         } else {
           Text(presentation.status)
             .font(.title2.weight(.semibold))
@@ -127,6 +134,11 @@ struct CompassActivityCard: View {
       .multilineTextAlignment(.center)
   }
 
+  /// How far the Last Updated line may shrink. At the largest text size with Bold Text, the
+  /// shortest line with a 12-hour time needs about 80% to fit the 270-point card a 375-point
+  /// iPhone shows with Display Zoom, so 70% leaves margin and is still twice its default size.
+  static let captionScale: CGFloat = 0.7
+
   private var secondaryLine: some View {
     Group {
       if timestampMode != .hidden {
@@ -138,7 +150,7 @@ struct CompassActivityCard: View {
       }
     }
     .font(.caption2).foregroundStyle(.secondary).monospacedDigit()
-    .lineLimit(1).minimumScaleFactor(0.85)
+    .lineLimit(1).minimumScaleFactor(Self.captionScale)
   }
 }
 
@@ -231,18 +243,48 @@ struct ActivityTimestamp: View {
   let sample: Date
   let mode: ActivityTimestampMode
 
+  /// The space between the label and the time.
+  static let spacing: CGFloat = 4
+  /// The widest the elapsed timer gets. An ended Live Activity can stay on the Lock Screen for
+  /// hours, and the digits are monospaced.
+  static let widestTimer = "00:00:00"
+
   var body: some View {
     switch mode {
     case .hidden:
       EmptyView()
     case .time:
-      Text("Last Updated \(sample, style: .time)")
+      // With Display Zoom a 375-point iPhone's card is only 270 points wide, too narrow for the
+      // full line at the largest text sizes even at its smallest scale.
+      ViewThatFits(in: .horizontal) {
+        Text("Last Updated \(sample, style: .time)")
+        Text("Updated \(sample, style: .time)")
+      }
     case .elapsed:
-      HStack(spacing: 4) {
-        Text("Last Updated")
+      // The timer keeps its full size, so when the line is too wide the label shortens and
+      // then goes, rather than shrinking beside it.
+      ViewThatFits(in: .horizontal) {
+        elapsed(label: "Last Updated")
+        elapsed(label: "Updated")
+        elapsed(label: nil)
+      }
+    }
+  }
+
+  /// The system advances the timer without a new layout, so the line is measured with the
+  /// widest the timer can grow to, and a label chosen for "0:12" still fits at "10:00:00".
+  private func elapsed(label: LocalizedStringKey?) -> some View {
+    VStack(spacing: 0) {
+      HStack(spacing: Self.spacing) {
+        if let label { Text(label) }
         Text(timerInterval: sample...Date.distantFuture, countsDown: false)
           .monospacedDigit().fixedSize()
       }
+      HStack(spacing: Self.spacing) {
+        if let label { Text(label) }
+        Text(verbatim: Self.widestTimer).monospacedDigit().fixedSize()
+      }
+      .hidden().frame(height: 0)
     }
   }
 }
