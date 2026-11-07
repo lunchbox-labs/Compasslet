@@ -234,12 +234,11 @@ struct AppearanceStoreTests {
   private static let narrowestLine: CGFloat = 270
 
   private func idealWidth(_ view: some View) -> CGFloat {
-    let host = UIHostingController(
-      rootView: view
-        .font(.caption2).monospacedDigit()
-        .environment(\.locale, Locale(identifier: "en_US"))
-        .environment(\.dynamicTypeSize, .accessibility5)
-        .environment(\.legibilityWeight, .bold))
+    let styled = view.font(.caption2).monospacedDigit()
+      .environment(\.locale, Locale(identifier: "en_US"))
+      .environment(\.dynamicTypeSize, .accessibility5)
+      .environment(\.legibilityWeight, .bold)
+    let host = UIHostingController(rootView: styled)
     let unbounded = CGFloat.greatestFiniteMagnitude
     return host.sizeThatFits(in: CGSize(width: unbounded, height: unbounded)).width
   }
