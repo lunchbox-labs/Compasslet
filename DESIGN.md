@@ -56,9 +56,16 @@ These system-hosted surfaces have constraints beyond an ordinary iPhone screen.
   available. At large text sizes the label shortens to “Updated”, and the elapsed timer, which
   never shrinks, drops it. Size these for a 270pt line, the card on a 375pt iPhone with
   Display Zoom. Keep the Lock Screen card within its 160pt height limit.
-- Live Activity backgrounds belong to the system. Keep semantic primary and secondary text
-  rather than copying web neutrals into the extension. Its compact readings use the system's
-  text styles for legibility in the available space.
+- The Lock Screen card is see-through: it draws its own black tint in the dark look and white
+  tint in the light look, with the system tint clear, so the wallpaper shows behind it.
+  `LockScreenBackdrop` in `CompassCore` sets the tint's opacity and the secondary text, which is
+  the primary colour at reduced opacity, and its tests keep that text at 4.5:1 or better over
+  any solid wallpaper colour. Reduce Transparency gives a solid card and Increase Contrast a
+  more opaque one.
+- Other Live Activity backgrounds, in CarPlay, the Apple Watch Smart Stack and the Dynamic
+  Island, belong to the system. Keep semantic primary and secondary text rather than copying
+  web neutrals into the extension. Its compact readings use the system's text styles for
+  legibility in the available space.
 - The Lock Screen card's 14pt side inset and 2pt reading-to-caption spacing are local compact
   layout exceptions, not extra steps in the app-wide spacing scale.
 - `CompassActivity/CompassActivityWidget.swift` caps the Dynamic Island readout at

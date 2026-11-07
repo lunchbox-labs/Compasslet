@@ -65,7 +65,7 @@ struct CompassActivityCard: View {
       VStack(spacing: 2) {
         readout
         if presentation.reading != nil, timestampMode != .hidden {
-          Text("Last Updated").font(.caption2).foregroundStyle(.secondary)
+          Text("Last Updated").font(.caption2).foregroundStyle(secondaryStyle)
             .lineLimit(1).minimumScaleFactor(Self.captionScale)
         }
       }
@@ -95,7 +95,7 @@ struct CompassActivityCard: View {
         Text("Sample \(sample, format: .dateTime.hour().minute().second())")
       }
     }
-    .font(.caption2).foregroundStyle(.secondary).monospacedDigit()
+    .font(.caption2).foregroundStyle(secondaryStyle).monospacedDigit()
     .lineLimit(1).minimumScaleFactor(0.85)
   }
 
@@ -149,8 +149,40 @@ struct CompassActivityCard: View {
         }
       }
     }
-    .font(.caption2).foregroundStyle(.secondary).monospacedDigit()
+    .font(.caption2).foregroundStyle(secondaryStyle).monospacedDigit()
     .lineLimit(1).minimumScaleFactor(Self.captionScale)
+  }
+
+  /// The Lock Screen card is see-through, and the system secondary colour is too faint over a
+  /// bright wallpaper, so its secondary text is the primary colour at reduced opacity.
+  private var secondaryStyle: AnyShapeStyle {
+    if isSmall { return AnyShapeStyle(HierarchicalShapeStyle.secondary) }
+    let opacity = LockScreenBackdrop.secondaryTextOpacity
+    return AnyShapeStyle(HierarchicalShapeStyle.primary.opacity(opacity))
+  }
+}
+
+extension View {
+  /// Puts the see-through Lock Screen backdrop behind the card when `isActive`.
+  func lockScreenBackdrop(isActive: Bool) -> some View {
+    modifier(LockScreenBackdropModifier(isActive: isActive))
+  }
+}
+
+/// Tints the Lock Screen card black in the dark look and white in the light look, so the
+/// wallpaper shows through. Drawn by the card rather than with the system's background tint,
+/// so it changes with the text colours whenever the Lock Screen changes the card's look.
+struct LockScreenBackdropModifier: ViewModifier {
+  let isActive: Bool
+  @Environment(\.colorScheme) private var colorScheme
+  @Environment(\.colorSchemeContrast) private var contrast
+  @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+  func body(content: Content) -> some View {
+    let opacity = LockScreenBackdrop.opacity(
+      reduceTransparency: reduceTransparency, increaseContrast: contrast == .increased)
+    let tint = colorScheme == .dark ? Color.black : Color.white
+    content.background(isActive ? tint.opacity(opacity) : Color.clear)
   }
 }
 
