@@ -16,8 +16,9 @@
 		020F1378FBC3CA202F0BD64E /* TravelLocationSensor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B8C91614F79675159741862 /* TravelLocationSensor.swift */; };
 		0838A3A568319EC0360654D0 /* HeadingController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1A46DD5AFEAE45BDDC8C05D /* HeadingController.swift */; };
 		10A9C1012AD54E0AA0676C01 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 10A9C1012AD54E0AA0676C02 /* Assets.xcassets */; };
-		138E3C277C6E5E7EF2AD4E8A /* AppearanceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 517E687B4D6CA25B3C156124 /* AppearanceStore.swift */; };
 		149B12D598F3154DC78CA28F /* CompassDial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 014D8AD2FF2B324887AF606C /* CompassDial.swift */; };
+		C51B637F5AF0FDFD2E498D3D /* ReadoutTextSize+DynamicType.swift in Sources */ = {isa = PBXBuildFile; fileRef = E444BD4051C64FCD9D2B2876 /* ReadoutTextSize+DynamicType.swift */; };
+		E66074E662AD7D0A92FB1EF3 /* ReadoutTextSize+DynamicType.swift in Sources */ = {isa = PBXBuildFile; fileRef = E444BD4051C64FCD9D2B2876 /* ReadoutTextSize+DynamicType.swift */; };
 		14E89346F4BEB1206AB95142 /* HeadingStatus+Phone.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82701719F862789BAC0BE6A0 /* HeadingStatus+Phone.swift */; };
 		14F6505531FA7B7C727EC52A /* PhoneLocationControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B44134007C500393E3DB2F22 /* PhoneLocationControllerTests.swift */; };
 		1C93D8F6DE7D02826C2F75D5 /* AppearanceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 517E687B4D6CA25B3C156124 /* AppearanceStore.swift */; };
@@ -26,9 +27,7 @@
 		2ADCF5F1540DE262C8F3A1E5 /* CompassDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 220B49D5093197C84DE6C5D3 /* CompassDiagnostics.swift */; };
 		3280C1EBE391B58BE077EC39 /* CompassCore in Frameworks */ = {isa = PBXBuildFile; productRef = ADC322CBBFADDB05596FFE57 /* CompassCore */; };
 		35807C85FCA4AFD3E7A5EE80 /* CompassActivityPresenting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30824FB5698A3169AA134E40 /* CompassActivityPresenting.swift */; };
-		391F7E6A591CFB7AB7F572CF /* CompassDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 220B49D5093197C84DE6C5D3 /* CompassDiagnostics.swift */; };
 		4C4C18A842B6F0419CBD4102 /* CompassAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DCA6A3149843FD54FCEC16B /* CompassAppDelegate.swift */; };
-		555243C8123747500336AF8A /* CompassDial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 014D8AD2FF2B324887AF606C /* CompassDial.swift */; };
 		579778A1A4E3CF711F1D2023 /* HeadingControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 610060C3F3A54EBB9B3CFE8E /* HeadingControllerTests.swift */; };
 		6769CA462DD49C1BDF6E1E09 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C4A9F4F65AD120DB8AF53BA7 /* Foundation.framework */; };
 		6CDD9E0873AD960278BA7DA7 /* AppearanceSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34543F74FCA9F2BB0A0BB32E /* AppearanceSettingsView.swift */; };
@@ -50,9 +49,7 @@
 		BDA9B299C2EB6FF52080780E /* AppearanceStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 477ECA488466B5E09ABBE0F2 /* AppearanceStoreTests.swift */; };
 		5C4EE0A1D2B3C4D5E6F70811 /* ScreenshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C4EE0A1D2B3C4D5E6F70812 /* ScreenshotTests.swift */; };
 		C0A000000000000000000001 /* CarPlayCompassTemplate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0A000000000000000000002 /* CarPlayCompassTemplate.swift */; };
-		CF0000000000000000000001 /* RetiredWidgetData.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF0000000000000000000003 /* RetiredWidgetData.swift */; };
 		D204473737DF36F5712B0D3E /* DiagnosticsSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E4EE64525C86691D6CBD629 /* DiagnosticsSettingsSection.swift */; };
-		D39558B867B4613C01C73F04 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = F493B01490C49678449E1B72 /* libsqlite3.tbd */; };
 		D907B3FB0760FE2EB99FEEC1 /* CompassCore in Frameworks */ = {isa = PBXBuildFile; productRef = 00ACE86DE479ABD3ED9E5D9F /* CompassCore */; };
 		DB938C90D20A4B90A9A33002 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = DB938C90D20A4B90A9A33001 /* PrivacyInfo.xcprivacy */; };
 		DB938C90D20A4B90A9A33004 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = DB938C90D20A4B90A9A33003 /* PrivacyInfo.xcprivacy */; };
@@ -101,6 +98,7 @@
 		00E111F986E110C7D82BA48C /* PhoneLocationController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PhoneLocationController.swift; sourceTree = "<group>"; };
 		00F237C285337B5CFA6907E4 /* CompassActivity.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = CompassActivity.entitlements; sourceTree = "<group>"; };
 		014D8AD2FF2B324887AF606C /* CompassDial.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompassDial.swift; sourceTree = "<group>"; };
+		E444BD4051C64FCD9D2B2876 /* ReadoutTextSize+DynamicType.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "ReadoutTextSize+DynamicType.swift"; sourceTree = "<group>"; };
 		10A9C1012AD54E0AA0676C02 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		13F96CE477553A99C1F0F39D /* CompassActivityControllerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompassActivityControllerTests.swift; sourceTree = "<group>"; };
 		1AC18E30C9DAEB073F3B849A /* Compass.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Compass.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -134,7 +132,6 @@
 		B44134007C500393E3DB2F22 /* PhoneLocationControllerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PhoneLocationControllerTests.swift; sourceTree = "<group>"; };
 		C0A000000000000000000002 /* CarPlayCompassTemplate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayCompassTemplate.swift; sourceTree = "<group>"; };
 		C4A9F4F65AD120DB8AF53BA7 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
-		CF0000000000000000000003 /* RetiredWidgetData.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RetiredWidgetData.swift; sourceTree = "<group>"; };
 		DB938C90D20A4B90A9A33001 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		DB938C90D20A4B90A9A33003 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		DE2F63BB5C501FDD96214F95 /* CompassActivityAttributes.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompassActivityAttributes.swift; sourceTree = "<group>"; };
@@ -160,7 +157,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				B1F547E16C5F05867526333C /* Foundation.framework in Frameworks */,
-				D39558B867B4613C01C73F04 /* libsqlite3.tbd in Frameworks */,
 				D907B3FB0760FE2EB99FEEC1 /* CompassCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -184,9 +180,9 @@
 				DE2F63BB5C501FDD96214F95 /* CompassActivityAttributes.swift */,
 				AB1310000000000000000003 /* CompassActivityCard.swift */,
 				220B49D5093197C84DE6C5D3 /* CompassDiagnostics.swift */,
-				CF0000000000000000000003 /* RetiredWidgetData.swift */,
 				517E687B4D6CA25B3C156124 /* AppearanceStore.swift */,
 				014D8AD2FF2B324887AF606C /* CompassDial.swift */,
+				E444BD4051C64FCD9D2B2876 /* ReadoutTextSize+DynamicType.swift */,
 			);
 			name = Shared;
 			path = Shared;
@@ -490,9 +486,7 @@
 				F97CCAF85C23D34073466081 /* CompassActivityWidget.swift in Sources */,
 				7AA75085FC60695A12D26713 /* CompassActivityAttributes.swift in Sources */,
 				AB1310000000000000000001 /* CompassActivityCard.swift in Sources */,
-				391F7E6A591CFB7AB7F572CF /* CompassDiagnostics.swift in Sources */,
-				138E3C277C6E5E7EF2AD4E8A /* AppearanceStore.swift in Sources */,
-				555243C8123747500336AF8A /* CompassDial.swift in Sources */,
+				E66074E662AD7D0A92FB1EF3 /* ReadoutTextSize+DynamicType.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -520,10 +514,10 @@
 				7AE82164CFC284EB48F0ECB8 /* CarPlaySceneDelegate.swift in Sources */,
 				4C4C18A842B6F0419CBD4102 /* CompassAppDelegate.swift in Sources */,
 				2ADCF5F1540DE262C8F3A1E5 /* CompassDiagnostics.swift in Sources */,
-				CF0000000000000000000001 /* RetiredWidgetData.swift in Sources */,
 				D204473737DF36F5712B0D3E /* DiagnosticsSettingsSection.swift in Sources */,
 				1C93D8F6DE7D02826C2F75D5 /* AppearanceStore.swift in Sources */,
 				149B12D598F3154DC78CA28F /* CompassDial.swift in Sources */,
+				C51B637F5AF0FDFD2E498D3D /* ReadoutTextSize+DynamicType.swift in Sources */,
 				6CDD9E0873AD960278BA7DA7 /* AppearanceSettingsView.swift in Sources */,
 				14E89346F4BEB1206AB95142 /* HeadingStatus+Phone.swift in Sources */,
 			);

@@ -11,7 +11,7 @@ struct AppearanceStoreTests {
     let name = "readout-layout-tests-\(UUID())"
     let defaults = try #require(UserDefaults(suiteName: name))
     defer { defaults.removePersistentDomain(forName: name) }
-    let store = AppearanceStore(defaults: defaults, legacyDefaults: defaults)
+    let store = AppearanceStore(defaults: defaults)
     let scene = try #require(
       UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
 
@@ -543,7 +543,7 @@ struct AppearanceStoreTests {
     let name = "readout-editor-tests-\(UUID())"
     let defaults = try #require(UserDefaults(suiteName: name))
     defer { defaults.removePersistentDomain(forName: name) }
-    let store = AppearanceStore(defaults: defaults, legacyDefaults: defaults)
+    let store = AppearanceStore(defaults: defaults)
     store.update { preferences in
       var hidden = preferences.effective(for: .phone)
       hidden.showDirection = false
@@ -581,7 +581,7 @@ struct AppearanceStoreTests {
     let name = "appearance-editor-tests-\(UUID())"
     let defaults = try #require(UserDefaults(suiteName: name))
     defer { defaults.removePersistentDomain(forName: name) }
-    let store = AppearanceStore(defaults: defaults, legacyDefaults: defaults)
+    let store = AppearanceStore(defaults: defaults)
     let global = AppearanceOptionEditor(surface: nil, option: .minorTicks, store: store)
     let phone = AppearanceOptionEditor(surface: .phone, option: .rotation, store: store)
     global.binding(\.minorTicks).wrappedValue = .five
@@ -608,16 +608,14 @@ struct AppearanceStoreTests {
     labels.wrappedValue = .hidden
     #expect(phone.value.minorTicks == .none)
     #expect(phone.value.cardinalLabels == .hidden)
-    #expect(
-      AppearanceStore(defaults: defaults, legacyDefaults: defaults).preferences == store.preferences
-    )
+    #expect(AppearanceStore(defaults: defaults).preferences == store.preferences)
   }
 
   @Test func savesOverridesAndPreservesUnchangedPreferences() throws {
     let name = "appearance-tests-\(UUID())"
     let defaults = try #require(UserDefaults(suiteName: name))
     defer { defaults.removePersistentDomain(forName: name) }
-    let store = AppearanceStore(defaults: defaults, legacyDefaults: defaults)
+    let store = AppearanceStore(defaults: defaults)
     store.update { preferences in
       var activity = preferences.effective(for: .activity)
       activity.showDegrees = false
@@ -627,7 +625,7 @@ struct AppearanceStoreTests {
     let saved = store.preferences
     store.update { _ in }
     #expect(store.preferences == saved)
-    let reopened = AppearanceStore(defaults: defaults, legacyDefaults: defaults)
+    let reopened = AppearanceStore(defaults: defaults)
     #expect(reopened.preferences == saved)
   }
 
@@ -635,7 +633,7 @@ struct AppearanceStoreTests {
     let name = "theme-tests-\(UUID())"
     let defaults = try #require(UserDefaults(suiteName: name))
     defer { defaults.removePersistentDomain(forName: name) }
-    let store = AppearanceStore(defaults: defaults, legacyDefaults: defaults)
+    let store = AppearanceStore(defaults: defaults)
     #expect(store.preferences.theme == .system)
     let scene = try #require(
       UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
@@ -672,8 +670,7 @@ struct AppearanceStoreTests {
       }
       #expect(observed["compass"] == expected)
       #expect(observed["settings"] == expected)
-      #expect(
-        AppearanceStore(defaults: defaults, legacyDefaults: defaults).preferences.theme == theme)
+      #expect(AppearanceStore(defaults: defaults).preferences.theme == theme)
     }
     // System must release the override, including subsequent host appearance changes.
     window.overrideUserInterfaceStyle = .light
@@ -702,19 +699,6 @@ struct AppearanceStoreTests {
     // Every slider step announces a distinct value.
     let titles = ReadoutTextSize.allCases.map(\.title)
     #expect(Set(titles).count == titles.count)
-  }
-
-  @Test func migratesOnlyExistingPhoneArrowChoiceOnce() throws {
-    let name = "appearance-tests-\(UUID())"
-    let defaults = try #require(UserDefaults(suiteName: name))
-    defer { defaults.removePersistentDomain(forName: name) }
-    defaults.set(false, forKey: "rotatesCompassDial")
-    let store = AppearanceStore(defaults: defaults, legacyDefaults: defaults)
-    #expect(store.preferences.effective(for: .phone).rotation == .arrow)
-    #expect(store.preferences.usesGlobal(for: .activity))
-    store.update { $0.setUsesGlobal(true, for: .phone) }
-    let reopened = AppearanceStore(defaults: defaults, legacyDefaults: defaults)
-    #expect(reopened.preferences.usesGlobal(for: .phone))
   }
 }
 

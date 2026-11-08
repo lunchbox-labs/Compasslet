@@ -104,11 +104,6 @@ final class CompassDiagnostics: @unchecked Sendable {
           wall REAL NOT NULL, uptime REAL NOT NULL, elapsed REAL NOT NULL, session TEXT NOT NULL)
         """)
       try execute("CREATE INDEX IF NOT EXISTS events_surface ON events(surface, elapsed)")
-      try transaction {
-        try execute("DELETE FROM events WHERE surface='widget'")
-        try execute("DELETE FROM clocks WHERE surface='widget'")
-        try execute("DROP TABLE IF EXISTS widget_events")
-      }
     } catch {
       sqlite3_close(handle)
       throw error
@@ -232,8 +227,12 @@ final class CompassDiagnostics: @unchecked Sendable {
       let events = try rows(
         "SELECT sequence,surface,kind,wall,uptime,elapsed,session FROM events ORDER BY sequence"
       ).compactMap { row -> Event? in
-        guard let sequence = Int64(row[0]), let surface = Surface(rawValue: row[1]),
-          let kind = Kind(rawValue: row[2]), let wall = Double(row[3]),
+        // A surface or kind this version doesn't record, such as a removed one, is left out
+        // rather than making the whole store unreadable.
+        guard let surface = Surface(rawValue: row[1]), let kind = Kind(rawValue: row[2]) else {
+          return nil
+        }
+        guard let sequence = Int64(row[0]), let wall = Double(row[3]),
           let uptime = Double(row[4]), let elapsed = Double(row[5])
         else { throw Failure.database }
         let origin = origins[row[6], default: uptime]

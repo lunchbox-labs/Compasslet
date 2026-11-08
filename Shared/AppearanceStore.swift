@@ -10,22 +10,10 @@ final class AppearanceStore: ObservableObject {
   @Published private(set) var preferences: AppearancePreferences
   private let defaults: UserDefaults?
 
-  init(
-    defaults: UserDefaults? = UserDefaults(suiteName: suiteName),
-    legacyDefaults: UserDefaults = .standard
-  ) {
+  init(defaults: UserDefaults? = UserDefaults(suiteName: suiteName)) {
     self.defaults = defaults
-    var initial = Self.read(from: defaults)
-    if defaults?.data(forKey: Self.key) == nil,
-      let rotates = legacyDefaults.object(forKey: "rotatesCompassDial") as? Bool, !rotates
-    {
-      // Preserve the existing phone-only choice without changing the other surfaces.
-      var phone = initial.effective(for: .phone)
-      phone.rotation = .arrow
-      initial.setOverride(phone, for: .phone)
-    }
-    preferences = initial
-    if defaults?.data(forKey: Self.key) == nil, let data = try? JSONEncoder().encode(initial) {
+    preferences = Self.read(from: defaults)
+    if defaults?.data(forKey: Self.key) == nil, let data = try? JSONEncoder().encode(preferences) {
       defaults?.set(data, forKey: Self.key)
     }
   }
