@@ -29,7 +29,7 @@ on:
       max-parts:
         description: Most captures of each screen that scrolls, counting the first, from 1 (only the top) to 9
         required: false
-        default: "6"
+        default: "9"
       log-images:
         description: Also print the images into the log as base64, for clients that can't download artifacts
         type: boolean
@@ -83,7 +83,7 @@ jobs:
           DEVICES: ${{ inputs.devices || 'largest,smallest' }}
           APPEARANCES: ${{ inputs.appearances == 'light' && 'light' || inputs.appearances == 'dark' && 'dark' || 'light,dark' }}
           SCREEN_FILTER: ${{ inputs.filter }}
-          MAX_PARTS: ${{ inputs.max-parts || '6' }}
+          MAX_PARTS: ${{ inputs.max-parts || '9' }}
         run: |
           if [[ "$CAPTURE_SET" == accessibility ]]; then
             python3 scripts/screenshots capture --set accessibility --filter "$SCREEN_FILTER" \

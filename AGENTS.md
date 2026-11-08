@@ -146,7 +146,7 @@ and captures each further part until the end is on screen. The first part keeps 
 name; later parts add `-part2`, `-part3` and so on. In `screenshots.json`, every image of a
 screen captured in parts has a `part` number, and images of other screens have none. Screens
 that fit are captured exactly as before. The `max-parts` input (`--max-parts` in the script;
-default 6, at most 9, and 1 for only the top) caps the captures per screen. Screens shown at a
+from 1, only the top, to 9, the default) caps the captures per screen. Screens shown at a
 chosen scroll position, with a tip or the share sheet over them, or with the location prompt up,
 are captured only as shown. Set `scrollsInParts: false` on a `Screen` entry to leave out
 another, as `compass-settings-sheet` does.
