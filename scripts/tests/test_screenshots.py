@@ -137,6 +137,16 @@ class CaptureSetTests(unittest.TestCase):
                 later = [other for other in passes[index + 1:] if other.device == item.device]
                 self.assertEqual(later, [])
 
+    def test_the_listing_set_is_the_compass_in_light_and_dark_on_one_phone(self):
+        passes = MODULE["SETS"]["listing"]
+        self.assertEqual({item.device for item in passes}, {"iPhone 17"})
+        self.assertEqual(sorted(item.appearance for item in passes), ["dark", "light"])
+        for item in passes:
+            with self.subTest(appearance=item.appearance):
+                self.assertEqual(item.screens, ("compass",))
+                self.assertEqual((item.text_variants, item.system_settings, item.tag), ((), (), ""))
+                self.assertFalse(item.undecided_location or item.captures_launch)
+
     def test_a_filter_narrows_each_pass_and_drops_empty_ones(self):
         passes = MODULE["passes_for"]("accessibility", "live-activity")
         self.assertTrue(passes)
