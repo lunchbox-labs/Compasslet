@@ -106,6 +106,18 @@ class ResponderTests(unittest.TestCase):
             self.assertTrue((requests / "settings.done").exists())
 
 
+class PartNameTests(unittest.TestCase):
+    def test_a_part_suffix_is_split_from_the_screen_it_continues(self):
+        self.assertEqual(MODULE["split_part"]("settings-part2"), ("settings", 2))
+        self.assertEqual(MODULE["split_part"]("settings-ax5-bold-part9"), ("settings-ax5-bold", 9))
+
+    def test_the_first_part_and_unscrolled_names_keep_their_own_name(self):
+        for name in ("settings", "settings-part1", "settings-part", "settings-part10",
+                     "tour-shortcuts-carplay"):
+            with self.subTest(name=name):
+                self.assertEqual(MODULE["split_part"](name), (name, 1))
+
+
 class CaptureSetTests(unittest.TestCase):
     def test_every_screen_in_a_set_is_one_the_test_can_show(self):
         source = (SCRIPTS.parent / "AppTests/ScreenshotTests.swift").read_text()
@@ -183,6 +195,7 @@ class FakeSimulators:
         self.devices = [{"udid": "17-id", "name": "iPhone 17", "isAvailable": True,
                          "deviceTypeIdentifier": "type.17"}]
         self.commands = []
+        self.environments = []
 
     def __call__(self, arguments, **options):
         self.commands.append(list(arguments))
@@ -203,6 +216,7 @@ class FakeSimulators:
         elif arguments[:4] == ["xcrun", "simctl", "io", arguments[3]]:
             Path(arguments[-1]).write_bytes(b"png")
         elif arguments[-1] == "test-without-building":
+            self.environments.append(options["env"])
             directory = Path(options["env"]["TEST_RUNNER_SCREENSHOT_DIRECTORY"])
             for name in self.requests:
                 (directory / (name + ".request")).touch()
@@ -225,14 +239,14 @@ class CaptureRunTests(unittest.TestCase):
                                  system_settings=("increase-contrast",), tag="increase-contrast",
                                  undecided_location=True)
 
-    def capture(self, simulators):
+    def capture(self, simulators, *options):
         output = tempfile.TemporaryDirectory()
         self.addCleanup(output.cleanup)
         globals_ = MODULE["capture"].__globals__
         with patch.dict(globals_, {"SETS": {"test": (self.PASS,)}}), \
                 patch("subprocess.run", side_effect=simulators):
             try:
-                MODULE["main"](["capture", "--set", "test", "--output", output.name])
+                MODULE["main"](["capture", "--set", "test", "--output", output.name, *options])
                 error = None
             except SystemExit as raised:
                 error = raised
@@ -251,6 +265,39 @@ class CaptureRunTests(unittest.TestCase):
               "settings", "ax3-bold")])
         self.assertTrue(all(entry["system_settings"] == ["increase-contrast"]
                             and entry["runtime"] == RUNTIME_27 for entry in manifest))
+
+    def test_scrolled_parts_are_numbered_after_their_screen_and_text_variant(self):
+        simulators = FakeSimulators(requests=("settings-ax3", "settings-ax3-part2",
+                                              "settings-ax3-part3", "settings-ax3-bold"))
+        error, manifest = self.capture(simulators)
+        self.assertIsNone(error)
+        self.assertEqual(
+            [(entry["file"], entry["screen"], entry["text_variant"], entry.get("part"))
+             for entry in manifest],
+            [("iphone-se-3rd-generation-dark-increase-contrast-settings-ax3.png", "settings",
+              "ax3", 1),
+             ("iphone-se-3rd-generation-dark-increase-contrast-settings-ax3-part2.png",
+              "settings", "ax3", 2),
+             ("iphone-se-3rd-generation-dark-increase-contrast-settings-ax3-part3.png",
+              "settings", "ax3", 3),
+             ("iphone-se-3rd-generation-dark-increase-contrast-settings-ax3-bold.png",
+              "settings", "ax3-bold", None)])
+
+    def test_the_part_limit_reaches_the_test(self):
+        simulators = FakeSimulators()
+        self.capture(simulators, "--max-parts", "2")
+        self.assertEqual(simulators.environments[0]["TEST_RUNNER_SCREENSHOT_MAX_PARTS"], "2")
+        simulators = FakeSimulators()
+        self.capture(simulators)
+        self.assertEqual(simulators.environments[0]["TEST_RUNNER_SCREENSHOT_MAX_PARTS"], "6")
+
+    def test_a_part_limit_out_of_range_stops_before_anything_runs(self):
+        for value in ("0", "10", "two"):
+            with self.subTest(value=value), tempfile.TemporaryDirectory() as output, \
+                    patch("subprocess.run") as run, patch("sys.stderr"):
+                with self.assertRaises(SystemExit):
+                    MODULE["main"](["capture", "--max-parts", value, "--output", output])
+                run.assert_not_called()
 
     def test_a_failed_test_run_still_restores_the_simulator_and_deletes_what_it_created(self):
         simulators = FakeSimulators(test_result=65)

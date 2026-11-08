@@ -26,6 +26,10 @@ on:
         description: Screen name prefixes, separated by commas (empty for every screen)
         required: false
         default: ""
+      max-parts:
+        description: Most captures of each screen that scrolls, counting the first, from 1 (only the top) to 9
+        required: false
+        default: "6"
       log-images:
         description: Also print the images into the log as base64, for clients that can't download artifacts
         type: boolean
@@ -40,7 +44,8 @@ jobs:
        contains(github.event.pull_request.labels.*.name, 'screenshots') &&
        (github.event.action != 'labeled' || github.event.label.name == 'screenshots'))
     runs-on: xcode-27
-    # A full run takes about 30 minutes on hosted runners, mostly simulator boots and captures.
+    # A full run takes about 30 minutes on hosted runners, mostly simulator boots and captures;
+    # parts of screens that scroll add a few seconds each.
     timeout-minutes: 75
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
@@ -78,14 +83,15 @@ jobs:
           DEVICES: ${{ inputs.devices || 'largest,smallest' }}
           APPEARANCES: ${{ inputs.appearances == 'light' && 'light' || inputs.appearances == 'dark' && 'dark' || 'light,dark' }}
           SCREEN_FILTER: ${{ inputs.filter }}
+          MAX_PARTS: ${{ inputs.max-parts || '6' }}
         run: |
           if [[ "$CAPTURE_SET" == accessibility ]]; then
             python3 scripts/screenshots capture --set accessibility --filter "$SCREEN_FILTER" \
-              --output "$RUNNER_TEMP/screenshots"
+              --max-parts "$MAX_PARTS" --output "$RUNNER_TEMP/screenshots"
           else
             python3 scripts/screenshots capture --devices "$DEVICES" \
               --appearances "$APPEARANCES" --filter "$SCREEN_FILTER" \
-              --output "$RUNNER_TEMP/screenshots"
+              --max-parts "$MAX_PARTS" --output "$RUNNER_TEMP/screenshots"
           fi
       # A failed run still uploads what it captured, to show what went wrong.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
