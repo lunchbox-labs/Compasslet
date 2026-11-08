@@ -32,3 +32,8 @@ test('a failed run uploads its result bundle from the hidden .build folder', () 
   assert.equal(upload.with['include-hidden-files'], true);
   assert.equal(upload.with['if-no-files-found'], 'error');
 });
+
+test('the test step times out before the job, so a slow run still keeps its bundle', () => {
+  const step = workflow.jobs.repeat.steps.find(step => step.id === 'repeat');
+  assert.ok(step['timeout-minutes'] < workflow.jobs.repeat['timeout-minutes']);
+});

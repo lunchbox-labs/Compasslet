@@ -29,10 +29,12 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
-      # Each iteration relaunches the app, so no state carries over from the one before and a
-      # failure is one a single Check run could hit.
+      # Each iteration relaunches the app, so no in-memory state carries over from the one before
+      # and a failure is one a single Check run could hit. The step times out before the job does,
+      # so a run that takes too long still counts as a failure and keeps its result bundle.
       - name: Run the simulator tests until one fails
         id: repeat
+        timeout-minutes: 110
         env:
           ITERATIONS: ${{ inputs.iterations }}
         run: |

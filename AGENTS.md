@@ -45,8 +45,8 @@ npm test --prefix scripts/tests/workflows
 To check whether the simulator tests are flaky, use Actions → Repeat Tests → Run workflow on the
 branch to test. It runs them up to `iterations` times (20 by default, 50 at most) and stops at the
 first failure, keeping that failure's result bundle for 7 days. Each iteration relaunches the app,
-so no state carries over between them. A run that hits the two-hour timeout keeps no bundle. It
-runs only by hand, so it never blocks a merge. Locally, `scripts/test-ios` passes its options to
+so no in-memory state carries over between them. A run that's still going after 110 minutes stops
+and keeps its bundle too. It runs only by hand, so it never blocks a merge. Locally, `scripts/test-ios` passes its options to
 `xcodebuild`:
 
 ```sh
