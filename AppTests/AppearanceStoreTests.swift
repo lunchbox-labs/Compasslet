@@ -280,11 +280,12 @@ struct AppearanceStoreTests {
           #expect(lines <= font.lineHeight * 2 + 1, "\(status) \(weight) \(card): \(lines)")
           #expect(lines <= card.height, "\(status) \(weight) \(card): \(lines)")
           // A word too wide at full size is broken across the lines unless the status then needs
-          // more than two lines anyway, which makes it shrink.
+          // more than two lines, or more than its card's height, anyway, which makes it shrink.
           if words.contains(where: { width($0, fullSize) > card.width }) {
             let unscaled = height(status, fullSize, width: card.width)
             #expect(
-              unscaled > fullSize.lineHeight * 2 + 1, "\(status) \(weight) \(card): \(unscaled)")
+              unscaled > min(fullSize.lineHeight * 2 + 1, card.height),
+              "\(status) \(weight) \(card): \(unscaled)")
           }
         }
       }
