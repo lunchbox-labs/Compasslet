@@ -57,3 +57,26 @@ test('manual runs never cancel or replace other runs, even at the same commit', 
     assert.notEqual(first.group, other.group);
   }
 });
+
+const native = workflow.jobs.native;
+const testStep = native.steps.find(step => step.run?.includes('scripts/test-ios'));
+const upload = native.steps.find(step => step.uses?.startsWith('actions/upload-artifact@'));
+
+test('a failed simulator test run uploads its result bundle from the hidden .build folder', () => {
+  assert.equal(testStep.id, 'test');
+  assert.equal(upload.if, "failure() && steps.test.outcome == 'failure'");
+  assert.match(upload.with.path, /^\.build\/test-results\./);
+  assert.equal(upload.with['include-hidden-files'], true);
+  assert.equal(upload.with['if-no-files-found'], 'error');
+  assert.equal(upload.with['retention-days'], 7);
+});
+
+test('the result bundle uploads after the tests, under a name unique to each attempt', () => {
+  assert.ok(native.steps.indexOf(upload) > native.steps.indexOf(testStep));
+  assert.match(upload.with.name, /\$\{\{ github\.run_number \}\}/);
+  assert.match(upload.with.name, /\$\{\{ github\.run_attempt \}\}/);
+});
+
+test('the simulator test step times out before the job, so a hung run still keeps its bundle', () => {
+  assert.ok(testStep['timeout-minutes'] < native['timeout-minutes']);
+});

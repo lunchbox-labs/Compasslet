@@ -62,7 +62,23 @@ jobs:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      # The step times out before the job does, so a hung run still counts as a test failure
+      # and keeps its result bundle.
       - name: Build and test on an available iPhone simulator
+        id: test
+        timeout-minutes: 20
         # DEVELOPER_DIR pins the toolchain, and the test build compiles the arm64 products
         # the simulator runs, so neither a toolchain probe nor a separate build is needed.
         run: bash scripts/test-ios
+      # A failed test run keeps its result bundle, with each test's failure details, timings and
+      # attachments, so it can be diagnosed without running the job again. Passing runs upload
+      # nothing. The bundle sits under the hidden .build folder, so hidden files must be included
+      # or nothing is uploaded, and each attempt gets its own name so a re-run can upload too.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure() && steps.test.outcome == 'failure'
+        with:
+          name: check-test-results-run-${{ github.run_number }}-attempt-${{ github.run_attempt }}
+          path: .build/test-results.*/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
