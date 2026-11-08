@@ -68,7 +68,7 @@ activation, on a manual start, on each drive heartbeat, on each sensor event, an
 `authorizationChanged` while no drive runs (`observeAuthorization`). Any state other than
 `ready` ends a running drive (`phoneBecameActive`, `beat` and `receive`).
 `beginDrive` sets `unavailable` directly when the sensor refuses to start, leaves the drive
-idle with `StartFailure.locationUnavailable` and clears the sensor callback without restoring
+plainly idle and clears the sensor callback without restoring
 the authorization observer. The next refresh replaces the status. This can't happen in
 practice, because the sensor checks the same conditions the refresh checked just before.
 
@@ -99,8 +99,8 @@ stateDiagram-v2
 ## Drive session
 
 A drive is the period in which travel location runs. `DriveSessionController.state`
-(`App/Driving/DriveSessionController.swift`) holds it as one value: `idle`, with the
-`StartFailure` of the last start if it failed, or `driving` with one `DriveSession` object.
+(`App/Driving/DriveSessionController.swift`) holds it as one value: `idle`, recording in `liveActivityFailed` whether the last start ended
+because its Live Activity couldn't start, or `driving` with one `DriveSession` object.
 The session holds everything that belongs to one drive: `startedAt`, the course filter, the
 last reading, `hasReceivedReading`, `locationNeedsForeground`, `carAbsentSince`,
 `notInUseSince`, the background time held for that wait, its heartbeat and deadline timers, and
@@ -114,18 +114,19 @@ and `preparation`.
 stateDiagram-v2
     [*] --> Idle
     Idle --> Driving: beginDrive (CarPlay activation, manual start, Start intent)
-    Idle --> Idle: setup not ready, suppressed, or already driving
-    Idle --> LocationUnavailable: sensor start fails
+    Idle --> Idle: setup not ready, suppressed, already driving, or sensor start fails
     Idle --> LiveActivityUnavailable: manual start without CarPlay while Live Activities are off
     Driving --> Idle: stopDrive
     Driving --> LiveActivityUnavailable: Live Activity fails to start without CarPlay
-    LocationUnavailable --> Driving: beginDrive
     LiveActivityUnavailable --> Driving: beginDrive
+    LiveActivityUnavailable --> Idle: sensor start fails
     LiveActivityUnavailable --> Idle: phone activation while Live Activities are allowed
+    LiveActivityUnavailable --> LiveActivityUnavailable: manual start without CarPlay while Live Activities are off
 ```
 
-`Idle`, `LocationUnavailable` and `LiveActivityUnavailable` are `idle(nil)`,
-`idle(.locationUnavailable)` and `idle(.liveActivityUnavailable)`.
+`Idle` and `LiveActivityUnavailable` are `idle(liveActivityFailed: false)` and
+`idle(liveActivityFailed: true)`. A sensor start failure needs no state of its own: it shows
+as `setupStatus == .unavailable`, and `compactStatus` is `inactive` either way.
 
 Inside a drive, each reading is classified on its own by the
 [travel course filter](#travel-course-filter), so the presentation moves between any of these
@@ -173,7 +174,10 @@ run while a drive does, both in process, so they only advance while the process 
 - The heartbeat (`heartbeatInterval`, `beat`) runs once a second. It re-reads the car audio
   route, refreshes setup, enforces the eight-hour limit, observes the `activity` diagnostics
   surface (which counts a gap over 2 s as a new session), lets an active Live Activity renew
-  its stale date once it has gone 60 s without a write, and checks every limit again.
+  its stale date once it has gone 60 s without a write, and checks every limit again. Beats
+  keep to whole seconds from `startedAt` (`scheduleHeartbeat`, `nextBeat`), so the beat's work
+  doesn't stretch the gap; a beat that wakes late skips to the next slot still to come rather
+  than catching up, and a clock set back puts the next beat a second from now.
 - One deadline timer (`armDeadline`, `deadlineCame`) fires at the first moment past the
   earliest of the absence limit, the not-in-use limit and the reading's 5 s lifetime, so each
   takes effect on time rather than at the next heartbeat. A change that moves a limit later
@@ -214,8 +218,9 @@ drive runs with its activity `starting` or `active`; the phone's Live Activity b
 own `generation`. Its `start()`, `end()`, content writes and rewrites all run in order on its
 one queue (`operation`, `enqueue`), each joining it when it is called, so a start always
 follows the survivor cleanup or an earlier end, and an end always follows queued writes. An
-end called while a request is in flight overtakes it: the request's result is ended and
-`start()` throws `cancelled`.
+end called while a request waits in the queue or is in flight overtakes it: a waiting request
+is never made, a request in flight has its result ended, and either way `start()` throws
+`cancelled`.
 
 ```mermaid
 stateDiagram-v2

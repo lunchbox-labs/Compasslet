@@ -29,8 +29,9 @@ final class SystemDriveClock: DriveClock {
   var now: Date { Date() }
 
   func timer(at date: Date, _ fire: @escaping @MainActor () -> Void) -> DriveTimer {
+    // Measured now, so the time the task takes to start doesn't lengthen the wait.
+    let delay = date.timeIntervalSinceNow
     let task = Task { @MainActor in
-      let delay = date.timeIntervalSinceNow
       guard delay.isFinite else { return }
       if delay > 0 {
         do { try await Task.sleep(for: .seconds(delay)) } catch { return }
@@ -58,17 +59,10 @@ final class DriveSessionController: ObservableObject {
     /// Whether the activity is showing or about to, so it gets the drive's presentations.
     var isRunning: Bool { self == .starting || self == .active }
   }
-  /// Why the last start left no drive running.
-  enum StartFailure {
-    /// The Live Activity couldn't start, and without CarPlay nothing else would show the drive.
-    case liveActivityUnavailable
-    /// Travel location refused to start.
-    case locationUnavailable
-  }
-
-  /// No drive, with why the last start failed if it did, or one drive.
+  /// No drive, or one drive. `liveActivityFailed` records that the last start ended because its
+  /// Live Activity couldn't start, and without CarPlay nothing else would show the drive.
   private enum State {
-    case idle(StartFailure?)
+    case idle(liveActivityFailed: Bool)
     case driving(DriveSession)
   }
 
@@ -107,7 +101,7 @@ final class DriveSessionController: ObservableObject {
   }
 
   @Published private(set) var presentation = TravelPresentation(sample: nil, status: .unavailable)
-  @Published private var state = State.idle(nil)
+  @Published private var state = State.idle(liveActivityFailed: false)
   @Published private(set) var setupStatus: SetupStatus = .ready
   /// Whether Compasslet's CarPlay scene is connected, whether or not it's in front.
   @Published private(set) var isCarPlayConnected = false
@@ -119,7 +113,7 @@ final class DriveSessionController: ObservableObject {
 
   var compactStatus: CompactStatus {
     switch state {
-    case .idle(.liveActivityUnavailable): return .unavailable
+    case .idle(liveActivityFailed: true): return .unavailable
     case .idle: return .inactive
     case .driving(let session):
       switch session.liveActivity {
@@ -210,8 +204,8 @@ final class DriveSessionController: ObservableObject {
     refreshSetupStatus()
     if setupStatus != .ready { stopDrive() }
     // A failed phone start shouldn't keep asking for a setting the user has since changed.
-    if case .idle(.liveActivityUnavailable) = state, activity.canStartActivities {
-      state = .idle(nil)
+    if case .idle(liveActivityFailed: true) = state, activity.canStartActivities {
+      state = .idle(liveActivityFailed: false)
     }
     if requestingPermission { requestPhoneAuthorization(isForeground: true) }
   }
@@ -282,7 +276,7 @@ final class DriveSessionController: ObservableObject {
       // Without CarPlay the drive exists only for the Live Activity, so don't acquire
       // location when the system won't show one.
       guard isCarPlayConnected || activity.canStartActivities else {
-        state = .idle(.liveActivityUnavailable)
+        state = .idle(liveActivityFailed: true)
         return
       }
       await beginDrive()
@@ -305,7 +299,7 @@ final class DriveSessionController: ObservableObject {
       sensor.stop()
       sensor.receive = nil
       setupStatus = .unavailable
-      state = .idle(.locationUnavailable)
+      state = .idle(liveActivityFailed: false)
       return
     }
     // A notification can be missed while the app is suspended, so read the route itself.
@@ -313,7 +307,7 @@ final class DriveSessionController: ObservableObject {
     if !isCarPlayConnected, !isCarAudioConnected { session.carAbsentSince = session.startedAt }
     presentation = TravelPresentation(sample: nil, status: .waiting)
     state = .driving(session)
-    scheduleHeartbeat(for: session)
+    scheduleHeartbeat(for: session, after: session.startedAt)
     armDeadline(for: session)
     await startActivity(for: session)
   }
@@ -339,7 +333,7 @@ final class DriveSessionController: ObservableObject {
     } catch {
       guard session === current else { return }
       guard isCarPlayConnected else {
-        stopDrive(leaving: .liveActivityUnavailable)
+        stopDrive(liveActivityFailed: true)
         return
       }
       setLiveActivity(.unavailable, for: session)
@@ -349,7 +343,6 @@ final class DriveSessionController: ObservableObject {
   func carPlayResignedActive() {
     active = false
     suppressed = false
-    if let current { armDeadline(for: current) }
   }
 
   /// A brief disconnect keeps the drive; its absence limit ends it once CarPlay stays away too
@@ -507,17 +500,34 @@ final class DriveSessionController: ObservableObject {
     session.liveActivity = status
   }
 
-  private func scheduleHeartbeat(for session: DriveSession) {
-    let date = clock.now.addingTimeInterval(Self.heartbeatInterval)
+  /// Sets the beat after the one due at `due`, keeping to the drive's own seconds so the beat's
+  /// work and a late wake don't stretch the gaps that diagnostics measure. A beat that woke past
+  /// the next slot skips to the first one still to come rather than catching up.
+  private func scheduleHeartbeat(for session: DriveSession, after due: Date) {
+    let date = nextBeat(after: due)
     session.heartbeat = clock.timer(at: date) { [weak self, weak session] in
       guard let self, let session else { return }
-      self.beat(session)
+      self.beat(session, due: date)
     }
+  }
+
+  /// The first slot after `due`, a whole number of intervals on, that is still to come. A clock
+  /// set back would otherwise put it far off, so then it is an interval from now.
+  private func nextBeat(after due: Date) -> Date {
+    let interval = Self.heartbeatInterval
+    let now = clock.now
+    var date = due.addingTimeInterval(interval)
+    if date <= now {
+      let missed = (now.timeIntervalSince(date) / interval).rounded(.down)
+      date = date.addingTimeInterval((missed + 1) * interval)
+    }
+    guard date.timeIntervalSince(now) <= interval else { return now.addingTimeInterval(interval) }
+    return date
   }
 
   /// The drive's regular work. Once this stops running, as when the app's process ends, the
   /// Live Activity goes stale on its own.
-  private func beat(_ session: DriveSession) {
+  private func beat(_ session: DriveSession, due: Date) {
     guard session === current else { return }
     let carAudio = readCarAudioRoute()
     if carAudio != isCarAudioConnected { carAudioChanged(connected: carAudio) }
@@ -533,7 +543,7 @@ final class DriveSessionController: ObservableObject {
     if session.liveActivity == .active { activity.renew() }
     expireReading(of: session)
     armDeadline(for: session)
-    scheduleHeartbeat(for: session)
+    scheduleHeartbeat(for: session, after: due)
   }
 
   /// Ends the drive when the car has been away too long, or when location stopped because the
@@ -603,11 +613,12 @@ final class DriveSessionController: ObservableObject {
     return Date(timeIntervalSinceReferenceDate: end.nextUp)
   }
 
-  /// Ends the drive and its Live Activity, leaving why a start failed if one did.
+  /// Ends the drive and its Live Activity, recording whether it ended because the Live Activity
+  /// couldn't start.
   @discardableResult
-  private func stopDrive(leaving failure: StartFailure? = nil) -> Task<Void, Never>? {
+  private func stopDrive(liveActivityFailed: Bool = false) -> Task<Void, Never>? {
     guard let session = current else { return nil }
-    state = .idle(failure)
+    state = .idle(liveActivityFailed: liveActivityFailed)
     session.cancelTimers()
     // The background time keeps the app running until the Live Activity has ended.
     let releaseBackgroundTime = session.releaseBackgroundTime

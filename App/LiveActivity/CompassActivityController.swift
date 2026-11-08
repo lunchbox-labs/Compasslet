@@ -99,6 +99,8 @@ final class CompassActivityController: CompassActivityPresenting {
   /// Requests the activity at the head of the queue, then writes what was handed over meanwhile.
   private func request(_ token: UUID) async throws {
     do {
+      // An end called while this waited in the queue cancels it before anything shows.
+      guard generation == token else { throw Failure.cancelled }
       var initial = CompassActivityAttributes.ContentState(bearing: nil, status: .waiting)
       initial.appearance = appearance
       initial = stamped(initial)

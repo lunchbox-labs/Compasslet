@@ -162,6 +162,26 @@ struct CompassActivityControllerTests {
     #expect(system.cleanups == 1)
   }
 
+  @Test func endBeforeAQueuedStartupRunsMeansNoRequest() async throws {
+    let system = TestActivitySystem()
+    system.suspendCleanup = true
+    let controller = CompassActivityController(system: system)
+    let cleanup = controller.end()
+    let startup = Task { try await controller.start() }
+    while system.resumeCleanup == nil { await Task.yield() }
+    // The start joins the queue behind the suspended cleanup, and the end joins behind it.
+    for _ in 0..<10 { await Task.yield() }
+    let ending = controller.end()
+    system.suspendCleanup = false
+    system.resumeCleanup?.resume()
+    await cleanup.value
+    await #expect(throws: CompassActivityController.Failure.self) { try await startup.value }
+    await ending.value
+    #expect(system.requests == 0)
+    #expect(system.handle.ends == 0)
+    #expect(system.cleanups == 2)
+  }
+
   @Test func startAfterAnEndRequestsOnlyOnceTheEndHasFinished() async throws {
     let system = TestActivitySystem()
     system.suspendCleanup = true
@@ -578,6 +598,39 @@ struct CompassActivityControllerTests {
     let written = system.handle.updates.dropFirst(initialCount)
     #expect(written.map { $0.bearing == nil } == [false, true, true])
     #expect(written.last?.status == .unavailable)
+    await drive.endDrive()
+  }
+
+  @Test func driveWritesTheClearThenOnlyTheLatestReadingAfterASuspendedWrite() async throws {
+    let system = TestActivitySystem()
+    let clock = TestDriveClock(now: Date(timeIntervalSince1970: 100))
+    let sensor = TestTravelSensor()
+    let activity = CompassActivityController(system: system, now: { clock.now })
+    let drive = DriveSessionController(sensor: sensor, activity: activity, clock: clock)
+    await drive.carPlayActivated()
+    await drive.waitForPendingOperations()
+    let initialCount = system.handle.updates.count
+    func send(_ degrees: Double) {
+      sensor.receive?(
+        .reading(
+          .init(
+            courseDegrees: degrees, courseAccuracyDegrees: 1, speedMetersPerSecond: 10,
+            speedAccuracyMetersPerSecond: 1, horizontalAccuracyMeters: 1, timestamp: clock.now)))
+    }
+    system.handle.suspendNextUpdate = true
+    send(20)
+    while system.handle.resumeUpdate == nil { await Task.yield() }
+    sensor.receive?(.interrupted)
+    // Past the rate limit, so a reading after the clear can be written.
+    clock.now += 2
+    for course in 30...100 { send(Double(course)) }
+    system.handle.resumeUpdate?.resume()
+    await drive.waitForPendingOperations()
+    // The suspended reading, the clear, then only the latest reading handed over after it.
+    let written = Array(system.handle.updates.dropFirst(initialCount))
+    #expect(written.map { $0.bearing == nil } == [false, true, false])
+    #expect(written[1].status == .unavailable)
+    #expect(written.last?.bearing?.rounded() == 100)
     await drive.endDrive()
   }
 
