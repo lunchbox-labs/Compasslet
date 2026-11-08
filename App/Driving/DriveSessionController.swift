@@ -258,6 +258,9 @@ final class DriveSessionController: ObservableObject {
       return
     }
     try? CompassDiagnostics.shared?.observe(.activity, active: compactStatus == .active)
+    // Keeps the activity current through a stop with nothing new to show. Once this stops
+    // running, as when the app's process ends, the activity goes stale on its own.
+    if compactStatus == .active { activity.renew() }
     if let lastReading,
       !(0...5).contains(now().timeIntervalSince(lastReading.timestamp))
     {
@@ -267,6 +270,9 @@ final class DriveSessionController: ObservableObject {
   }
 
   func waitForPendingOperations() async { await activityOperation?.value }
+
+  /// Whether a Live Activity is showing, including one left from an earlier launch.
+  var hasLiveActivity: Bool { activity.hasActivities }
 
   /// After a start from the background, waits for location and reports whether it couldn't
   /// start without the app in use. A drive that ended meanwhile, or one with Compasslet's

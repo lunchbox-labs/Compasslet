@@ -664,7 +664,9 @@ private final class FixedTravelSensor: TravelLocationSensor {
 private final class IdleActivity: CompassActivityPresenting {
   var onDismiss: (() -> Void)?
   var canStartActivities: Bool { true }
+  var hasActivities: Bool { false }
   func start() async throws {}
+  func renew() {}
   func update(_ presentation: TravelPresentation) async {}
   func end() async {}
 }

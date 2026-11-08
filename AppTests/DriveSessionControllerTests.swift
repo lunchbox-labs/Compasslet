@@ -25,7 +25,10 @@ final class DriveSessionControllerTests: XCTestCase {
   final class Activity: CompassActivityPresenting {
     var onDismiss: (() -> Void)?
     var canStartActivities = true
+    var hasActivities = false
     var starts = 0
+    var renewals = 0
+    func renew() { renewals += 1 }
     var invalidations = 0
     func invalidateReading() async { invalidations += 1 }
     var ends = 0
@@ -812,6 +815,30 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertFalse(controller.isDriving)
     XCTAssertEqual(activity.ends, 1)
     XCTAssertEqual(sensor.starts, 0)
+  }
+
+  func testTickRenewsOnlyAShowingActivity() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    controller.tick()
+    XCTAssertEqual(activity.renewals, 0)
+    await controller.carPlayActivated()
+    XCTAssertEqual(controller.compactStatus, .active)
+    controller.tick()
+    XCTAssertEqual(activity.renewals, 1)
+    activity.onDismiss?()
+    XCTAssertEqual(controller.compactStatus, .dismissed)
+    controller.tick()
+    XCTAssertEqual(activity.renewals, 1)
+    await controller.endDrive()
+    controller.tick()
+    XCTAssertEqual(activity.renewals, 1)
+  }
+
+  func testReportsALiveActivityLeftFromAnEarlierLaunch() {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    XCTAssertFalse(controller.hasLiveActivity)
+    activity.hasActivities = true
+    XCTAssertTrue(controller.hasLiveActivity)
   }
 
   func testEndingDuringAnActivityRestartLeavesTheDriveEnded() async {

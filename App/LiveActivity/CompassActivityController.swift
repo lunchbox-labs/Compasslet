@@ -16,6 +16,8 @@ protocol CompassActivitySystem: AnyObject {
   func request(_ state: CompassActivityAttributes.ContentState) async throws
     -> any CompassActivityHandle
   func endSurvivors(_ finalState: CompassActivityAttributes.ContentState) async
+  /// Whether any Compasslet Live Activity is showing, including one left from an earlier launch.
+  var hasActivities: Bool { get }
 }
 
 /// Owns only the current compact presentation. Call start from an eligible drive start.
@@ -30,12 +32,22 @@ final class CompassActivityController: CompassActivityPresenting {
   private var generation = UUID()
   private var validity = UUID()
   private var lastUsableWrite: Date?
+  /// When the activity's content and stale date were last written.
+  private var lastWrite: Date?
   private var operation: Task<Void, Never>?
   private var appearance: AppearanceValues
   private var appearanceObservation: AnyCancellable?
   private var lastContent: CompassActivityAttributes.ContentState?
 
   var canStartActivities: Bool { system.enabled }
+  var hasActivities: Bool { system.hasActivities }
+
+  /// How long a write keeps the activity current. A running drive renews it well before then, so
+  /// only an activity whose app has stopped running goes stale and shows travel as unavailable,
+  /// rather than an old direction.
+  static let staleInterval: TimeInterval = 5 * 60
+  /// How long an activity goes without a write before a running drive renews its stale date.
+  static let renewalInterval: TimeInterval = 60
 
   init(
     system: any CompassActivitySystem = LocalCompassActivitySystem(),
@@ -61,6 +73,7 @@ final class CompassActivityController: CompassActivityPresenting {
     do {
       var initial = CompassActivityAttributes.ContentState(bearing: nil, status: .waiting)
       initial.appearance = appearance
+      initial = stamped(initial)
       let created = try await system.request(initial)
       guard generation == token else {
         await created.end(.init(bearing: nil, status: .unavailable))
@@ -77,6 +90,7 @@ final class CompassActivityController: CompassActivityPresenting {
         self.lastContent = nil
         try? CompassDiagnostics.shared?.observe(.activity, active: false)
         self.lastUsableWrite = nil
+        self.lastWrite = nil
         self.scheduledReading = nil
         self.onDismiss?()
       }
@@ -152,6 +166,7 @@ final class CompassActivityController: CompassActivityPresenting {
         return
       }
       content.appearance = self.appearance
+      content = self.stamped(content)
       self.lastContent = content
       await handle.update(content)
     }
@@ -163,6 +178,28 @@ final class CompassActivityController: CompassActivityPresenting {
   @discardableResult
   func updateAppearance(_ value: AppearanceValues) -> Task<Void, Never>? {
     appearance = value.requiringReadout()
+    return rewriteLastContent()
+  }
+
+  /// Rewrites the current content with a new stale date once the last write is older than the
+  /// renewal interval, so a long stop with nothing new to show doesn't make the activity stale.
+  func renew() {
+    guard handle != nil, let lastWrite else { return }
+    let date = now()
+    guard date.timeIntervalSince1970.isFinite,
+      !(0..<Self.renewalInterval).contains(date.timeIntervalSince(lastWrite))
+    else { return }
+    // Set now, so the ticks before the queued write runs don't queue more.
+    self.lastWrite = date
+    rewriteLastContent()
+  }
+
+  func waitForPendingOperations() async { await operation?.value }
+
+  /// Writes the last content again with the current appearance and a new stale date. The
+  /// retained content keeps its original sample time, because a rewrite is not a new sample.
+  @discardableResult
+  private func rewriteLastContent() -> Task<Void, Never>? {
     guard let handle else { return nil }
     let token = generation
     let validityToken = validity
@@ -173,7 +210,7 @@ final class CompassActivityController: CompassActivityPresenting {
         var content = self.lastContent
       else { return }
       content.appearance = self.appearance
-      // Retained content keeps its original sample time; a cosmetic update is not a new sample.
+      content = self.stamped(content)
       self.lastContent = content
       await handle.update(content)
     }
@@ -185,6 +222,7 @@ final class CompassActivityController: CompassActivityPresenting {
     generation = UUID()
     starting = false
     lastUsableWrite = nil
+    lastWrite = nil
     scheduledReading = nil
     let owned = handle
     handle = nil
@@ -201,6 +239,21 @@ final class CompassActivityController: CompassActivityPresenting {
     }
     operation = task
     await task.value
+  }
+
+  /// The content with a stale date measured from now, recorded as the latest write.
+  private func stamped(_ content: CompassActivityAttributes.ContentState)
+    -> CompassActivityAttributes.ContentState
+  {
+    var content = content
+    let date = now()
+    guard date.timeIntervalSince1970.isFinite else {
+      content.expiry = nil
+      return content
+    }
+    content.expiry = date.addingTimeInterval(Self.staleInterval)
+    lastWrite = date
+    return content
   }
 
   /// Whether two bearings render the same rounded degrees and the same cardinal direction.
@@ -247,6 +300,11 @@ private final class LocalCompassActivitySystem: CompassActivitySystem {
     for activity in Activity<CompassActivityAttributes>.activities {
       await activity.end(
         ActivityContent(state: finalState, staleDate: nil), dismissalPolicy: .immediate)
+    }
+  }
+  var hasActivities: Bool {
+    Activity<CompassActivityAttributes>.activities.contains {
+      $0.activityState == .active || $0.activityState == .stale
     }
   }
 }

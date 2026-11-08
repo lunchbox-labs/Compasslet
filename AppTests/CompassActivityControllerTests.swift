@@ -15,7 +15,7 @@ struct CompassActivityControllerTests {
       accuracyDegrees: 1, timestamp: time)
     await controller.update(.init(sample: sample, status: .usable))
     let original = try #require(system.handle.updates.last)
-    #expect(original.expiry == nil)
+    #expect(original.expiry == time.addingTimeInterval(CompassActivityController.staleInterval))
     for status in [TravelStatus.slow, .unreliable, .unavailable] {
       time += 60
       await controller.update(.init(sample: nil, status: status))
@@ -55,7 +55,7 @@ struct CompassActivityControllerTests {
     let changed = try #require(system.handle.updates.last)
     #expect(changed.bearing == original.bearing)
     #expect(changed.sampleTime == original.sampleTime)
-    #expect(changed.expiry == original.expiry)
+    #expect(changed.expiry == time.addingTimeInterval(CompassActivityController.staleInterval))
     #expect(changed.appearance?.showDegrees == false)
     #expect(changed.appearance?.lockScreenTimestamp == .hidden)
     #expect(changed.appearance?.carPlayActivityTimestamp == .elapsed)
@@ -64,7 +64,9 @@ struct CompassActivityControllerTests {
     await controller.updateAppearance(appearance)?.value
     #expect(system.handle.updates.last?.bearing == original.bearing)
     #expect(system.handle.updates.last?.sampleTime == original.sampleTime)
-    #expect(system.handle.updates.last?.expiry == nil)
+    #expect(
+      system.handle.updates.last?.expiry
+        == time.addingTimeInterval(CompassActivityController.staleInterval))
     await controller.end()
     let count = system.handle.updates.count
     await controller.updateAppearance(appearance)?.value
@@ -168,6 +170,66 @@ struct CompassActivityControllerTests {
     #expect(system.handle.finalState == .init(bearing: nil, status: .unavailable))
   }
 
+  @Test func everyWriteGoesStaleAfterTheStaleIntervalFromIt() async throws {
+    let system = TestActivitySystem()
+    var time = Date(timeIntervalSince1970: 100)
+    let controller = CompassActivityController(system: system, now: { time })
+    let interval = CompassActivityController.staleInterval
+    try await controller.start()
+    #expect(system.requestedState?.expiry == time.addingTimeInterval(interval))
+    for status in [TravelStatus.waiting, .slow, .unreliable, .unavailable] {
+      time += 30
+      await controller.update(.init(sample: nil, status: status))
+      #expect(system.handle.updates.last?.expiry == time.addingTimeInterval(interval))
+    }
+    time += 30
+    await controller.invalidateReading()
+    #expect(system.handle.updates.last?.expiry == time.addingTimeInterval(interval))
+    await controller.end()
+  }
+
+  @Test func renewalKeepsARetainedReadingCurrentThroughALongStop() async throws {
+    let system = TestActivitySystem()
+    var time = Date(timeIntervalSince1970: 100)
+    let controller = CompassActivityController(system: system, now: { time })
+    let interval = CompassActivityController.staleInterval
+    try await controller.start()
+    let sample = CompassSample(
+      degrees: 42, source: .vehicleCourse, reference: .trueNorth,
+      accuracyDegrees: 1, timestamp: time)
+    await controller.update(.init(sample: sample, status: .usable))
+    let original = try #require(system.handle.updates.last)
+    // A stop: nothing new is written, so only renewal moves the stale date.
+    time += 30
+    await controller.update(.init(sample: nil, status: .slow))
+    controller.renew()
+    await controller.waitForPendingOperations()
+    #expect(system.handle.updates.count == 1)
+    time += CompassActivityController.renewalInterval - 30
+    controller.renew()
+    controller.renew()
+    await controller.waitForPendingOperations()
+    #expect(system.handle.updates.count == 2)
+    let renewed = try #require(system.handle.updates.last)
+    #expect(renewed.bearing == original.bearing)
+    #expect(renewed.sampleTime == original.sampleTime)
+    #expect(renewed.status == .usable)
+    #expect(renewed.expiry == time.addingTimeInterval(interval))
+    await controller.end()
+    time += CompassActivityController.renewalInterval
+    controller.renew()
+    await controller.waitForPendingOperations()
+    #expect(system.handle.updates.count == 2)
+  }
+
+  @Test func reportsActivitiesLeftFromAnEarlierLaunch() {
+    let system = TestActivitySystem()
+    let controller = CompassActivityController(system: system)
+    #expect(!controller.hasActivities)
+    system.hasActivities = true
+    #expect(controller.hasActivities)
+  }
+
   @Test func unchangedReadingsDoNotRenewTheRecordedSampleTime() async throws {
     let system = TestActivitySystem()
     var time = Date(timeIntervalSince1970: 100)
@@ -181,7 +243,9 @@ struct CompassActivityControllerTests {
           degrees: 270, source: .vehicleCourse, reference: .trueNorth,
           accuracyDegrees: 1, timestamp: time.addingTimeInterval(-1.5)))
       await controller.update(.init(sample: sample, status: .usable))
-      #expect(system.handle.updates.last?.expiry == nil)
+      #expect(
+        system.handle.updates.last?.expiry
+          == Date(timeIntervalSince1970: 100 + CompassActivityController.staleInterval))
       #expect(system.handle.updates.last?.sampleTime == Date(timeIntervalSince1970: 98.5))
     }
     #expect(system.handle.updates.count == 1)
@@ -504,12 +568,15 @@ struct CompassActivityControllerTests {
   var resume: CheckedContinuation<Void, Never>?
   var requests = 0
   var cleanups = 0
+  var hasActivities = false
   var finalState: CompassActivityAttributes.ContentState?
   var handle = TestActivityHandle()
+  var requestedState: CompassActivityAttributes.ContentState?
   func request(_ state: CompassActivityAttributes.ContentState) async throws
     -> any CompassActivityHandle
   {
     requests += 1
+    requestedState = state
     if suspend { await withCheckedContinuation { resume = $0 } }
     if fail { throw CompassActivityController.Failure.unavailable }
     return handle
