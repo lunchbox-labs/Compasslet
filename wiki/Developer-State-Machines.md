@@ -272,7 +272,10 @@ stale date without changing its sample time.
 ## Background start intent
 
 `StartLiveActivityIntent` (`CompassLiveActivityIntents.swift:8`) can run in the background,
-where When In Use location may not start.
+where When In Use location may not start. Its decisions, and those of `EndLiveActivityIntent`,
+live in `LiveActivityShortcut` (`CompassLiveActivityIntents.swift`), which works on any
+`ShortcutDrive`, so `LiveActivityShortcutTests` covers the intents' decisions without
+ActivityKit or location. `DriveSessionControllerTests` covers the `Waiting` state.
 
 ```mermaid
 stateDiagram-v2
