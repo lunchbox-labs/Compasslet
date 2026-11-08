@@ -308,9 +308,8 @@ final class CarPlayPresentationTests: XCTestCase {
     let sensor = DriveSessionControllerTests.Sensor()
     let activity = DriveSessionControllerTests.Activity()
     activity.pauseStart = true
-    var time = Date(timeIntervalSince1970: 1_000)
-    let drive = DriveSessionController(
-      sensor: sensor, activity: activity, now: { time }, automaticTick: false)
+    let clock = TestDriveClock()
+    let drive = DriveSessionController(sensor: sensor, activity: activity, clock: clock)
     let bridge = CarPlayLifecycleBridge(drive: drive)
     bridge.activate()
     for _ in 0..<100 where activity.startContinuation == nil { await Task.yield() }
@@ -320,11 +319,11 @@ final class CarPlayPresentationTests: XCTestCase {
     XCTAssertTrue(drive.isDriving)
     bridge.disconnect()
     XCTAssertFalse(drive.isCarPlayConnected)
-    time += DriveSessionController.carPlayAbsenceLimit
-    drive.tick()
+    clock.now += DriveSessionController.carPlayAbsenceLimit
+    clock.fireDue()
     XCTAssertTrue(drive.isDriving)
-    time += 1
-    drive.tick()
+    clock.now += 1
+    clock.fireDue()
     XCTAssertFalse(drive.isDriving)
     XCTAssertEqual(sensor.stops, 1)
     activity.startContinuation?.resume()

@@ -13,27 +13,27 @@ struct CompassActivityControllerTests {
     let sample = CompassSample(
       degrees: 42, source: .vehicleCourse, reference: .trueNorth,
       accuracyDegrees: 1, timestamp: time)
-    await controller.update(.init(sample: sample, status: .usable))
+    await controller.showAndWait(.init(sample: sample, status: .usable))
     let original = try #require(system.handle.updates.last)
     #expect(original.expiry == time.addingTimeInterval(CompassActivityController.staleInterval))
     for status in [TravelStatus.slow, .unreliable, .unavailable] {
       time += 60
-      await controller.update(.init(sample: nil, status: status))
+      await controller.showAndWait(.init(sample: nil, status: status))
       #expect(system.handle.updates.last == original)
     }
     let next = CompassSample(
       degrees: 90, source: .vehicleCourse, reference: .trueNorth,
       accuracyDegrees: 1, timestamp: time)
-    await controller.update(.init(sample: next, status: .usable))
+    await controller.showAndWait(.init(sample: next, status: .usable))
     #expect(system.handle.updates.last?.bearing == 90)
     #expect(system.handle.updates.last?.sampleTime == time)
-    await controller.end()
+    await controller.end().value
     try await controller.start()
     let count = system.handle.updates.count
-    await controller.update(.init(sample: nil, status: .slow))
+    await controller.showAndWait(.init(sample: nil, status: .slow))
     #expect(system.handle.updates.count == count + 1)
     #expect(system.handle.updates.last?.bearing == nil)
-    await controller.end()
+    await controller.end().value
   }
 
   @Test func appearanceChangesKeepOriginalLastReadingTimestamp() async throws {
@@ -44,7 +44,7 @@ struct CompassActivityControllerTests {
     let sample = CompassSample(
       degrees: 42, source: .vehicleCourse, reference: .trueNorth,
       accuracyDegrees: 1, timestamp: time)
-    await controller.update(.init(sample: sample, status: .usable))
+    await controller.showAndWait(.init(sample: sample, status: .usable))
     let original = try #require(system.handle.updates.last)
     var appearance = AppearanceValues()
     appearance.showDegrees = false
@@ -67,7 +67,7 @@ struct CompassActivityControllerTests {
     #expect(
       system.handle.updates.last?.expiry
         == time.addingTimeInterval(CompassActivityController.staleInterval))
-    await controller.end()
+    await controller.end().value
     let count = system.handle.updates.count
     await controller.updateAppearance(appearance)?.value
     #expect(system.handle.updates.count == count)
@@ -76,32 +76,21 @@ struct CompassActivityControllerTests {
   @Test func queuedAppearanceCannotRepublishAfterSensorInvalidation() async throws {
     let system = TestActivitySystem()
     let time = Date(timeIntervalSince1970: 100)
-    var watchInvalidation = false
-    var invalidationBegan = false
-    let controller = CompassActivityController(
-      system: system,
-      now: {
-        if watchInvalidation { invalidationBegan = true }
-        return time
-      })
+    let controller = CompassActivityController(system: system, now: { time })
     try await controller.start()
     system.handle.suspendNextUpdate = true
     let sample = CompassSample(
       degrees: 42, source: .vehicleCourse, reference: .trueNorth,
       accuracyDegrees: 1, timestamp: time)
-    let usable = Task { await controller.update(.init(sample: sample, status: .usable)) }
+    controller.show(.init(sample: sample, status: .usable))
     while system.handle.resumeUpdate == nil { await Task.yield() }
     var appearance = AppearanceValues()
     appearance.showDegrees = false
     let cosmetic = controller.updateAppearance(appearance)
-    watchInvalidation = true
-    let invalidation = Task { await controller.invalidateReading() }
-    // now() runs synchronously before the invalidation joins the serial queue.
-    while !invalidationBegan { await Task.yield() }
+    controller.invalidateReading()
     system.handle.resumeUpdate?.resume()
-    await usable.value
     await cosmetic?.value
-    await invalidation.value
+    await controller.waitForPendingOperations()
     #expect(system.handle.updates.count == 2)
     #expect(system.handle.updates.last?.bearing == nil)
     #expect(system.handle.updates.last?.status == .unavailable)
@@ -123,7 +112,7 @@ struct CompassActivityControllerTests {
   @Test func duplicateStartsSurvivorsDismissalAndLateUpdates() async throws {
     let system = TestActivitySystem()
     let controller = CompassActivityController(system: system)
-    await controller.end()
+    await controller.end().value
     #expect(system.cleanups == 1)
     #expect(system.finalState == .init(bearing: nil, status: .unavailable))
     try await controller.start()
@@ -133,7 +122,7 @@ struct CompassActivityControllerTests {
     controller.onDismiss = { dismissed = true }
     system.handle.onDismiss?()
     #expect(dismissed)
-    await controller.update(.init(sample: nil, status: .waiting))
+    await controller.showAndWait(.init(sample: nil, status: .waiting))
     #expect(system.handle.updates.isEmpty)
   }
 
@@ -142,7 +131,7 @@ struct CompassActivityControllerTests {
     let controller = CompassActivityController(system: system)
     try await controller.start()
     let dismissed = system.handle
-    await controller.update(.init(sample: nil, status: .unreliable))
+    await controller.showAndWait(.init(sample: nil, status: .unreliable))
     let delivered = dismissed.updates.count
     #expect(delivered > 0)
     dismissed.onDismiss?()
@@ -150,10 +139,10 @@ struct CompassActivityControllerTests {
     system.handle = fresh
     try await controller.start()
     #expect(system.requests == 2)
-    await controller.update(.init(sample: nil, status: .slow))
+    await controller.showAndWait(.init(sample: nil, status: .slow))
     #expect(fresh.updates.last?.status == .slow)
     #expect(dismissed.updates.count == delivered)
-    await controller.end()
+    await controller.end().value
     #expect(fresh.ends == 1)
   }
 
@@ -163,11 +152,92 @@ struct CompassActivityControllerTests {
     let controller = CompassActivityController(system: system)
     let startup = Task { try await controller.start() }
     while system.resume == nil { await Task.yield() }
-    await controller.end()
+    // The end joins the queue behind the request, which it overtakes.
+    let ending = controller.end()
     system.resume?.resume()
     await #expect(throws: CompassActivityController.Failure.self) { try await startup.value }
+    await ending.value
     #expect(system.handle.ends == 1)
     #expect(system.handle.finalState == .init(bearing: nil, status: .unavailable))
+    #expect(system.cleanups == 1)
+  }
+
+  @Test func startAfterAnEndRequestsOnlyOnceTheEndHasFinished() async throws {
+    let system = TestActivitySystem()
+    system.suspendCleanup = true
+    let controller = CompassActivityController(system: system)
+    let ending = controller.end()
+    let startup = Task { try await controller.start() }
+    while system.resumeCleanup == nil { await Task.yield() }
+    for _ in 0..<10 { await Task.yield() }
+    #expect(system.requests == 0)
+    system.suspendCleanup = false
+    system.resumeCleanup?.resume()
+    await ending.value
+    try await startup.value
+    #expect(system.requests == 1)
+    #expect(system.cleanups == 1)
+    await controller.end().value
+  }
+
+  @Test func presentationsHandedOverDuringStartupAreWrittenOnceItShows() async throws {
+    let system = TestActivitySystem()
+    system.suspend = true
+    let time = Date(timeIntervalSince1970: 100)
+    let controller = CompassActivityController(system: system, now: { time })
+    let startup = Task { try await controller.start() }
+    while system.resume == nil { await Task.yield() }
+    controller.show(.init(sample: nil, status: .slow))
+    let sample = CompassSample(
+      degrees: 42, source: .vehicleCourse, reference: .trueNorth,
+      accuracyDegrees: 1, timestamp: time)
+    controller.show(.init(sample: sample, status: .usable))
+    #expect(system.handle.updates.isEmpty)
+    system.resume?.resume()
+    try await startup.value
+    await controller.waitForPendingOperations()
+    // Only the latest presentation is written.
+    #expect(system.handle.updates.map(\.bearing) == [42])
+    await controller.end().value
+  }
+
+  @Test func failedStartupDropsWhatWasHandedOver() async throws {
+    let system = TestActivitySystem()
+    system.fail = true
+    let controller = CompassActivityController(system: system)
+    controller.show(.init(sample: nil, status: .slow))
+    await #expect(throws: CompassActivityController.Failure.self) { try await controller.start() }
+    system.fail = false
+    try await controller.start()
+    await controller.waitForPendingOperations()
+    #expect(system.handle.updates.isEmpty)
+    await controller.end().value
+  }
+
+  @Test func clearDropsAPresentationHandedOverBeforeIt() async throws {
+    let system = TestActivitySystem()
+    var time = Date(timeIntervalSince1970: 100)
+    let controller = CompassActivityController(system: system, now: { time })
+    try await controller.start()
+    func reading(_ degrees: Double) -> TravelPresentation {
+      .init(
+        sample: CompassSample(
+          degrees: degrees, source: .vehicleCourse, reference: .trueNorth,
+          accuracyDegrees: 1, timestamp: time), status: .usable)
+    }
+    system.handle.suspendNextUpdate = true
+    controller.show(reading(42))
+    while system.handle.resumeUpdate == nil { await Task.yield() }
+    time += 2
+    controller.show(reading(90))
+    controller.invalidateReading()
+    system.handle.resumeUpdate?.resume()
+    await controller.waitForPendingOperations()
+    #expect(system.handle.updates.map(\.bearing) == [42, nil])
+    // A reading handed over after the clear is written.
+    await controller.showAndWait(reading(90))
+    #expect(system.handle.updates.map(\.bearing) == [42, nil, 90])
+    await controller.end().value
   }
 
   @Test func everyWriteGoesStaleAfterTheStaleIntervalFromIt() async throws {
@@ -179,13 +249,13 @@ struct CompassActivityControllerTests {
     #expect(system.requestedState?.expiry == time.addingTimeInterval(interval))
     for status in [TravelStatus.waiting, .slow, .unreliable, .unavailable] {
       time += 30
-      await controller.update(.init(sample: nil, status: status))
+      await controller.showAndWait(.init(sample: nil, status: status))
       #expect(system.handle.updates.last?.expiry == time.addingTimeInterval(interval))
     }
     time += 30
-    await controller.invalidateReading()
+    await controller.invalidateAndWait()
     #expect(system.handle.updates.last?.expiry == time.addingTimeInterval(interval))
-    await controller.end()
+    await controller.end().value
   }
 
   @Test func renewalKeepsARetainedReadingCurrentThroughALongStop() async throws {
@@ -197,11 +267,11 @@ struct CompassActivityControllerTests {
     let sample = CompassSample(
       degrees: 42, source: .vehicleCourse, reference: .trueNorth,
       accuracyDegrees: 1, timestamp: time)
-    await controller.update(.init(sample: sample, status: .usable))
+    await controller.showAndWait(.init(sample: sample, status: .usable))
     let original = try #require(system.handle.updates.last)
     // A stop: nothing new is written, so only renewal moves the stale date.
     time += 30
-    await controller.update(.init(sample: nil, status: .slow))
+    await controller.showAndWait(.init(sample: nil, status: .slow))
     controller.renew()
     await controller.waitForPendingOperations()
     #expect(system.handle.updates.count == 1)
@@ -215,7 +285,7 @@ struct CompassActivityControllerTests {
     #expect(renewed.sampleTime == original.sampleTime)
     #expect(renewed.status == .usable)
     #expect(renewed.expiry == time.addingTimeInterval(interval))
-    await controller.end()
+    await controller.end().value
     time += CompassActivityController.renewalInterval
     controller.renew()
     await controller.waitForPendingOperations()
@@ -242,14 +312,14 @@ struct CompassActivityControllerTests {
         CompassSample(
           degrees: 270, source: .vehicleCourse, reference: .trueNorth,
           accuracyDegrees: 1, timestamp: time.addingTimeInterval(-1.5)))
-      await controller.update(.init(sample: sample, status: .usable))
+      await controller.showAndWait(.init(sample: sample, status: .usable))
       #expect(
         system.handle.updates.last?.expiry
           == Date(timeIntervalSince1970: 100 + CompassActivityController.staleInterval))
       #expect(system.handle.updates.last?.sampleTime == Date(timeIntervalSince1970: 98.5))
     }
     #expect(system.handle.updates.count == 1)
-    await controller.end()
+    await controller.end().value
   }
 
   @Test func deliveredReadingsChangeAtRoundedDegreeBoundariesAndWrapNorth() async throws {
@@ -261,26 +331,20 @@ struct CompassActivityControllerTests {
       let sample = CompassSample(
         degrees: degrees, source: .vehicleCourse, reference: .trueNorth,
         accuracyDegrees: 1, timestamp: time)
-      await controller.update(.init(sample: sample, status: .usable))
+      await controller.showAndWait(.init(sample: sample, status: .usable))
       time += 1
     }
     #expect(system.handle.updates.map(\.bearing) == [22.1, 22.5, 359.6])
     #expect(
       system.handle.updates.map(\.sampleTime)
         == [100.0, 102, 103].map(Date.init(timeIntervalSince1970:)))
-    await controller.end()
+    await controller.end().value
   }
 
-  @Test func queuedReadingsCompareWithTheLastScheduledDirection() async throws {
+  @Test func readingsHandedOverDuringAWriteCompareWithTheLastWrittenDirection() async throws {
     let system = TestActivitySystem()
     var time = Date(timeIntervalSince1970: 100)
-    var evaluations = 0
-    let controller = CompassActivityController(
-      system: system,
-      now: {
-        evaluations += 1
-        return time
-      })
+    let controller = CompassActivityController(system: system, now: { time })
     try await controller.start()
     func reading(_ degrees: Double) -> TravelPresentation {
       .init(
@@ -290,32 +354,30 @@ struct CompassActivityControllerTests {
     }
 
     system.handle.suspendNextUpdate = true
-    let first = reading(300)
-    let slow = Task { await controller.update(first) }
+    controller.show(reading(300))
     while system.handle.resumeUpdate == nil { await Task.yield() }
-
     time = time.addingTimeInterval(1)
-    let second = reading(270)
-    let beforeSecond = evaluations
-    let queued = Task { await controller.update(second) }
-    // now() runs before the first suspension in update(), on this same main actor.
-    // Observing its call proves the second reading has joined the queue.
-    while evaluations == beforeSecond { await Task.yield() }
-
-    time = time.addingTimeInterval(1)
-    let third = reading(300)
-    let beforeThird = evaluations
-    let returned = Task { await controller.update(third) }
-    while evaluations == beforeThird { await Task.yield() }
-    // The first write is still suspended: comparing against its content would
-    // incorrectly suppress the return to 300 after the queued 270-degree reading.
+    controller.show(reading(270))
+    // The first write is still suspended, and only the latest reading waits behind it.
     #expect(system.handle.updates.map(\.bearing) == [300])
     system.handle.resumeUpdate?.resume()
-    await slow.value
-    await queued.value
-    await returned.value
+    await controller.waitForPendingOperations()
+    #expect(system.handle.updates.map(\.bearing) == [300, 270])
+    time = time.addingTimeInterval(1)
+    // The return to 300 differs from the 270 written last, so it isn't suppressed.
+    await controller.showAndWait(reading(300))
     #expect(system.handle.updates.map(\.bearing) == [300, 270, 300])
-    await controller.end()
+    // Readings handed over during one write leave only the newest.
+    system.handle.suspendNextUpdate = true
+    time = time.addingTimeInterval(1)
+    controller.show(reading(10))
+    while system.handle.resumeUpdate == nil { await Task.yield() }
+    time = time.addingTimeInterval(1)
+    for degrees in [20.0, 30, 40] { controller.show(reading(degrees)) }
+    system.handle.resumeUpdate?.resume()
+    await controller.waitForPendingOperations()
+    #expect(system.handle.updates.map(\.bearing) == [300, 270, 300, 10, 40])
+    await controller.end().value
   }
 
   @Test func activityReadingsSpeakOnlyShownReadingsAsRecordedTravel() {
@@ -387,16 +449,16 @@ struct CompassActivityControllerTests {
       let accepted = CompassSample(
         degrees: 90, source: .vehicleCourse, reference: .trueNorth,
         accuracyDegrees: 1, timestamp: now)
-      await controller.update(.init(sample: accepted, status: .usable))
+      await controller.showAndWait(.init(sample: accepted, status: .usable))
       #expect(system.handle.updates.last?.bearing == 90)
       let rejected = CompassSample(
         degrees: 42, source: source, reference: reference,
         accuracyDegrees: 1, timestamp: timestamp)
-      await controller.update(.init(sample: rejected, status: .usable))
+      await controller.showAndWait(.init(sample: rejected, status: .usable))
       let cleared = try #require(system.handle.updates.last)
       #expect(cleared.bearing == nil)
       #expect(cleared.status == .unavailable)
-      await controller.end()
+      await controller.end().value
     }
   }
 
@@ -411,37 +473,35 @@ struct CompassActivityControllerTests {
           degrees: degrees, source: .vehicleCourse, reference: .trueNorth,
           accuracyDegrees: 1, timestamp: time), status: .usable)
     }
-    await controller.update(reading(42))
+    await controller.showAndWait(reading(42))
     let encoded = try JSONEncoder().encode(system.handle.updates[0])
     #expect(
       try JSONDecoder().decode(CompassActivityAttributes.ContentState.self, from: encoded)
         == system.handle.updates[0])
     time += 0.5
-    await controller.update(reading(90))
+    await controller.showAndWait(reading(90))
     #expect(system.handle.updates.count == 1)
-    await controller.invalidateReading()
+    await controller.invalidateAndWait()
     #expect(system.handle.updates.last?.bearing == nil)
-    await controller.update(reading(90))
+    await controller.showAndWait(reading(90))
     #expect(system.handle.updates.last?.bearing == nil)
     time += 0.5
-    await controller.update(reading(90))
+    await controller.showAndWait(reading(90))
     #expect(system.handle.updates.last?.bearing == 90)
-    await controller.end()
+    await controller.end().value
     #expect(system.handle.finalState == .init(bearing: nil, status: .unavailable))
     let count = system.handle.updates.count
-    await controller.update(reading(180))
+    await controller.showAndWait(reading(180))
     #expect(system.handle.updates.count == count)
   }
 
   @Test func startupInterruptionCannotClearTheNewReadingAfterRecovery() async throws {
     let system = TestActivitySystem()
     system.suspend = true
-    let time = Date(timeIntervalSince1970: 100)
-    let activity = CompassActivityController(system: system, now: { time })
+    let clock = TestDriveClock(now: Date(timeIntervalSince1970: 100))
+    let activity = CompassActivityController(system: system, now: { clock.now })
     let sensor = TestTravelSensor()
-    let drive = DriveSessionController(
-      sensor: sensor, activity: activity,
-      now: { time }, automaticTick: false)
+    let drive = DriveSessionController(sensor: sensor, activity: activity, clock: clock)
     let startup = Task { await drive.carPlayActivated() }
     while system.resume == nil { await Task.yield() }
     sensor.receive?(.interrupted)
@@ -449,32 +509,32 @@ struct CompassActivityControllerTests {
       .reading(
         TravelReading(
           courseDegrees: 90, courseAccuracyDegrees: 1, speedMetersPerSecond: 10,
-          speedAccuracyMetersPerSecond: 1, horizontalAccuracyMeters: 5, timestamp: time)))
+          speedAccuracyMetersPerSecond: 1, horizontalAccuracyMeters: 5, timestamp: clock.now)))
     system.resume?.resume()
     await startup.value
     await drive.waitForPendingOperations()
-    #expect(system.handle.updates.last?.bearing == 90)
+    // The clear from startup is written first, and the newer reading after it.
+    #expect(system.handle.updates.map(\.bearing) == [nil, 90])
     await drive.endDrive()
   }
 
   @Test func secondInterruptionCannotRepublishReadingCapturedBeforeIt() async throws {
     let system = TestActivitySystem()
-    var time = Date(timeIntervalSince1970: 100)
+    let clock = TestDriveClock(now: Date(timeIntervalSince1970: 100))
     let sensor = TestTravelSensor()
-    let activity = CompassActivityController(system: system, now: { time })
-    let drive = DriveSessionController(
-      sensor: sensor, activity: activity, now: { time }, automaticTick: false)
+    let activity = CompassActivityController(system: system, now: { clock.now })
+    let drive = DriveSessionController(sensor: sensor, activity: activity, clock: clock)
     await drive.carPlayActivated()
     func send(_ degrees: Double) {
       sensor.receive?(
         .reading(
           .init(
             courseDegrees: degrees, courseAccuracyDegrees: 1, speedMetersPerSecond: 10,
-            speedAccuracyMetersPerSecond: 1, horizontalAccuracyMeters: 1, timestamp: time)))
+            speedAccuracyMetersPerSecond: 1, horizontalAccuracyMeters: 1, timestamp: clock.now)))
     }
     send(42)
     await drive.waitForPendingOperations()
-    time += 2
+    clock.now += 2
     system.handle.suspendNextUpdate = true
     sensor.receive?(.interrupted)
     send(90)
@@ -490,6 +550,36 @@ struct CompassActivityControllerTests {
     await drive.endDrive()
   }
 
+  @Test func driveWritesOnlyTheLatestReadingAfterASuspendedWrite() async throws {
+    let system = TestActivitySystem()
+    let clock = TestDriveClock(now: Date(timeIntervalSince1970: 100))
+    let sensor = TestTravelSensor()
+    let activity = CompassActivityController(system: system, now: { clock.now })
+    let drive = DriveSessionController(sensor: sensor, activity: activity, clock: clock)
+    await drive.carPlayActivated()
+    await drive.waitForPendingOperations()
+    let initialCount = system.handle.updates.count
+    func send(_ degrees: Double) {
+      sensor.receive?(
+        .reading(
+          .init(
+            courseDegrees: degrees, courseAccuracyDegrees: 1, speedMetersPerSecond: 10,
+            speedAccuracyMetersPerSecond: 1, horizontalAccuracyMeters: 1, timestamp: clock.now)))
+    }
+    system.handle.suspendNextUpdate = true
+    send(20)
+    while system.handle.resumeUpdate == nil { await Task.yield() }
+    for course in 30...100 { send(Double(course)) }
+    sensor.receive?(.interrupted)
+    system.handle.resumeUpdate?.resume()
+    await drive.waitForPendingOperations()
+    // The suspended reading, then the clear and the unavailable status; no later reading.
+    let written = system.handle.updates.dropFirst(initialCount)
+    #expect(written.map { $0.bearing == nil } == [false, true, true])
+    #expect(written.last?.status == .unavailable)
+    await drive.endDrive()
+  }
+
   @Test func sampleAlreadyExpiredInDriveQueueDoesNotClearAcceptedReading() async throws {
     let system = TestActivitySystem()
     var time = Date(timeIntervalSince1970: 100)
@@ -498,26 +588,21 @@ struct CompassActivityControllerTests {
     let first = CompassSample(
       degrees: 42, source: .vehicleCourse, reference: .trueNorth,
       accuracyDegrees: 1, timestamp: time)
-    await controller.update(.init(sample: first, status: .usable))
+    await controller.showAndWait(.init(sample: first, status: .usable))
     let delayed = CompassSample(
       degrees: 90, source: .vehicleCourse, reference: .trueNorth,
       accuracyDegrees: 1, timestamp: time + 1)
     time += 10
-    await controller.update(.init(sample: delayed, status: .usable))
+    await controller.showAndWait(.init(sample: delayed, status: .usable))
     #expect(system.handle.updates.map(\.bearing) == [42])
     #expect(system.handle.updates.last?.sampleTime == first?.timestamp)
-    await controller.end()
+    await controller.end().value
   }
 
   @Test func sampleExpiringInQueueCannotReplaceTheLastAcceptedCourse() async throws {
     let system = TestActivitySystem()
     var time = Date(timeIntervalSince1970: 100)
-    var evaluations = 0
-    let controller = CompassActivityController(
-      system: system,
-      now: {
-        evaluations += 1; return time
-      })
+    let controller = CompassActivityController(system: system, now: { time })
     try await controller.start()
     func reading(_ degrees: Double) -> TravelPresentation {
       .init(
@@ -526,23 +611,18 @@ struct CompassActivityControllerTests {
           accuracyDegrees: 1, timestamp: time), status: .usable)
     }
     system.handle.suspendNextUpdate = true
-    let first = reading(42)
-    let writing = Task { await controller.update(first) }
+    controller.show(reading(42))
     while system.handle.resumeUpdate == nil { await Task.yield() }
     time += 1
-    let next = reading(90)
-    let before = evaluations
-    let queued = Task { await controller.update(next) }
-    while evaluations == before { await Task.yield() }
+    controller.show(reading(90))
     time += 60
     system.handle.resumeUpdate?.resume()
-    await writing.value
-    await queued.value
+    await controller.waitForPendingOperations()
     #expect(system.handle.updates.map(\.bearing) == [42])
     #expect(system.handle.updates.last?.sampleTime == Date(timeIntervalSince1970: 100))
-    await controller.update(reading(90))
+    await controller.showAndWait(reading(90))
     #expect(system.handle.updates.last?.bearing == 90)
-    await controller.end()
+    await controller.end().value
   }
 
 }
@@ -587,9 +667,12 @@ struct CompassActivityControllerTests {
     if fail { throw CompassActivityController.Failure.unavailable }
     return handle
   }
+  var suspendCleanup = false
+  var resumeCleanup: CheckedContinuation<Void, Never>?
   func endSurvivors(_ finalState: CompassActivityAttributes.ContentState) async {
     self.finalState = finalState
     cleanups += 1
+    if suspendCleanup { await withCheckedContinuation { resumeCleanup = $0 } }
   }
 }
 
@@ -602,4 +685,18 @@ struct CompassActivityControllerTests {
   func requestAuthorization() {}
   func start() throws {}
   func stop() {}
+}
+
+extension CompassActivityController {
+  /// Hands over a presentation and waits until it has been written or passed over.
+  fileprivate func showAndWait(_ presentation: TravelPresentation) async {
+    show(presentation)
+    await waitForPendingOperations()
+  }
+
+  /// Clears the retained reading and waits until the clear has been written.
+  fileprivate func invalidateAndWait() async {
+    invalidateReading()
+    await waitForPendingOperations()
+  }
 }

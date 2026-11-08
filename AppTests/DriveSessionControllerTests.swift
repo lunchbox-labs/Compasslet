@@ -22,6 +22,7 @@ final class DriveSessionControllerTests: XCTestCase {
     func stop() { stops += 1 }
   }
   enum Failure: Error { case unavailable }
+  /// Records what the drive hands to its Live Activity.
   final class Activity: CompassActivityPresenting {
     var onDismiss: (() -> Void)?
     var canStartActivities = true
@@ -30,14 +31,13 @@ final class DriveSessionControllerTests: XCTestCase {
     var renewals = 0
     func renew() { renewals += 1 }
     var invalidations = 0
-    func invalidateReading() async { invalidations += 1 }
+    func invalidateReading() { invalidations += 1 }
     var ends = 0
+    /// Every presentation handed over, in order.
     var updates: [TravelPresentation] = []
     var fails = false
     var pauseStart = false
     var startContinuation: CheckedContinuation<Void, Never>?
-    var pauseUpdate = false
-    var updateContinuation: CheckedContinuation<Void, Never>?
     var pauseEnd = false
     var endContinuation: CheckedContinuation<Void, Never>?
     func start() async throws {
@@ -47,18 +47,19 @@ final class DriveSessionControllerTests: XCTestCase {
       }
       if fails { throw Failure.unavailable }
     }
-    func update(_ presentation: TravelPresentation) async {
-      updates.append(presentation)
-      if pauseUpdate { await withCheckedContinuation { updateContinuation = $0 } }
-    }
-    func end() async {
+    func show(_ presentation: TravelPresentation) { updates.append(presentation) }
+    func end() -> Task<Void, Never> {
       ends += 1
-      if pauseEnd {
-        await withCheckedContinuation { endContinuation = $0 }
-      }
+      guard pauseEnd else { return Task {} }
+      return Task { await withCheckedContinuation { self.endContinuation = $0 } }
     }
+    func waitForPendingOperations() async {}
   }
-  var time = Date(timeIntervalSince1970: 1_000)
+  let clock = TestDriveClock()
+  var time: Date {
+    get { clock.now }
+    set { clock.now = newValue }
+  }
   var carAudio = false
   var backgroundHolds = 0
   var backgroundReleases = 0
@@ -70,17 +71,20 @@ final class DriveSessionControllerTests: XCTestCase {
   }
   func make(_ sensor: Sensor, _ activity: Activity) -> DriveSessionController {
     DriveSessionController(
-      sensor: sensor, activity: activity, now: { self.time }, automaticTick: false,
+      sensor: sensor, activity: activity, clock: clock,
       carAudioRoute: { self.carAudio },
       backgroundTime: {
         self.backgroundHolds += 1
         return { self.backgroundReleases += 1 }
       })
   }
+  /// Runs what has come due at the current time: the heartbeat once a second has passed since
+  /// the last one, and any limit.
+  func tick() { clock.fireDue() }
   func disconnectPastTheAbsenceLimit(_ controller: DriveSessionController) async {
     controller.carPlayDisconnected()
     time += DriveSessionController.carPlayAbsenceLimit + 1
-    controller.tick()
+    tick()
     await controller.waitForPendingOperations()
   }
 
@@ -90,7 +94,7 @@ final class DriveSessionControllerTests: XCTestCase {
     sensor.receive?(reading())
     await controller.waitForPendingOperations()
     time += 60
-    controller.tick()
+    tick()
     await controller.waitForPendingOperations()
     XCTAssertEqual(activity.invalidations, 0)
     sensor.receive?(.interrupted)
@@ -276,8 +280,8 @@ final class DriveSessionControllerTests: XCTestCase {
     controller.carPlayDisconnected()
     XCTAssertTrue(controller.isDriving)
     time += DriveSessionController.carPlayAbsenceLimit + 1
-    controller.tick()
-    controller.tick()
+    tick()
+    tick()
     XCTAssertEqual(sensor.stops, 1)
     XCTAssertNil(controller.presentation.sample)
     XCTAssertFalse(controller.isDriving)
@@ -381,7 +385,7 @@ final class DriveSessionControllerTests: XCTestCase {
     controller.carPlayDisconnected()
     await controller.carPlayActivated()
     time = time.addingTimeInterval(8 * 60 * 60)
-    controller.tick()
+    tick()
     await controller.waitForPendingOperations()
     XCTAssertFalse(controller.isDriving)
     XCTAssertEqual(sensor.stops, 2)
@@ -399,7 +403,7 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertTrue(controller.isDriving)
     sensor.receive?(reading())
     time = time.addingTimeInterval(5.01)
-    controller.tick()
+    tick()
     XCTAssertNil(controller.presentation.sample)
   }
 
@@ -454,7 +458,7 @@ final class DriveSessionControllerTests: XCTestCase {
     while activity.startContinuation == nil { await Task.yield() }
     controller.carPlayDisconnected()
     time += DriveSessionController.carPlayAbsenceLimit + 1
-    controller.tick()
+    tick()
     XCTAssertFalse(controller.isDriving)
     activity.pauseStart = false
     let next = Task { await controller.carPlayActivated() }
@@ -515,6 +519,7 @@ final class DriveSessionControllerTests: XCTestCase {
     while activity.startContinuation == nil { await Task.yield() }
     sensor.receive?(reading())
     activity.onDismiss?()
+    let handedOver = activity.updates.count
     XCTAssertTrue(controller.isDriving)
     XCTAssertEqual(controller.compactStatus, .dismissed)
     XCTAssertEqual(sensor.stops, 0)
@@ -527,28 +532,11 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertEqual(controller.compactStatus, .dismissed)
     XCTAssertTrue(controller.isDriving)
     XCTAssertNotNil(controller.presentation.sample)
-    XCTAssertTrue(activity.updates.isEmpty)
+    // Nothing reaches the activity after its dismissal.
+    XCTAssertEqual(activity.updates.count, handedOver)
     XCTAssertEqual(activity.ends, 1)
     await disconnectPastTheAbsenceLimit(controller)
     XCTAssertEqual(activity.ends, 2)
-  }
-
-  func testSuspendedCompactWriteCoalescesToLatestInvalidation() async {
-    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
-    await controller.carPlayActivated()
-    let initialCount = activity.updates.count
-    activity.pauseUpdate = true
-    sensor.receive?(reading(20))
-    while activity.updateContinuation == nil { await Task.yield() }
-    for course in 30...100 { sensor.receive?(reading(Double(course))) }
-    sensor.receive?(.interrupted)
-    activity.pauseUpdate = false
-    activity.updateContinuation?.resume()
-    await controller.waitForPendingOperations()
-    XCTAssertEqual(activity.updates.count, initialCount + 2)
-    XCTAssertNil(activity.updates.last?.sample)
-    XCTAssertEqual(activity.updates.last?.status, .unavailable)
-    await controller.endDrive()
   }
 
   func testManualStartWithCarPlayConnectedRunsUntilTheUserEndsIt() async {
@@ -566,7 +554,7 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertEqual(sensor.starts, 1)
     XCTAssertEqual(activity.starts, 1)
     time += 10 * 60
-    controller.tick()
+    tick()
     XCTAssertTrue(controller.isDriving)
     await controller.endLiveActivity()
     XCTAssertFalse(controller.isDriving)
@@ -581,10 +569,10 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertTrue(controller.isDriving)
     XCTAssertEqual(controller.compactStatus, .active)
     time += DriveSessionController.carPlayAbsenceLimit
-    controller.tick()
+    tick()
     XCTAssertTrue(controller.isDriving)
     time += 1
-    controller.tick()
+    tick()
     await controller.waitForPendingOperations()
     XCTAssertFalse(controller.isDriving)
     XCTAssertEqual(controller.compactStatus, .inactive)
@@ -598,7 +586,7 @@ final class DriveSessionControllerTests: XCTestCase {
     time += DriveSessionController.carPlayAbsenceLimit - 1
     controller.carPlayConnected()
     time += 10 * 60
-    controller.tick()
+    tick()
     XCTAssertTrue(controller.isDriving)
     await controller.carPlayActivated()
     XCTAssertEqual(sensor.starts, 1)
@@ -614,19 +602,19 @@ final class DriveSessionControllerTests: XCTestCase {
     controller.carPlayDisconnected()
     XCTAssertFalse(controller.isCarPlayConnected)
     time += 30
-    controller.tick()
+    tick()
     XCTAssertTrue(controller.isDriving)
     controller.carPlayConnected()
     XCTAssertTrue(controller.isCarPlayConnected)
     time += DriveSessionController.carPlayAbsenceLimit
-    controller.tick()
+    tick()
     XCTAssertTrue(controller.isDriving)
     controller.carPlayDisconnected()
     time += DriveSessionController.carPlayAbsenceLimit
-    controller.tick()
+    tick()
     XCTAssertTrue(controller.isDriving)
     time += 1
-    controller.tick()
+    tick()
     XCTAssertFalse(controller.isDriving)
     XCTAssertEqual(sensor.starts, 1)
     XCTAssertEqual(sensor.stops, 1)
@@ -645,14 +633,14 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertTrue(controller.isDriving)
     XCTAssertFalse(controller.isCarPlayConnected)
     time += 10 * 60
-    controller.tick()
+    tick()
     XCTAssertTrue(controller.isDriving)
     setCarAudio(false, controller)
     time += DriveSessionController.carPlayAbsenceLimit
-    controller.tick()
+    tick()
     XCTAssertTrue(controller.isDriving)
     time += 1
-    controller.tick()
+    tick()
     await controller.waitForPendingOperations()
     XCTAssertFalse(controller.isDriving)
     XCTAssertEqual(sensor.stops, 1)
@@ -665,7 +653,7 @@ final class DriveSessionControllerTests: XCTestCase {
     time += DriveSessionController.carPlayAbsenceLimit - 1
     setCarAudio(true, controller)
     time += 10 * 60
-    controller.tick()
+    tick()
     XCTAssertTrue(controller.isDriving)
     await controller.endDrive()
   }
@@ -676,7 +664,7 @@ final class DriveSessionControllerTests: XCTestCase {
     await controller.startLiveActivity()
     XCTAssertTrue(controller.isCarAudioConnected)
     time += 10 * 60
-    controller.tick()
+    tick()
     XCTAssertTrue(controller.isDriving)
     await controller.endDrive()
   }
@@ -686,11 +674,12 @@ final class DriveSessionControllerTests: XCTestCase {
     setCarAudio(true, controller)
     await controller.startLiveActivity()
     carAudio = false
-    controller.tick()
+    time += DriveSessionController.heartbeatInterval
+    tick()
     XCTAssertFalse(controller.isCarAudioConnected)
     XCTAssertTrue(controller.isDriving)
     time += DriveSessionController.carPlayAbsenceLimit + 1
-    controller.tick()
+    tick()
     XCTAssertFalse(controller.isDriving)
   }
 
@@ -701,11 +690,11 @@ final class DriveSessionControllerTests: XCTestCase {
     controller.carPlayResignedActive()
     controller.carPlayDisconnected()
     time += 10 * 60
-    controller.tick()
+    tick()
     XCTAssertTrue(controller.isDriving)
     setCarAudio(false, controller)
     time += DriveSessionController.carPlayAbsenceLimit + 1
-    controller.tick()
+    tick()
     XCTAssertFalse(controller.isDriving)
   }
 
@@ -715,7 +704,7 @@ final class DriveSessionControllerTests: XCTestCase {
     await controller.carPlayActivated()
     setCarAudio(false, controller)
     time += 10 * 60
-    controller.tick()
+    tick()
     XCTAssertTrue(controller.isDriving)
     await disconnectPastTheAbsenceLimit(controller)
     XCTAssertFalse(controller.isDriving)
@@ -765,11 +754,11 @@ final class DriveSessionControllerTests: XCTestCase {
     sensor.receive?(.notInUse)
     XCTAssertEqual(backgroundHolds, 1)
     time += DriveSessionController.notInUseLimit
-    controller.tick()
+    tick()
     XCTAssertTrue(controller.isDriving)
     time += 1
     activity.pauseEnd = true
-    controller.tick()
+    tick()
     XCTAssertFalse(controller.isDriving)
     while activity.endContinuation == nil { await Task.yield() }
     // The background time lasts until the Live Activity has ended.
@@ -791,7 +780,7 @@ final class DriveSessionControllerTests: XCTestCase {
     sensor.receive?(earlier)
     XCTAssertEqual(backgroundReleases, 0)
     time += DriveSessionController.notInUseLimit + 1
-    controller.tick()
+    tick()
     await controller.waitForPendingOperations()
     XCTAssertFalse(controller.isDriving)
     XCTAssertEqual(backgroundReleases, 1)
@@ -808,7 +797,7 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertEqual(backgroundReleases, 1)
     time += DriveSessionController.notInUseLimit + 1
     sensor.receive?(reading())
-    controller.tick()
+    tick()
     XCTAssertTrue(controller.isDriving)
     // A later report waits again, and ending the drive gives the background time back.
     sensor.receive?(.notInUse)
@@ -822,7 +811,7 @@ final class DriveSessionControllerTests: XCTestCase {
     await controller.carPlayActivated()
     sensor.receive?(.notInUse)
     time += DriveSessionController.notInUseLimit + 1
-    controller.tick()
+    tick()
     XCTAssertTrue(controller.isDriving)
     XCTAssertEqual(backgroundHolds, 0)
     await controller.endDrive()
@@ -836,7 +825,7 @@ final class DriveSessionControllerTests: XCTestCase {
     await controller.carPlayActivated()
     XCTAssertEqual(backgroundReleases, 1)
     time += DriveSessionController.notInUseLimit + 1
-    controller.tick()
+    tick()
     XCTAssertTrue(controller.isDriving)
     await controller.endDrive()
   }
@@ -990,20 +979,28 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertEqual(sensor.starts, 0)
   }
 
-  func testTickRenewsOnlyAShowingActivity() async {
+  func testHeartbeatRenewsOnlyAShowingActivity() async {
     let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
-    controller.tick()
+    let beat = DriveSessionController.heartbeatInterval
+    time += beat
+    tick()
     XCTAssertEqual(activity.renewals, 0)
     await controller.carPlayActivated()
     XCTAssertEqual(controller.compactStatus, .active)
-    controller.tick()
+    // The heartbeat waits a full interval after the drive starts.
+    tick()
+    XCTAssertEqual(activity.renewals, 0)
+    time += beat
+    tick()
     XCTAssertEqual(activity.renewals, 1)
     activity.onDismiss?()
     XCTAssertEqual(controller.compactStatus, .dismissed)
-    controller.tick()
+    time += beat
+    tick()
     XCTAssertEqual(activity.renewals, 1)
     await controller.endDrive()
-    controller.tick()
+    time += beat
+    tick()
     XCTAssertEqual(activity.renewals, 1)
   }
 
@@ -1060,5 +1057,287 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertEqual(controller.compactStatus, .unavailable)
     sensor.receive?(reading())
     XCTAssertNotNil(controller.presentation.sample)
+  }
+
+  func testTheAbsenceLimitEndsTheDriveOnTimeBetweenHeartbeats() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    let start = time
+    await controller.carPlayActivated()
+    controller.carPlayResignedActive()
+    clock.run(until: start + 0.5)
+    controller.carPlayDisconnected()
+    clock.run(until: start + 0.5 + DriveSessionController.carPlayAbsenceLimit)
+    XCTAssertTrue(controller.isDriving)
+    // The next heartbeat is half a second away, so only the limit's own deadline ends it.
+    clock.run(until: start + 0.6 + DriveSessionController.carPlayAbsenceLimit)
+    XCTAssertFalse(controller.isDriving)
+    XCTAssertEqual(sensor.stops, 1)
+    await controller.waitForPendingOperations()
+    XCTAssertEqual(activity.ends, 2)
+  }
+
+  func testTheNotInUseLimitEndsTheDriveOnTimeBetweenHeartbeats() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    setCarAudio(true, controller)
+    let start = time
+    await controller.startLiveActivity()
+    clock.run(until: start + 0.5)
+    sensor.receive?(.notInUse)
+    clock.run(until: start + 0.5 + DriveSessionController.notInUseLimit)
+    XCTAssertTrue(controller.isDriving)
+    clock.run(until: start + 0.6 + DriveSessionController.notInUseLimit)
+    XCTAssertFalse(controller.isDriving)
+    await controller.waitForPendingOperations()
+    XCTAssertEqual(backgroundReleases, 1)
+  }
+
+  func testAReadingExpiresOnTimeBetweenHeartbeats() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    let start = time
+    await controller.carPlayActivated()
+    clock.run(until: start + 0.5)
+    sensor.receive?(reading())
+    clock.run(until: start + 0.5 + DriveSessionController.readingLifetime)
+    XCTAssertNotNil(controller.presentation.sample)
+    clock.run(until: start + 0.6 + DriveSessionController.readingLifetime)
+    XCTAssertNil(controller.presentation.sample)
+    XCTAssertEqual(controller.presentation.status, .unavailable)
+    XCTAssertNil(activity.updates.last?.sample)
+    XCTAssertTrue(controller.isDriving)
+    await controller.endDrive()
+  }
+
+  func testEachNewReadingMovesTheExpiryLater() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    let start = time
+    await controller.carPlayActivated()
+    sensor.receive?(reading(10))
+    // A newer reading arrives before the first expires, so travel stays current past it.
+    clock.run(until: start + 4)
+    sensor.receive?(reading(20))
+    clock.run(until: start + 8)
+    XCTAssertNotNil(controller.presentation.sample)
+    // The deadline comes first and only then a reading, which shows travel again.
+    clock.run(until: start + 9.5)
+    XCTAssertNil(controller.presentation.sample)
+    sensor.receive?(reading(30))
+    XCTAssertNotNil(controller.presentation.sample)
+    await controller.endDrive()
+  }
+
+  func testTheHeartbeatBeatsOnceASecondAndStopsWithTheDrive() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    let start = time
+    XCTAssertTrue(clock.pending.isEmpty)
+    await controller.carPlayActivated()
+    clock.run(until: start + 10.5)
+    XCTAssertEqual(activity.renewals, 10)
+    await controller.endDrive()
+    // The ended drive leaves no heartbeat or deadline behind.
+    XCTAssertTrue(clock.pending.isEmpty)
+    clock.run(until: start + 20)
+    XCTAssertEqual(activity.renewals, 10)
+  }
+
+  func testReconnectingAsTheAbsenceLimitComesKeepsTheDrive() async {
+    for carAudioReturns in [false, true] {
+      let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+      let start = time
+      await controller.carPlayActivated()
+      controller.carPlayResignedActive()
+      controller.carPlayDisconnected()
+      clock.run(until: start + DriveSessionController.carPlayAbsenceLimit)
+      // The car returns just before the deadline fires.
+      if carAudioReturns {
+        setCarAudio(true, controller)
+      } else {
+        controller.carPlayConnected()
+      }
+      clock.run(until: start + 2 * DriveSessionController.carPlayAbsenceLimit)
+      XCTAssertTrue(controller.isDriving)
+      XCTAssertEqual(sensor.stops, 0)
+      await controller.endDrive()
+      setCarAudio(false, controller)
+    }
+  }
+
+  func testNotInUseClearedByCarPlayAsItsLimitComesKeepsTheDrive() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    setCarAudio(true, controller)
+    let start = time
+    await controller.startLiveActivity()
+    sensor.receive?(.notInUse)
+    clock.run(until: start + DriveSessionController.notInUseLimit)
+    await controller.carPlayActivated()
+    controller.carPlayResignedActive()
+    clock.run(until: start + 2 * DriveSessionController.notInUseLimit)
+    XCTAssertTrue(controller.isDriving)
+    XCTAssertEqual(backgroundReleases, 1)
+    await controller.endDrive()
+  }
+
+  func testATimerFromAnEndedDriveCannotEndTheNextDrive() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    let start = time
+    // The first drive starts without the car, so its absence deadline is set.
+    await controller.startLiveActivity()
+    await controller.endDrive()
+    controller.carPlayConnected()
+    await controller.startLiveActivity()
+    clock.run(until: start + 2 * DriveSessionController.carPlayAbsenceLimit)
+    XCTAssertTrue(controller.isDriving)
+    XCTAssertEqual(sensor.stops, 1)
+    await controller.endDrive()
+  }
+
+  func testLiveActivityRunningFollowsTheDrivesActivity() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    XCTAssertFalse(controller.isLiveActivityRunning)
+    activity.pauseStart = true
+    let starting = Task { await controller.carPlayActivated() }
+    while activity.startContinuation == nil { await Task.yield() }
+    XCTAssertEqual(controller.compactStatus, .starting)
+    XCTAssertTrue(controller.isLiveActivityRunning)
+    activity.startContinuation?.resume()
+    await starting.value
+    XCTAssertEqual(controller.compactStatus, .active)
+    XCTAssertTrue(controller.isLiveActivityRunning)
+    activity.onDismiss?()
+    XCTAssertTrue(controller.isDriving)
+    XCTAssertFalse(controller.isLiveActivityRunning)
+    activity.pauseStart = false
+    activity.fails = true
+    await controller.startLiveActivity()
+    XCTAssertEqual(controller.compactStatus, .unavailable)
+    XCTAssertTrue(controller.isDriving)
+    XCTAssertFalse(controller.isLiveActivityRunning)
+    await controller.endDrive()
+    XCTAssertFalse(controller.isLiveActivityRunning)
+    XCTAssertEqual(controller.compactStatus, .inactive)
+  }
+
+  func testLocationStartFailureLeavesNoLiveActivityState() async {
+    let sensor = Sensor(), activity = Activity()
+    activity.fails = true
+    let controller = make(sensor, activity)
+    await controller.startLiveActivity()
+    XCTAssertEqual(controller.compactStatus, .unavailable)
+    // The next start fails at location instead, before any Live Activity is asked for.
+    activity.fails = false
+    sensor.fails = true
+    await controller.startLiveActivity()
+    XCTAssertFalse(controller.isDriving)
+    XCTAssertEqual(controller.setupStatus, .unavailable)
+    XCTAssertEqual(controller.compactStatus, .inactive)
+    XCTAssertFalse(controller.isLiveActivityRunning)
+    XCTAssertEqual(activity.starts, 1)
+  }
+
+  func testInterruptionHandsOverAClearOnlyWhileTheActivityRuns() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    activity.pauseStart = true
+    let starting = Task { await controller.carPlayActivated() }
+    while activity.startContinuation == nil { await Task.yield() }
+    // A clear during startup is handed over, so it reaches the activity once it shows.
+    sensor.receive?(.interrupted)
+    XCTAssertEqual(activity.invalidations, 1)
+    XCTAssertEqual(activity.updates.last?.status, .unavailable)
+    activity.startContinuation?.resume()
+    await starting.value
+    activity.onDismiss?()
+    sensor.receive?(.interrupted)
+    XCTAssertEqual(activity.invalidations, 1)
+    await controller.endDrive()
+  }
+
+  func testForegroundWaitEndsAsSoonAsLocationReportsNotInUse() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    await controller.startLiveActivity()
+    let started = ContinuousClock.now
+    Task { sensor.receive?(.notInUse) }
+    let needed = await controller.needsForegroundStart(waitingUpTo: .seconds(30))
+    XCTAssertTrue(needed)
+    XCTAssertLessThan(ContinuousClock.now - started, .seconds(10))
+    await controller.endDrive()
+  }
+
+  func testForegroundWaitEndsWhenCarPlayConnects() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    await controller.startLiveActivity()
+    let started = ContinuousClock.now
+    Task { controller.carPlayConnected() }
+    let needed = await controller.needsForegroundStart(waitingUpTo: .seconds(30))
+    XCTAssertFalse(needed)
+    XCTAssertLessThan(ContinuousClock.now - started, .seconds(10))
+    await controller.endDrive()
+  }
+
+  func testAReadingDuringTheForegroundWaitSettlesAfterASecond() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    await controller.startLiveActivity()
+    let started = ContinuousClock.now
+    Task { sensor.receive?(self.reading()) }
+    let needed = await controller.needsForegroundStart(waitingUpTo: .seconds(30))
+    XCTAssertFalse(needed)
+    let waited = ContinuousClock.now - started
+    XCTAssertGreaterThanOrEqual(waited, .seconds(1))
+    XCTAssertLessThan(waited, .seconds(10))
+    await controller.endDrive()
+  }
+
+  func testCancellingTheForegroundWaitNeverNeedsTheForeground() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    await controller.startLiveActivity()
+    let waiting = Task { await controller.needsForegroundStart(waitingUpTo: .seconds(30)) }
+    await Task.yield()
+    waiting.cancel()
+    let needed = await waiting.value
+    XCTAssertFalse(needed)
+    XCTAssertTrue(controller.isDriving)
+    await controller.endDrive()
+  }
+}
+
+/// A clock that moves only when a test sets it, and runs the timers that have come due when
+/// asked.
+final class TestDriveClock: DriveClock {
+  private typealias Entry = (id: Int, date: Date, fire: @MainActor () -> Void)
+  var now: Date
+  private var timers: [Entry] = []
+  private var lastID = 0
+
+  nonisolated init(now: Date = Date(timeIntervalSince1970: 1_000)) { self.now = now }
+
+  func timer(at date: Date, _ fire: @escaping @MainActor () -> Void) -> DriveTimer {
+    lastID += 1
+    let id = lastID
+    timers.append((id, date, fire))
+    return DriveTimer { [weak self] in self?.timers.removeAll { $0.id == id } }
+  }
+
+  /// When the timers still to fire are due, earliest first.
+  var pending: [Date] { timers.map(\.date).sorted() }
+
+  /// Runs each timer due by now once, earliest first. Timers set meanwhile wait for the next call.
+  func fireDue() {
+    let due = timers.filter { $0.date <= now }.sorted(by: Self.earlier).map(\.id)
+    for id in due {
+      guard let index = timers.firstIndex(where: { $0.id == id }) else { continue }
+      timers.remove(at: index).fire()
+    }
+  }
+
+  /// Moves time on to `date`, running each timer at its own time on the way, earliest first.
+  func run(until date: Date) {
+    while let next = timers.filter({ $0.date <= date }).min(by: Self.earlier) {
+      timers.removeAll { $0.id == next.id }
+      if next.date > now { now = next.date }
+      next.fire()
+    }
+    now = date
+  }
+
+  nonisolated private static func earlier(_ first: Entry, _ second: Entry) -> Bool {
+    (first.date, first.id) < (second.date, second.id)
   }
 }
