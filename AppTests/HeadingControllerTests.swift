@@ -266,7 +266,11 @@ final class HeadingControllerTests: XCTestCase {
 @MainActor
 func notifies(_ read: () -> Void, when change: () -> Void) -> Bool {
   let flag = ObservationFlag()
-  withObservationTracking { read() } onChange: { flag.raise() }
+  withObservationTracking {
+    read()
+  } onChange: {
+    flag.raise()
+  }
   change()
   return flag.raised
 }
