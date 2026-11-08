@@ -31,6 +31,25 @@ struct RenderedPixels: Equatable, CustomStringConvertible {
 
   // A failed comparison shows the sizes, not every byte.
   var description: String { "\(width)×\(height) pixels" }
+
+  /// Where two renders differ, for a failed comparison's message.
+  func difference(from other: RenderedPixels) -> String {
+    guard width == other.width, height == other.height else { return "\(self) and \(other)" }
+    var count = 0
+    var largest = 0
+    var first: Int?
+    for pixel in 0..<(width * height) {
+      let channels = (pixel * 4)..<(pixel * 4 + 4)
+      let delta = channels.map { abs(Int(bytes[$0]) - Int(other.bytes[$0])) }.max() ?? 0
+      guard delta > 0 else { continue }
+      count += 1
+      largest = max(largest, delta)
+      if first == nil { first = pixel }
+    }
+    guard let first else { return "no pixels differ" }
+    let (row, column) = first.quotientAndRemainder(dividingBy: width)
+    return "\(count) pixels differ by up to \(largest), the first at row \(row), column \(column)"
+  }
 }
 
 extension UIImage {
@@ -41,5 +60,5 @@ extension UIImage {
 @MainActor
 extension ImageRenderer {
   /// The rendered pixels, or nil when the content could not be rendered.
-  var renderedPixels: RenderedPixels? { cgImage.flatMap { RenderedPixels($0) } }
+  var renderedPixels: RenderedPixels? { uiImage?.renderedPixels }
 }

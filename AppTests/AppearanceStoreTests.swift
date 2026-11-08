@@ -157,7 +157,11 @@ struct AppearanceStoreTests {
             reading.padding(insets).frame(maxWidth: .infinity)
           })
       }
-      #expect(try render(card) == render(expected), "small=\(small)")
+      let cardPixels = try render(card)
+      let expectedPixels = try render(expected)
+      #expect(
+        cardPixels == expectedPixels,
+        "small=\(small): \(cardPixels.difference(from: expectedPixels))")
     }
   }
 
