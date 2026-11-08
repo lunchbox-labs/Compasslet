@@ -21,13 +21,13 @@ struct CarPlayPresentation: Equatable {
         case .servicesDisabled: "Turn on Location Services on iPhone while parked."
         case .preciseLocationRequired: "Enable Precise Location on iPhone while parked."
         case .unavailable: "Travel direction unavailable on this device."
-        case .ready: "Waiting for travel direction"
+        case .ready: "Start moving"
         }
     } else if !driving {
       status = "Drive ended. Reopen Compasslet on CarPlay to start."
     } else {
       switch presentation.status {
-      case .waiting: status = "Waiting for travel direction"
+      case .waiting: status = "Start moving"
       case .slow: status = "Stopped or moving too slowly"
       case .unreliable: status = "Direction unreliable"
       case .unavailable: status = "Direction unavailable"

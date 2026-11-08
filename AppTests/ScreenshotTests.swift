@@ -202,6 +202,10 @@ final class ScreenshotTests: XCTestCase {
     Screen(name: "live-activity-largest-text") {
       AnyView(LiveActivityScreen().environment(\.dynamicTypeSize, .accessibility5))
     },
+    Screen(name: "live-activity-waiting") { AnyView(LiveActivityScreen(status: .waiting)) },
+    Screen(name: "live-activity-waiting-largest-text") {
+      AnyView(LiveActivityScreen(status: .waiting).environment(\.dynamicTypeSize, .accessibility5))
+    },
     Screen(name: "live-activity-status") { AnyView(LiveActivityScreen(status: .slow)) },
     Screen(name: "live-activity-status-largest-text") {
       AnyView(LiveActivityScreen(status: .slow).environment(\.dynamicTypeSize, .accessibility5))

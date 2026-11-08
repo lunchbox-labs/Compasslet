@@ -240,6 +240,9 @@ final class CarPlayPresentationTests: XCTestCase {
         setup: .ready, driving: true, now: now)
       XCTAssertEqual(value.bearing, "—")
     }
+    let waiting = CarPlayPresentation(
+      presentation: .init(sample: nil, status: .waiting), setup: .ready, driving: true, now: now)
+    XCTAssertEqual(waiting.status, "Start moving")
     let stale = CarPlayPresentation(
       presentation: .init(sample: sample, status: .usable),
       setup: .ready, driving: true, now: now.addingTimeInterval(6))

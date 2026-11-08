@@ -46,7 +46,7 @@ struct CompassActivityReading {
     } else {
       status =
         switch state.status {
-        case .waiting: "Waiting for travel"
+        case .waiting: "Start moving"
         case .usable, .unavailable: "Travel unavailable"
         case .slow: "Move steadily to show travel"
         case .unreliable: "Travel direction uncertain"
