@@ -658,15 +658,19 @@ struct AppearanceStoreTests {
       window.rootViewController = nil
       previousKeyWindow?.makeKey()
     }
+    // The window's first draw can take several seconds on a cold simulator, so wait for both
+    // probes to report before timing how quickly each theme change reaches them.
+    try await waitUntil(.seconds(30), layingOut: host.view) {
+      observed["compass"] != nil && observed["settings"] != nil
+    }
+    try #require(observed["compass"] != nil, "The test window never drew")
+    try #require(observed["settings"] != nil, "The test window never drew its Form")
     for (theme, expected) in [
       (AppTheme.dark, ColorScheme.dark), (.light, .light), (.system, .dark),
     ] {
       store.update { $0.theme = theme }
-      let deadline = ContinuousClock.now + .seconds(3)
-      while (observed["compass"] != expected || observed["settings"] != expected),
-        ContinuousClock.now < deadline
-      {
-        try await Task.sleep(for: .milliseconds(10))
+      try await waitUntil(.seconds(10), layingOut: host.view) {
+        observed["compass"] == expected && observed["settings"] == expected
       }
       #expect(observed["compass"] == expected)
       #expect(observed["settings"] == expected)
@@ -674,11 +678,8 @@ struct AppearanceStoreTests {
     }
     // System must release the override, including subsequent host appearance changes.
     window.overrideUserInterfaceStyle = .light
-    let deadline = ContinuousClock.now + .seconds(3)
-    while (observed["compass"] != .light || observed["settings"] != .light),
-      ContinuousClock.now < deadline
-    {
-      try await Task.sleep(for: .milliseconds(10))
+    try await waitUntil(.seconds(10), layingOut: host.view) {
+      observed["compass"] == .light && observed["settings"] == .light
     }
     #expect(observed["compass"] == .light)
     #expect(observed["settings"] == .light)
@@ -699,6 +700,18 @@ struct AppearanceStoreTests {
     // Every slider step announces a distinct value.
     let titles = ReadoutTextSize.allCases.map(\.title)
     #expect(Set(titles).count == titles.count)
+  }
+}
+
+/// Lays `view` out every 10 ms until `condition` holds or `timeout` passes.
+@MainActor
+private func waitUntil(
+  _ timeout: Duration, layingOut view: UIView, _ condition: () -> Bool
+) async throws {
+  let deadline = ContinuousClock.now + timeout
+  while !condition(), ContinuousClock.now < deadline {
+    view.layoutIfNeeded()
+    try await Task.sleep(for: .milliseconds(10))
   }
 }
 
