@@ -73,6 +73,43 @@ struct CompassActivityControllerTests {
     #expect(system.handle.updates.count == count)
   }
 
+  @Test func appearancePreferenceChangesRewriteTheActivity() async throws {
+    let name = "activity-appearance-tests-\(UUID())"
+    let defaults = try #require(UserDefaults(suiteName: name))
+    defer { defaults.removePersistentDomain(forName: name) }
+    let store = AppearanceStore(defaults: defaults)
+    let system = TestActivitySystem()
+    let controller = CompassActivityController(system: system, appearanceStore: store)
+    try await controller.start()
+    await controller.waitForPendingOperations()
+    #expect(system.handle.updates.isEmpty)
+    // The observation delivers changes after the change itself, so wait for the rewrite.
+    func waitForRewrite(after count: Int) async {
+      let deadline = ContinuousClock.now + .seconds(5)
+      while system.handle.updates.count <= count, ContinuousClock.now < deadline {
+        try? await Task.sleep(for: .milliseconds(10))
+      }
+      await controller.waitForPendingOperations()
+    }
+    var values = AppearanceValues()
+    values.showDegrees = false
+    store.update { $0.setOverride(values, for: .activity) }
+    await waitForRewrite(after: 0)
+    #expect(system.handle.updates.count == 1)
+    #expect(system.handle.updates.last?.appearance?.showDegrees == false)
+    // A change that leaves the activity's appearance as it was doesn't rewrite it.
+    store.update { $0.setOverride(values, for: .phone) }
+    try await Task.sleep(for: .milliseconds(200))
+    await controller.waitForPendingOperations()
+    #expect(system.handle.updates.count == 1)
+    values.showDegrees = true
+    store.update { $0.setOverride(values, for: .activity) }
+    await waitForRewrite(after: 1)
+    #expect(system.handle.updates.count == 2)
+    #expect(system.handle.updates.last?.appearance?.showDegrees == true)
+    await controller.end().value
+  }
+
   @Test func queuedAppearanceCannotRepublishAfterSensorInvalidation() async throws {
     let system = TestActivitySystem()
     let time = Date(timeIntervalSince1970: 100)

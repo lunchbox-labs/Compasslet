@@ -1125,6 +1125,21 @@ final class DriveSessionControllerTests: XCTestCase {
     await controller.endDrive()
   }
 
+  func testViewsSeeTheLiveActivityStatusButNotAnUnchangedSetup() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    await controller.carPlayActivated()
+    // Each reading refreshes the setup, but only a change to it reaches the phone's screen.
+    XCTAssertFalse(notifies({ _ = controller.setupStatus }, when: { sensor.receive?(reading(10)) }))
+    XCTAssertTrue(notifies({ _ = controller.presentation }, when: { sensor.receive?(reading(20)) }))
+    // The status lives on the drive's session, and views still see it change.
+    XCTAssertTrue(controller.isLiveActivityRunning)
+    XCTAssertTrue(
+      notifies({ _ = controller.isLiveActivityRunning }, when: { activity.onDismiss?() }))
+    XCTAssertFalse(controller.isLiveActivityRunning)
+    XCTAssertTrue(controller.isDriving)
+    await controller.endDrive()
+  }
+
   func testTheHeartbeatBeatsOnceASecondAndStopsWithTheDrive() async {
     let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
     let start = time

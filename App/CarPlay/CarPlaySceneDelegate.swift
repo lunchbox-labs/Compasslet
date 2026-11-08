@@ -1,12 +1,10 @@
 import CarPlay
-import Combine
 import UIKit
 
 @MainActor
 final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
   private var interfaceController: CPInterfaceController?
   private var compass: CarPlayCompassTemplate?
-  private var subscriptions: Set<AnyCancellable> = []
   private var ticker: Task<Void, Never>?
   private var updates = CarPlayUpdateGate()
   private var bridge: CarPlayLifecycleBridge?
@@ -28,10 +26,9 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     updates = CarPlayUpdateGate()
     render()
     interfaceController.setRootTemplate(screen.template, animated: false, completion: nil)
-    coordinator.objectWillChange.sink { [weak self] in
-      Task { @MainActor in self?.render() }
-    }.store(in: &subscriptions)
     render()
+    // The template draws only what `render` reads from the drive, so polling it covers every
+    // change, at most 250 ms late; course already shows in ten-second slots.
     ticker = Task { @MainActor [weak self] in
       while !Task.isCancelled {
         do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
@@ -65,7 +62,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     bridge = nil
     ticker?.cancel()
     ticker = nil
-    subscriptions.removeAll()
     compass = nil
     interfaceController = nil
     drive = nil

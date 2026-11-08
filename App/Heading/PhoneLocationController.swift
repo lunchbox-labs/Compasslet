@@ -1,7 +1,7 @@
-import Combine
 import CoreLocation
 import Foundation
 import MapKit
+import Observation
 
 enum PhoneLocationEvent {
   case location(CLLocation), authorizationChanged, unavailable
@@ -110,20 +110,20 @@ final class ApplePhoneCityLookup: PhoneCityLookup {
   }
 }
 
-@MainActor
-final class PhoneLocationController: ObservableObject {
-  @Published private(set) var location: CLLocation?
-  @Published private(set) var approximate = false
-  @Published private(set) var city: String?
+@MainActor @Observable
+final class PhoneLocationController {
+  private(set) var location: CLLocation?
+  private(set) var approximate = false
+  private(set) var city: String?
   private let cityLookup: any PhoneCityLookup
-  private var cityToken: UUID?
-  private var cityAnchor: CLLocation?
-  private var lastCityAttempt: Date?
+  @ObservationIgnored private var cityToken: UUID?
+  @ObservationIgnored private var cityAnchor: CLLocation?
+  @ObservationIgnored private var lastCityAttempt: Date?
   private let sensor: any PhoneLocationSensor
   private let now: () -> Date
-  private var active = false
-  private var acquiring = false
-  private var session: UUID?
+  @ObservationIgnored private var active = false
+  @ObservationIgnored private var acquiring = false
+  @ObservationIgnored private var session: UUID?
 
   init(
     sensor: any PhoneLocationSensor = DevicePhoneLocationSensor(),

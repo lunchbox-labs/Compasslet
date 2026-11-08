@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 struct WelcomeTourOverlay: View {
-  @ObservedObject var onboarding: OnboardingState
+  let onboarding: OnboardingState
   /// The button's frame in this view's coordinates, while the button is on screen.
   let buttonFrame: CGRect?
   let carPlayConnected: Bool

@@ -25,7 +25,7 @@ struct CompassApp: App {
 
 /// Applies the preference to this app presentation only, including its Settings navigation.
 struct AppThemeModifier: ViewModifier {
-  @ObservedObject var store: AppearanceStore
+  let store: AppearanceStore
 
   func body(content: Content) -> some View {
     content.preferredColorScheme(store.preferences.theme.colorScheme)

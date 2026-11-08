@@ -1,4 +1,5 @@
 import CompassCore
+import Observation
 import XCTest
 @testable import Compass
 
@@ -33,6 +34,26 @@ final class HeadingControllerTests: XCTestCase {
     XCTAssertNil(controller.sample)
     sensor.receive?(.reading(degrees: 90, accuracy: 3, timestamp: time))
     XCTAssertEqual(controller.sample?.angle.degrees, 90)
+  }
+
+  func testHeadingRateReadingsChangeOnlyTheSample() {
+    let sensor = Sensor()
+    let time = Date(timeIntervalSince1970: 1_000)
+    let controller = HeadingController(sensor: sensor, now: { time })
+    func read(_ degrees: Double) {
+      sensor.receive?(.reading(degrees: degrees, accuracy: 2, timestamp: time))
+    }
+    controller.start()
+    XCTAssertFalse(controller.hasSample)
+    XCTAssertTrue(notifies({ _ = controller.hasSample }, when: { read(10) }))
+    XCTAssertTrue(controller.hasSample)
+    // Later readings change only the sample, so the screen around the dial keeps still.
+    XCTAssertFalse(
+      notifies({ _ = (controller.hasSample, controller.status) }, when: { read(20) }))
+    XCTAssertTrue(notifies({ _ = controller.sample }, when: { read(30) }))
+    XCTAssertTrue(notifies({ _ = controller.hasSample }, when: { sensor.receive?(.denied) }))
+    XCTAssertFalse(controller.hasSample)
+    XCTAssertEqual(controller.status, .denied)
   }
 
   func testUnavailableDoesNotStartSensor() {
@@ -239,4 +260,19 @@ final class HeadingControllerTests: XCTestCase {
     XCTAssertEqual(controller.status, .stale)
     XCTAssertNil(controller.sample)
   }
+}
+
+/// Whether reading what `read` reads is told of a change when `change` runs.
+@MainActor
+func notifies(_ read: () -> Void, when change: () -> Void) -> Bool {
+  let flag = ObservationFlag()
+  withObservationTracking { read() } onChange: { flag.raise() }
+  change()
+  return flag.raised
+}
+
+/// Records that an observation fired, from its `Sendable` change handler.
+final class ObservationFlag: @unchecked Sendable {
+  private(set) var raised = false
+  func raise() { raised = true }
 }

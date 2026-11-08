@@ -24,7 +24,7 @@ struct AppearanceSettingsView: View {
 
 struct AppearanceDetailView: View {
   let surface: AppearanceSurface?
-  @ObservedObject private var store = AppearanceStore.shared
+  private let store = AppearanceStore.shared
 
   private var value: AppearanceValues {
     surface.map { store.preferences.effective(for: $0) } ?? store.preferences.global
@@ -217,7 +217,7 @@ struct AppearanceDetailView: View {
 
 struct AppearanceReadoutControl: View {
   let surface: AppearanceSurface?
-  @ObservedObject var store: AppearanceStore
+  let store: AppearanceStore
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
   var selection: ReadoutMode? {
@@ -338,7 +338,7 @@ enum AppearanceOption: CaseIterable {
 struct AppearanceOptionEditor: View {
   let surface: AppearanceSurface?
   let option: AppearanceOption
-  @ObservedObject var store: AppearanceStore
+  let store: AppearanceStore
 
   var value: AppearanceValues {
     surface.map { store.preferences.effective(for: $0) } ?? store.preferences.global

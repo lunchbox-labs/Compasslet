@@ -1,7 +1,7 @@
 import ActivityKit
-import Combine
 import CompassCore
 import Foundation
+import Observation
 
 @MainActor
 protocol CompassActivityHandle: AnyObject {
@@ -43,7 +43,8 @@ final class CompassActivityController: CompassActivityPresenting {
   private var lastWrite: Date?
   private var operation: Task<Void, Never>?
   private var appearance: AppearanceValues
-  private var appearanceObservation: AnyCancellable?
+  /// Rewrites the activity when the appearance preferences change.
+  private var appearanceObservation: Task<Void, Never>?
   private var lastContent: CompassActivityAttributes.ContentState?
   /// The bearing the card shows, kept through stops until a changed reading or a clear.
   private var retainedBearing: Double?
@@ -71,13 +72,23 @@ final class CompassActivityController: CompassActivityPresenting {
   ) {
     self.system = system
     self.now = now
-    appearance = appearanceStore.preferences.effective(for: .activity)
-    appearanceObservation = appearanceStore.$preferences
-      .map { $0.effective(for: .activity) }.removeDuplicates().dropFirst()
-      .sink { [weak self] value in
-        self?.updateAppearance(value)
+    let initial = appearanceStore.preferences.effective(for: .activity)
+    appearance = initial
+    let changes = Observations { @MainActor in
+      appearanceStore.preferences.effective(for: .activity)
+    }
+    appearanceObservation = Task { [weak self] in
+      // The first value is the one read above, unless it has changed since.
+      var last = initial
+      for await value in changes where value != last {
+        guard let self else { return }
+        last = value
+        self.updateAppearance(value)
       }
+    }
   }
+
+  isolated deinit { appearanceObservation?.cancel() }
 
   func start() async throws {
     guard handle == nil else { return }
