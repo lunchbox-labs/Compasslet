@@ -103,6 +103,27 @@ final class CompassDiagnosticsTests: XCTestCase {
     XCTAssertTrue(try store.snapshot().surfaces.allSatisfy { $0.activeSeconds == 0 })
   }
 
+  func testEventsFromSurfacesThisVersionDoesNotRecordAreLeftOutOfTheExport() throws {
+    let store = try makeStore()
+    try store.setEnabled(true)
+    try store.observe(.activity, active: true, wall: 100, uptime: 100)
+    try store.record(.activity, kind: .updateCompleted, wall: 100, uptime: 100)
+    let retained = try store.snapshot().events
+    var connection: OpaquePointer?
+    XCTAssertEqual(sqlite3_open(store.url.path, &connection), SQLITE_OK)
+    defer { sqlite3_close(connection) }
+    let unknown = """
+      INSERT INTO events(surface,kind,wall,uptime,elapsed,session)
+        VALUES ('widget','reloadRequested',100,100,0,'other');
+      INSERT INTO events(surface,kind,wall,uptime,elapsed,session)
+        VALUES ('activity','retiredKind',100,100,0,'other');
+      INSERT INTO clocks VALUES ('widget',0,100,100,'old','other',1);
+      """
+    XCTAssertEqual(sqlite3_exec(connection, unknown, nil, nil, nil), SQLITE_OK)
+    XCTAssertEqual(try store.snapshot().events, retained)
+    XCTAssertNoThrow(try store.exportJSON())
+  }
+
   func testFailedClearDoesNotPretendDebugModeWasDisabled() throws {
     let store = try makeStore()
     try store.setEnabled(true)

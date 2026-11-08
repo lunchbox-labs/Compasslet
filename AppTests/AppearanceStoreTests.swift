@@ -608,9 +608,7 @@ struct AppearanceStoreTests {
     labels.wrappedValue = .hidden
     #expect(phone.value.minorTicks == .none)
     #expect(phone.value.cardinalLabels == .hidden)
-    #expect(
-      AppearanceStore(defaults: defaults).preferences == store.preferences
-    )
+    #expect(AppearanceStore(defaults: defaults).preferences == store.preferences)
   }
 
   @Test func savesOverridesAndPreservesUnchangedPreferences() throws {
@@ -672,8 +670,7 @@ struct AppearanceStoreTests {
       }
       #expect(observed["compass"] == expected)
       #expect(observed["settings"] == expected)
-      #expect(
-        AppearanceStore(defaults: defaults).preferences.theme == theme)
+      #expect(AppearanceStore(defaults: defaults).preferences.theme == theme)
     }
     // System must release the override, including subsequent host appearance changes.
     window.overrideUserInterfaceStyle = .light

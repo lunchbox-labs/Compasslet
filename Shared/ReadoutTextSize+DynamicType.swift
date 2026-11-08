@@ -1,7 +1,7 @@
 import CompassCore
 import SwiftUI
 
-// Shared with the Live Activity extension, which sizes its readouts from these.
+// Compiled into the Live Activity extension too, which sizes its readouts from these.
 extension AppearanceValues {
   func readoutTextSize(system: DynamicTypeSize) -> DynamicTypeSize {
     useSystemTextSize ? system : customTextSize.dynamicTypeSize
