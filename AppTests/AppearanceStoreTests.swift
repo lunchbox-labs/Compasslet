@@ -239,7 +239,8 @@ struct AppearanceStoreTests {
 
   /// A status shrinks to fit its two lines rather than growing its card, so the height tests
   /// can't show one that's cut off. At the largest text size with Bold Text, each must fit its
-  /// two lines, with no word broken, at the smallest size its card allows.
+  /// two lines, and its card's height, at the smallest size its card allows, and never break a
+  /// word across its lines at full size instead of shrinking.
   @Test func activityStatusesFitAtTheLargestTextSize() {
     let traits = UITraitCollection(preferredContentSizeCategory: .accessibilityExtraExtraExtraLarge)
     let pointSize = UIFont.preferredFont(forTextStyle: .title2, compatibleWith: traits).pointSize
@@ -249,25 +250,42 @@ struct AppearanceStoreTests {
     let statuses =
       states.map { CompassActivityReading(state: $0, isStale: false).status }
       + [CompassActivityReading(state: states[0], isStale: true).status]
-    // The Lock Screen card less its insets, at 80%, and CarPlay's card less its insets, at half.
-    let insets = CompassActivityCard.lockScreenInsets
-    var cards: [(width: CGFloat, scale: CGFloat)] = [(224, 0.5)]
-    for width: CGFloat in [298, 380, 418] {
-      cards.append((width - insets.leading - insets.trailing, 0.8))
+    func width(_ text: Substring, _ font: UIFont) -> CGFloat {
+      (String(text) as NSString).size(withAttributes: [.font: font]).width
     }
-    for weight in [UIFont.Weight.semibold, .bold] {
+    func height(_ text: String, _ font: UIFont, width: CGFloat) -> CGFloat {
+      let bounds = (text as NSString).boundingRect(
+        with: CGSize(width: width, height: .greatestFiniteMagnitude),
+        options: .usesLineFragmentOrigin, attributes: [.font: font], context: nil)
+      return bounds.height
+    }
+    // CarPlay's card less its insets, at half size, and the Lock Screen card less its insets, at
+    // 80%, where the height tests already hold the card to 160 points.
+    let insets = CompassActivityCard.lockScreenInsets
+    var cards: [(width: CGFloat, height: CGFloat, scale: CGFloat)] = [(224, 70, 0.5)]
+    for width: CGFloat in [298, 380, 418] {
+      cards.append((width - insets.leading - insets.trailing, .greatestFiniteMagnitude, 0.8))
+    }
+    // Bold Text makes semibold at least bold; heavy leaves margin.
+    for weight in [UIFont.Weight.semibold, .bold, .heavy] {
+      let fullSize = UIFont.systemFont(ofSize: pointSize, weight: weight)
       for card in cards {
         let font = UIFont.systemFont(ofSize: pointSize * card.scale, weight: weight)
         for status in statuses {
-          for word in status.split(separator: " ") {
-            let width = (String(word) as NSString).size(withAttributes: [.font: font]).width
-            #expect(width <= card.width, "\(word) \(weight) \(card): \(width)")
+          let words = status.split(separator: " ")
+          for word in words {
+            #expect(width(word, font) <= card.width, "\(word) \(weight) \(card)")
           }
-          let lines = (status as NSString).boundingRect(
-            with: CGSize(width: card.width, height: .greatestFiniteMagnitude),
-            options: .usesLineFragmentOrigin, attributes: [.font: font], context: nil)
-          #expect(
-            lines.height <= font.lineHeight * 2 + 1, "\(status) \(weight) \(card): \(lines.height)")
+          let lines = height(status, font, width: card.width)
+          #expect(lines <= font.lineHeight * 2 + 1, "\(status) \(weight) \(card): \(lines)")
+          #expect(lines <= card.height, "\(status) \(weight) \(card): \(lines)")
+          // A word too wide at full size is broken across the lines unless the status then needs
+          // more than two lines anyway, which makes it shrink.
+          if words.contains(where: { width($0, fullSize) > card.width }) {
+            let unscaled = height(status, fullSize, width: card.width)
+            #expect(
+              unscaled > fullSize.lineHeight * 2 + 1, "\(status) \(weight) \(card): \(unscaled)")
+          }
         }
       }
     }

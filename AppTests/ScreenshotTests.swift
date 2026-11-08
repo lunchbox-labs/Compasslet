@@ -235,7 +235,7 @@ final class ScreenshotTests: XCTestCase {
           .environment(\.legibilityWeight, .bold))
     },
     Screen(name: "live-activity-status") { AnyView(LiveActivityScreen(status: .slow)) },
-    // The longest status, and the shortest that ends in an ellipsis.
+    // The longest status, and the one that ends in an ellipsis.
     Screen(name: "live-activity-status-largest-text") {
       AnyView(
         LiveActivityScreen(status: .unavailable)

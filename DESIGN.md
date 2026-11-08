@@ -90,8 +90,8 @@ These system-hosted surfaces have constraints beyond an ordinary iPhone screen.
   fit both. The setting shows on the Global and Live Activity appearance pages when the readout
   shows both.
 - Live Activity statuses stay about as short as "Start moving", so they fit every presentation
-  at the largest text sizes with Bold Text. A test checks each one at its smallest size.
-  VoiceOver speaks a shortened status in full.
+  at the largest text sizes with Bold Text. A test checks each one on the Lock Screen and in
+  CarPlay at its smallest size. VoiceOver speaks a shortened status in full.
 
 ## Docs site
 
