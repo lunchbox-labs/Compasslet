@@ -200,13 +200,19 @@ struct AppearanceStoreTests {
       let state = CompassActivityAttributes.ContentState(
         bearing: 359, status: test.status, sampleTime: sample, expiry: nil,
         debugUpdateTime: test.diagnostics ? sample : nil, appearance: test.appearance)
-      host.rootView = AnyView(
-        CompassActivityCard(state: state, isStale: test.stale)
-          .environment(\.dynamicTypeSize, test.textSize))
-      // Narrower than any supported banner (a 375-point screen less 22), for margin.
-      let size = host.sizeThatFits(in: CGSize(width: 298, height: 1000))
-      // The card reports its full height above 160 points, so an overflow shows here.
-      #expect(size.height <= 160, "\(test): \(size.height)")
+      for weight in [LegibilityWeight.regular, .bold] {
+        host.rootView = AnyView(
+          CompassActivityCard(state: state, isStale: test.stale)
+            .environment(\.dynamicTypeSize, test.textSize)
+            .environment(\.legibilityWeight, weight))
+        // Narrower than any supported banner (a 375-point screen less 22), for margin, and the
+        // widest iPhone banners, where the reading is limited by the card's height, not width.
+        for width in [298.0, 380, 418] {
+          let size = host.sizeThatFits(in: CGSize(width: width, height: 1000))
+          // The card reports its full height above 160 points, so an overflow shows here.
+          #expect(size.height <= 160, "\(test) \(weight) \(width): \(size.height)")
+        }
+      }
     }
   }
 
@@ -312,11 +318,30 @@ struct AppearanceStoreTests {
   }
 
   @Test func lockScreenReadingFollowsSmallerTextSizesOnly() {
-    let standard = readingHeight(bearing: 47, width: Self.typicalLine)
-    #expect(readingHeight(bearing: 47, width: Self.typicalLine, textSize: .xSmall) < standard)
-    // A larger text size can't widen the line, and the reading is already larger than it.
+    let smaller = [DynamicTypeSize.xSmall, .small, .medium, .large].map {
+      readingHeight(bearing: 47, width: Self.typicalLine, textSize: $0)
+    }
+    #expect(zip(smaller, smaller.dropFirst()).allSatisfy { $0 < $1 }, "\(smaller)")
+    // A larger text size can't widen the line.
     #expect(
-      readingHeight(bearing: 47, width: Self.typicalLine, textSize: .accessibility5) == standard)
+      readingHeight(bearing: 47, width: Self.typicalLine, textSize: .accessibility5)
+        == smaller.last)
+  }
+
+  @Test func lockScreenCardFollowsASmallerCustomTextSize() {
+    func height(_ appearance: AppearanceValues) -> CGFloat {
+      var appearance = appearance
+      appearance.lockScreenTimestamp = .hidden
+      let state = CompassActivityAttributes.ContentState(
+        bearing: 47, status: .usable, sampleTime: nil, expiry: nil, appearance: appearance)
+      let host = UIHostingController(
+        rootView: CompassActivityCard(state: state).environment(\.dynamicTypeSize, .large))
+      return host.sizeThatFits(in: CGSize(width: Self.typicalLine + 28, height: 1000)).height
+    }
+    var custom = AppearanceValues()
+    custom.useSystemTextSize = false
+    custom.customTextSize = .xSmall
+    #expect(height(custom) < height(AppearanceValues()))
   }
 
   private func idealWidth(_ view: some View) -> CGFloat {

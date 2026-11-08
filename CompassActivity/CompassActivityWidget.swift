@@ -16,11 +16,10 @@ struct CompassActivityWidget: Widget {
       ActivityCard(context: context)
     } dynamicIsland: { context in
       DynamicIsland {
-        // The island's regions have fixed bounds, so the readout stops at the largest
-        // standard size there; the Lock Screen and small presentations use the full range.
+        // The island's regions have fixed bounds, so its reading is smaller than the Lock
+        // Screen's; it never grows with the text size, and shrinks with smaller ones.
         DynamicIslandExpandedRegion(.center) {
-          CompassActivityView(
-            state: context.state, isStale: context.isStale, maximumTextSize: .xxxLarge)
+          CompassActivityView(state: context.state, isStale: context.isStale)
         }
       } compactLeading: {
         // The trailing readout speaks the whole state; the icon is decorative.

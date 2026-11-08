@@ -54,8 +54,7 @@ These system-hosted surfaces have constraints beyond an ordinary iPhone screen.
 - `Shared/CompassActivityCard.swift` keeps the Lock Screen and small mirrored card text-only.
   On the Lock Screen and in the expanded Dynamic Island, the single-line reading is as large as
   the widest reading allows, at one size for every direction, so it never jumps as the direction
-  changes. Smaller text sizes make it smaller; it's already larger than the largest text size.
-  In CarPlay the reading shortens before scaling. Both show “Last Updated” and a sample time
+  changes. Smaller text sizes make it smaller; larger ones can't widen the line. In CarPlay the reading shortens before scaling. Both show “Last Updated” and a sample time
   when available. At large text sizes the label shortens to “Updated”, and the elapsed timer, which
   never shrinks, drops it. Size these for a 270pt line, the card on a 375pt iPhone with
   Display Zoom. Keep the Lock Screen card within its 160pt height limit.
@@ -71,8 +70,9 @@ These system-hosted surfaces have constraints beyond an ordinary iPhone screen.
   legibility in the available space.
 - The Lock Screen card's 14pt side inset and 2pt reading-to-caption spacing are local compact
   layout exceptions, not extra steps in the app-wide spacing scale.
-- `CompassActivity/CompassActivityWidget.swift` caps the Dynamic Island readout at
-  `.xxxLarge` because its regions have fixed bounds. Lock Screen and small-card layouts must
+- `CompassActivity/CompassActivityWidget.swift` caps the compact Dynamic Island readout at
+  `.xxxLarge`, and the expanded island's reading is at most 44pt, because its regions have
+  fixed bounds. Lock Screen and small-card layouts must
   still be checked through the accessibility sizes. Preserve the full spoken reading and
   freshness information when visible text is shortened.
 - `App/CarPlay/CarPlayCompassTemplate.swift` leaves template layout, text and backgrounds to

@@ -53,21 +53,21 @@ struct CompassActivityCard: View {
     ViewThatFits(in: .vertical) {
       if !isSmall, let update = state.debugUpdateTime {
         VStack(spacing: 2) {
-          centered
+          withLine(diagnosticLines: state.sampleTime == nil ? 1 : 2)
           diagnostics(update: update)
         }
         .fixedSize(horizontal: false, vertical: true)
       }
-      centered.fixedSize(horizontal: false, vertical: true)
-      if !isSmall {
+      withLine().fixedSize(horizontal: false, vertical: true)
+      if !isSmall, presentation.reading == nil {
         VStack(spacing: 2) {
-          readout
+          readout()
           secondaryLine
         }
         .fixedSize(horizontal: false, vertical: true)
       }
       VStack(spacing: 2) {
-        readout
+        readout()
         if presentation.reading != nil, timestampMode != .hidden {
           Text("Last Updated").font(.caption2).foregroundStyle(secondaryStyle)
             .lineLimit(1).minimumScaleFactor(Self.captionScale)
@@ -76,17 +76,19 @@ struct CompassActivityCard: View {
       // CarPlay's card has a fixed height, so a status there shrinks to fit it rather than
       // growing past it.
       if isSmall {
-        readout
+        readout()
       } else {
-        readout.fixedSize(horizontal: false, vertical: true)
+        readout().fixedSize(horizontal: false, vertical: true)
       }
     }
   }
 
-  @ViewBuilder private var centered: some View {
+  /// The reading with its line beneath it: on the Lock Screen a reading sits directly above it,
+  /// leaving room for `diagnosticLines` more; otherwise the line is balanced by an equal one.
+  @ViewBuilder private func withLine(diagnosticLines: Int = 0) -> some View {
     if !isSmall, presentation.reading != nil {
       VStack(spacing: 2) {
-        readout
+        readout(diagnosticLines: diagnosticLines)
         secondaryLine
       }
     } else {
@@ -98,7 +100,7 @@ struct CompassActivityCard: View {
     VStack(spacing: 2) {
       // An equal line above centers the reading against the line below.
       secondaryLine.hidden().accessibilityHidden(true)
-      readout
+      readout()
       secondaryLine
     }
   }
@@ -121,7 +123,7 @@ struct CompassActivityCard: View {
   /// before it shrinks: in CarPlay to no less than half size, so two lines still fit its card at
   /// the largest text sizes, and on the Lock Screen, where it also uses a smaller style, to no
   /// less than 80%.
-  private var readout: some View {
+  private func readout(diagnosticLines: Int = 0) -> some View {
     Group {
       if presentation.reading == nil {
         if isSmall {
@@ -139,7 +141,9 @@ struct CompassActivityCard: View {
           }
         }
       } else {
-        ActivityReading(presentation: presentation, maximumSize: readingMaximumSize)
+        ActivityReading(
+          presentation: presentation,
+          maximumSize: readingMaximumSize(diagnosticLines: diagnosticLines))
       }
     }
     .dynamicTypeSize(presentation.appearance.readoutTextSize(system: systemTextSize))
@@ -148,10 +152,9 @@ struct CompassActivityCard: View {
   }
 
   /// The largest Lock Screen reading that leaves room in 160 points for the caption lines shown
-  /// beneath it at the system text size: Last Updated, and the diagnostic times when present.
-  private var readingMaximumSize: CGFloat {
-    var lines = timestampMode == .hidden ? 0 : 1
-    if state.debugUpdateTime != nil { lines += state.sampleTime == nil ? 1 : 2 }
+  /// beneath it at the system text size: Last Updated, and any diagnostic times.
+  private func readingMaximumSize(diagnosticLines: Int) -> CGFloat {
+    let lines = (timestampMode == .hidden ? 0 : 1) + diagnosticLines
     let insets = Self.lockScreenInsets.top + Self.lockScreenInsets.bottom
     // One caption line at the system text size, which the reading leaves room for beneath it.
     let captionLineHeight = systemTextSize.font(for: .caption2).lineHeight
@@ -162,7 +165,7 @@ struct CompassActivityCard: View {
 
   private func readoutText(_ text: String) -> some View {
     Text(text)
-      .font((isSmall ? Font.title2 : Font.largeTitle).weight(.semibold)).monospacedDigit()
+      .font(Font.title2.weight(.semibold)).monospacedDigit()
       .multilineTextAlignment(.center)
   }
 
@@ -197,9 +200,9 @@ struct CompassActivityCard: View {
 /// A Live Activity reading on one line at one size for every direction, so it never grows or
 /// shrinks as the travel direction changes: the largest size, up to `maximumSize`, at which the
 /// widest reading the appearance's fields can show fits the line. A text size below the default
-/// makes it proportionally smaller; a larger one can't widen the line, so it keeps that size,
-/// which is already larger than the largest text size. On a line too narrow even for
-/// `minimumSize`, the reading drops to a shorter form (degrees, then direction) as before.
+/// makes it proportionally smaller; a larger one can't widen the line, so it keeps that size.
+/// On a line too narrow even for `minimumSize`, the reading drops to a shorter form (degrees,
+/// then direction) as before.
 struct ActivityReading: View {
   let presentation: CompassActivityReading
   let maximumSize: CGFloat
@@ -210,10 +213,12 @@ struct ActivityReading: View {
   static let lineHeight: CGFloat = 1.22
   /// The step between the sizes tried, small enough that the chosen size nearly fills the line.
   static let sizeStep: CGFloat = 2
+  /// Larger than any iPhone's line allows, so fewer sizes are tried.
+  static let largestSize: CGFloat = 96
 
   /// The sizes tried, largest first.
   static func sizes(minimum: CGFloat, maximum: CGFloat) -> [CGFloat] {
-    let largest = max(minimum, maximum.rounded(.down))
+    let largest = max(minimum, min(maximum, largestSize).rounded(.down))
     return Array(stride(from: largest, through: minimum, by: -sizeStep))
   }
 
@@ -233,6 +238,7 @@ struct ActivityReading: View {
         text(candidate, size: minimumSize * scale).minimumScaleFactor(0.8)
       }
     }
+    .contentTransition(.identity)
   }
 
   private func text(_ text: String, size: CGFloat) -> some View {
@@ -317,7 +323,6 @@ struct LockScreenHeight: Layout {
 struct CompassActivityView: View {
   let state: CompassActivityAttributes.ContentState
   var isStale = false
-  var maximumTextSize: DynamicTypeSize = .accessibility5
   @Environment(\.dynamicTypeSize) private var systemTextSize
 
   /// The largest reading in the expanded Dynamic Island, whose regions have fixed bounds.
@@ -348,8 +353,7 @@ struct CompassActivityView: View {
         ActivityReading(
           presentation: presentation, maximumSize: Self.maximumReadingSize, minimumSize: 28
         )
-        .dynamicTypeSize(
-          min(presentation.appearance.readoutTextSize(system: systemTextSize), maximumTextSize))
+        .dynamicTypeSize(presentation.appearance.readoutTextSize(system: systemTextSize))
       } else {
         Text("—").font(.largeTitle.bold())
       }
