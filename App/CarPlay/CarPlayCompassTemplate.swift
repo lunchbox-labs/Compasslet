@@ -20,13 +20,13 @@ final class CarPlayCompassTemplate {
   func update(_ value: CarPlayPresentation, traits: UITraitCollection) {
     rendered = (value, traits)
     let title: String
-    let subtitle: String
+    let subtitle: String?
     if let timestamp = value.sampleTimestamp {
       title = "Sampled \(value.bearing)"
-      subtitle = "\(value.reference) · \(timestamp.formatted(date: .omitted, time: .standard))"
+      subtitle = timestamp.formatted(date: .omitted, time: .standard)
     } else {
       title = value.bearing
-      subtitle = value.reference
+      subtitle = nil
     }
     template.listHeader = CPListTemplateDetailsHeader(
       thumbnail: CPThumbnailImage(

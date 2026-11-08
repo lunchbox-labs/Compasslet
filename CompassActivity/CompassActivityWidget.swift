@@ -58,7 +58,7 @@ private struct ActivityCompactReadout: View {
 
   var body: some View {
     let presentation = CompassActivityReading(state: context.state, isStale: context.isStale)
-    Text(presentation.reading == nil ? "—" : "Last \(presentation.bearing)")
+    Text(presentation.compactBearing)
       .font(.caption).lineLimit(1).minimumScaleFactor(0.85)
       // The compact island has fixed bounds, so the readout stops at the largest standard size.
       .dynamicTypeSize(

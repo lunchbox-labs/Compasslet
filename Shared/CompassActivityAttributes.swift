@@ -73,10 +73,21 @@ struct CompassActivityReading {
     }
   }
 
+  /// The one field the compact Dynamic Island has room for: the only one shown, or the one the
+  /// appearance keeps first when both are; a dash without a reading.
+  var compactBearing: String {
+    guard let reading else { return "—" }
+    guard appearance.showDirection && appearance.showDegrees else { return bearing }
+    return switch appearance.shortReadout {
+    case .degrees: reading.degrees
+    case .direction: reading.point.abbreviation
+    }
+  }
+
   /// The spoken description without the sample time, which a view appends in the user's format.
   var spokenDescription: String {
-    guard let reading else { return "\(status), travel direction, true north" }
+    guard let reading else { return status }
     return
-      "\(reading.roundedDegrees) degrees, \(reading.point.name), last recorded travel direction, true north"
+      "\(reading.roundedDegrees) degrees, \(reading.point.name), last recorded travel direction"
   }
 }

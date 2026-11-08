@@ -507,7 +507,7 @@ struct CompassActivityControllerTests {
     #expect(usable.bearing == "NE 45°")
     #expect(
       usable.spokenDescription
-        == "45 degrees, northeast, last recorded travel direction, true north")
+        == "45 degrees, northeast, last recorded travel direction")
     #expect(presentation(.usable, bearing: 359.6).bearing == "N 0°")
     // A stale payload, any non-usable status, or an out-of-range bearing is never spoken as a
     // recorded travel direction; each falls back to its visible status line.
@@ -520,7 +520,8 @@ struct CompassActivityControllerTests {
       #expect(value.reading == nil)
       #expect(value.bearing == "—")
       #expect(!value.spokenDescription.contains("last recorded"))
-      #expect(value.spokenDescription == "\(value.status), travel direction, true north")
+      #expect(value.spokenDescription == value.status)
+      #expect(value.compactBearing == "—")
     }
     #expect(
       presentation(.usable, bearing: 45, isStale: true).status == presentation(.unavailable).status)
@@ -546,6 +547,30 @@ struct CompassActivityControllerTests {
     hidden.showDirection = false
     hidden.showDegrees = false
     #expect(presentation(.usable, bearing: 270, appearance: hidden).bearing == "W")
+  }
+
+  @Test func compactDynamicIslandShowsOneField() {
+    func compact(_ appearance: AppearanceValues?, bearing: Double? = 45) -> String {
+      CompassActivityReading(
+        state: .init(
+          bearing: bearing, status: bearing == nil ? .waiting : .usable, sampleTime: nil,
+          expiry: nil, appearance: appearance),
+        isStale: false
+      ).compactBearing
+    }
+    // With both fields shown, it keeps the one When Only One Fits picks, degrees by default.
+    #expect(compact(nil) == "45°")
+    var keepsDirection = AppearanceValues()
+    keepsDirection.shortReadout = .direction
+    #expect(compact(keepsDirection) == "NE")
+    // With one field shown, it shows that one whatever the setting says.
+    var directionOnly = AppearanceValues()
+    directionOnly.showDegrees = false
+    #expect(compact(directionOnly) == "NE")
+    var degreesOnly = keepsDirection
+    degreesOnly.showDirection = false
+    #expect(compact(degreesOnly) == "45°")
+    #expect(compact(nil, bearing: nil) == "—")
   }
 
   @Test func rejectedCourseClearsPreviouslyDeliveredActivityReading() async throws {
