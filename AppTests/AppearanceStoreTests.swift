@@ -533,12 +533,16 @@ struct AppearanceStoreTests {
     changed.showDegrees = false
     let steady = try render(changed, reduceMotion: true)
     let restored = try render(changed.requiringReadout(), reduceMotion: true)
-    #expect(try #require(steady.renderedPixels) == restored.renderedPixels)
+    let steadyPixels = try #require(steady.renderedPixels)
+    let restoredPixels = try #require(restored.renderedPixels)
+    #expect(steadyPixels == restoredPixels)
     changed.reducedMotionDial = .rotatingDial
     let dial = try render(changed, reduceMotion: true)
     #expect(dial.size.height > steady.size.height)
     // Keep the Dial is a static example, identical to the ordinary dial preview.
-    #expect(try #require(render(changed).renderedPixels) == dial.renderedPixels)
+    let staticPixels = try #require(render(changed).renderedPixels)
+    let dialPixels = try #require(dial.renderedPixels)
+    #expect(staticPixels == dialPixels)
   }
 
   @Test func readoutSelectionPreservesHiddenLegacyValuesUntilExplicitChoice() throws {

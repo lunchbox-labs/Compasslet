@@ -38,6 +38,7 @@ extension UIImage {
   var renderedPixels: RenderedPixels? { cgImage.flatMap { RenderedPixels($0) } }
 }
 
+@MainActor
 extension ImageRenderer {
   /// The rendered pixels, or nil when the content could not be rendered.
   var renderedPixels: RenderedPixels? { cgImage.flatMap { RenderedPixels($0) } }
