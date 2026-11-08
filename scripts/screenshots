@@ -201,29 +201,42 @@ def display_names(choices):
     return [(display, names[display]) for display, _, _ in choices]
 
 
+# The displays found on each simulator that has more than one, so later screenshots skip the
+# plain attempt that simctl refuses.
+SIMULATOR_DISPLAYS = {}
+
+
+def command_output(result):
+    return (result.stdout or "") + (result.stderr or "")
+
+
 def take_screenshot(udid, path):
     """Saves the simulator's screen at path. A simulator with several displays is saved once
-    per display, with the display's name after the file's stem. Returns each saved file with
-    its display name, empty for a single display; nothing when a screenshot wasn't saved."""
+    per display, with the display's name after the file's stem. Returns the saved files with
+    their display names (empty for a single display) and the files that weren't saved."""
     arguments = ["xcrun", "simctl", "io", udid, "screenshot"]
-    result = subprocess.run(arguments + [str(path)], check=False, capture_output=True, text=True)
-    if result.returncode == 0 and path.exists():
-        return [(path.name, "")]
-    output = (result.stdout or "") + (result.stderr or "")
-    choices = DISPLAY_CHOICE.findall(output)
-    if len(choices) < 2:
-        print(output, end="", file=sys.stderr)
-        return []
-    saved = []
-    for display, display_name in display_names(choices):
+    if udid not in SIMULATOR_DISPLAYS:
+        result = subprocess.run(arguments + [str(path)], check=False, capture_output=True,
+                                text=True)
+        if result.returncode == 0 and path.exists():
+            return [(path.name, "")], []
+        choices = DISPLAY_CHOICE.findall(command_output(result))
+        if len(choices) < 2:
+            print(command_output(result), end="", file=sys.stderr)
+            return [], [path.name]
+        path.unlink(missing_ok=True)
+        SIMULATOR_DISPLAYS[udid] = display_names(choices)
+    saved, failed = [], []
+    for display, display_name in SIMULATOR_DISPLAYS[udid]:
         display_path = path.with_name(path.stem + "-" + display_name + path.suffix)
         result = subprocess.run(arguments + ["--display=" + display, str(display_path)],
                                 check=False, capture_output=True, text=True)
-        if result.returncode != 0 or not display_path.exists():
-            print((result.stdout or "") + (result.stderr or ""), end="", file=sys.stderr)
-            return []
-        saved.append((display_path.name, display_name))
-    return saved
+        if result.returncode == 0 and display_path.exists():
+            saved.append((display_path.name, display_name))
+        else:
+            print(command_output(result), end="", file=sys.stderr)
+            failed.append(display_path.name)
+    return saved, failed
 
 
 def screenshot_entries(screen, saved):
@@ -293,11 +306,9 @@ class ScreenshotResponder(threading.Thread):
                 screen = request.stem
                 request.unlink()
                 name = image_name(self.label, self.appearance, screen, self.tag)
-                saved = take_screenshot(self.udid, self.output / name)
-                if saved:
-                    self.captured += screenshot_entries(screen, saved)
-                else:
-                    self.failed.append(name)
+                saved, failed = take_screenshot(self.udid, self.output / name)
+                self.captured += screenshot_entries(screen, saved)
+                self.failed += failed
                 (self.requests / (screen + ".done")).touch()
             time.sleep(0.1)
 
@@ -362,7 +373,7 @@ def prepare_device(udid, app):
 def capture_launch(device, capture_pass, output):
     """Saves the launch screen as a cold launch shows it. The app is held before its first line
     of code runs, so the system's generated launch screen stays up until the capture.
-    Returns its manifest entries, empty when it wasn't saved."""
+    Returns its manifest entries and whether any display wasn't saved."""
     udid = device["udid"]
     quietly(["xcrun", "simctl", "terminate", udid, BUNDLE_IDENTIFIER])
     name = image_name(device["label"], capture_pass.appearance, LAUNCH_SCREEN, capture_pass.tag)
@@ -371,12 +382,12 @@ def capture_launch(device, capture_pass, output):
             capture_output=True)
         # Long enough for the launch animation to finish.
         time.sleep(2)
-        saved = take_screenshot(udid, output / name)
+        saved, failed = take_screenshot(udid, output / name)
     finally:
         quietly(["xcrun", "simctl", "terminate", udid, BUNDLE_IDENTIFIER])
-    if not saved:
-        print("No screenshot was saved for " + name, file=sys.stderr)
-    return screenshot_entries(LAUNCH_SCREEN, saved)
+    for file in failed:
+        print("No screenshot was saved for " + file, file=sys.stderr)
+    return screenshot_entries(LAUNCH_SCREEN, saved), bool(failed)
 
 
 def run_pass(xcodebuild, device, capture_pass, output, screen_filter):
@@ -390,9 +401,8 @@ def run_pass(xcodebuild, device, capture_pass, output, screen_filter):
         if capture_pass.undecided_location:
             run(["xcrun", "simctl", "privacy", udid, "reset", "location", BUNDLE_IDENTIFIER])
         if capture_pass.captures_launch:
-            launch = capture_launch(device, capture_pass, output)
+            launch, failed = capture_launch(device, capture_pass, output)
             captured += launch
-            failed = not launch
         if capture_pass.screens or not capture_pass.captures_launch:
             with tempfile.TemporaryDirectory() as requests:
                 responder = ScreenshotResponder(udid, Path(requests), output, device["label"],

@@ -81,7 +81,15 @@ class DeviceSelectionTests(unittest.TestCase):
         self.assertIn("iPhone 17 Pro Max", str(raised.exception))
 
 
+def forget_displays(test):
+    MODULE["SIMULATOR_DISPLAYS"].clear()
+    test.addCleanup(MODULE["SIMULATOR_DISPLAYS"].clear)
+
+
 class ResponderTests(unittest.TestCase):
+    def setUp(self):
+        forget_displays(self)
+
     def test_a_screenshot_that_wasnt_saved_is_reported_and_still_answered(self):
         with tempfile.TemporaryDirectory() as requests, tempfile.TemporaryDirectory() as output:
             requests, output = Path(requests), Path(output)
@@ -121,13 +129,16 @@ class ResponderTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as output, patch("subprocess.run",
                                                             side_effect=screenshot):
-            saved = MODULE["take_screenshot"]("id", Path(output) / "duo-light-compass.png")
+            saved, failed = MODULE["take_screenshot"]("id", Path(output) / "duo-light-compass.png")
             self.assertEqual(sorted(path.name for path in Path(output).iterdir()),
                              ["duo-light-compass-inner.png", "duo-light-compass-outer.png"])
+            MODULE["take_screenshot"]("id", Path(output) / "duo-light-settings.png")
         self.assertEqual(saved, [("duo-light-compass-inner.png", "inner"),
                                  ("duo-light-compass-outer.png", "outer")])
+        self.assertEqual(failed, [])
+        # The second screenshot goes straight to each display.
         self.assertEqual([command[5] for command in commands[1:]],
-                         ["--display=3", "--display=1"])
+                         ["--display=3", "--display=1", "--display=3", "--display=1"])
         self.assertEqual(MODULE["screenshot_entries"]("compass", saved),
                          [{"screen": "compass", "file": "duo-light-compass-inner.png",
                            "display": "inner"},
@@ -148,9 +159,26 @@ class ResponderTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as output, patch("subprocess.run",
                                                             side_effect=screenshot):
-            saved = MODULE["take_screenshot"]("id", Path(output) / "compass.png")
-        self.assertEqual(saved, [])
+            saved, failed = MODULE["take_screenshot"]("id", Path(output) / "compass.png")
+        self.assertEqual((saved, failed), ([], ["compass.png"]))
         self.assertEqual(len(commands), 1)
+
+    def test_a_display_that_wasnt_saved_is_reported_by_name_and_the_others_are_kept(self):
+        def screenshot(arguments, **options):
+            if not any(argument.startswith("--display=") for argument in arguments):
+                return subprocess.CompletedProcess(arguments, 22, "", TWO_DISPLAYS)
+            if "--display=1" in arguments:
+                return subprocess.CompletedProcess(arguments, 1, "", "Display busy\n")
+            Path(arguments[-1]).write_bytes(b"png")
+            return subprocess.CompletedProcess(arguments, 0, "", "")
+
+        with tempfile.TemporaryDirectory() as output, patch("subprocess.run",
+                                                            side_effect=screenshot):
+            saved, failed = MODULE["take_screenshot"]("id", Path(output) / "compass.png")
+            left = sorted(path.name for path in Path(output).iterdir())
+        self.assertEqual(saved, [("compass-inner.png", "inner")])
+        self.assertEqual(failed, ["compass-outer.png"])
+        self.assertEqual(left, ["compass-inner.png"])
 
 
 class CaptureSetTests(unittest.TestCase):
@@ -274,11 +302,15 @@ class CaptureRunTests(unittest.TestCase):
                                  system_settings=("increase-contrast",), tag="increase-contrast",
                                  undecided_location=True)
 
-    def capture(self, simulators):
+    def setUp(self):
+        forget_displays(self)
+
+    def capture(self, simulators, capture_pass=None):
         output = tempfile.TemporaryDirectory()
         self.addCleanup(output.cleanup)
+        self.output = Path(output.name)
         globals_ = MODULE["capture"].__globals__
-        with patch.dict(globals_, {"SETS": {"test": (self.PASS,)}}), \
+        with patch.dict(globals_, {"SETS": {"test": (capture_pass or self.PASS,)}}), \
                 patch("subprocess.run", side_effect=simulators):
             try:
                 MODULE["main"](["capture", "--set", "test", "--output", output.name])
@@ -313,6 +345,21 @@ class CaptureRunTests(unittest.TestCase):
               "ax3")])
         self.assertTrue(all(entry["device"] == "iPhone SE (3rd generation)"
                             for entry in manifest))
+
+    def test_the_launch_frame_is_saved_for_each_display(self):
+        launch_pass = MODULE["CapturePass"]("iPhone SE (3rd generation)", "light", (),
+                                            captures_launch=True)
+        error, manifest = self.capture(FakeSimulators(displays=2), launch_pass)
+        self.assertIsNone(error)
+        self.assertEqual(
+            [(entry["file"], entry["screen"], entry["display"], "pass_failed" in entry)
+             for entry in manifest],
+            [("iphone-se-3rd-generation-light-launch-first-frame-inner.png",
+              "launch-first-frame", "inner", False),
+             ("iphone-se-3rd-generation-light-launch-first-frame-outer.png",
+              "launch-first-frame", "outer", False)])
+        self.assertEqual(sorted(path.name for path in self.output.glob("*.png")),
+                         [entry["file"] for entry in manifest])
 
     def test_a_failed_test_run_still_restores_the_simulator_and_deletes_what_it_created(self):
         simulators = FakeSimulators(test_result=65)
