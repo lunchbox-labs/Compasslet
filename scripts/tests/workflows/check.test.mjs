@@ -21,9 +21,12 @@ const concurrency = github => ({
   group: render(workflow.concurrency.group, github),
   cancels: render(workflow.concurrency['cancel-in-progress'], github) === 'true',
 });
-const pullRequest = (number, sha) => ({ event_name: 'pull_request', ref: `refs/pull/${number}/merge`, sha });
-const push = sha => ({ event_name: 'push', ref: 'refs/heads/main', sha });
-const manual = (ref, sha) => ({ event_name: 'workflow_dispatch', ref, sha });
+const sha = 'a'.repeat(40);
+let runs = 0;
+const run = (event_name, ref, commit = sha) => ({ event_name, ref, sha: commit, run_id: String(++runs) });
+const pullRequest = (number, commit) => run('pull_request', `refs/pull/${number}/merge`, commit);
+const push = commit => run('push', 'refs/heads/main', commit);
+const manual = (ref, commit) => run('workflow_dispatch', ref, commit);
 
 test('a newer push to a pull request cancels its older run', () => {
   const older = concurrency(pullRequest(1, 'a'.repeat(40)));
@@ -33,20 +36,24 @@ test('a newer push to a pull request cancels its older run', () => {
 });
 
 test('different pull requests never cancel each other', () => {
-  assert.notEqual(concurrency(pullRequest(1, 'a'.repeat(40))).group, concurrency(pullRequest(2, 'a'.repeat(40))).group);
+  assert.notEqual(concurrency(pullRequest(1)).group, concurrency(pullRequest(2)).group);
 });
 
-test('each push to main finishes, and no later push replaces it while it waits', () => {
-  const first = concurrency(push('a'.repeat(40)));
-  const second = concurrency(push('b'.repeat(40)));
+test('pushes to main never cancel or replace each other, even at the same commit', () => {
+  for (const [first, second] of [[push('a'.repeat(40)), push('b'.repeat(40))], [push(), push()]]) {
+    assert.equal(concurrency(first).cancels, false);
+    assert.equal(concurrency(second).cancels, false);
+    assert.notEqual(concurrency(first).group, concurrency(second).group);
+  }
+});
+
+test('manual runs never cancel or replace other runs, even at the same commit', () => {
+  const first = concurrency(manual('refs/heads/main'));
+  const second = concurrency(manual('refs/heads/main'));
+  const onBranch = concurrency(manual('refs/heads/feature'));
   assert.equal(first.cancels, false);
-  assert.equal(second.cancels, false);
-  assert.notEqual(first.group, second.group);
-});
-
-test('manual runs never cancel or replace other runs', () => {
-  const run = concurrency(manual('refs/heads/main', 'c'.repeat(40)));
-  assert.equal(run.cancels, false);
-  assert.notEqual(run.group, concurrency(push('a'.repeat(40))).group);
-  assert.notEqual(run.group, concurrency(pullRequest(1, 'c'.repeat(40))).group);
+  assert.equal(onBranch.cancels, false);
+  for (const other of [second, onBranch, concurrency(push()), concurrency(pullRequest(1))]) {
+    assert.notEqual(first.group, other.group);
+  }
 });
