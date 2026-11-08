@@ -98,7 +98,7 @@ struct AppearanceDetailView: View {
             Text("This saved appearance hides the readout. Choose a mode to show it.")
           } else if surface != .phone, value.readoutMode == .both {
             Text(
-              "At the largest text sizes, CarPlay may have room for only direction or degrees. Choose which one shows."
+              "At the largest text sizes, CarPlay and Apple Watch may have room for only direction or degrees. Choose which one shows."
             )
           }
         }
