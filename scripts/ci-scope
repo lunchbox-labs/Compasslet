@@ -8,7 +8,7 @@ import sys
 # Xcode builds nor the tests read them. Every other path keeps the jobs, including
 # workflows, scripts, the project file and the Swift package.
 DOCUMENTATION_FILES = ("README.md", "AGENTS.md", ".github/CODEOWNERS")
-DOCUMENTATION_DIRECTORIES = ("docs/", "app-store/", "website/")
+DOCUMENTATION_DIRECTORIES = ("docs/", "app-store/", "website/", "wiki/")
 
 
 def is_documentation(path):
