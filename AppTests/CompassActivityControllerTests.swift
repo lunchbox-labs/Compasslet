@@ -235,7 +235,7 @@ struct CompassActivityControllerTests {
     var time = Date(timeIntervalSince1970: 100)
     let controller = CompassActivityController(system: system, now: { time })
     try await controller.start()
-    // New accepted input remains fresh, but unchanged displayed directions need no heartbeat.
+    // New accepted input remains fresh, but unchanged displayed directions aren't rewritten.
     for delivery in 0..<6 {
       time = Date(timeIntervalSince1970: 100 + Double(delivery))
       let sample = try #require(

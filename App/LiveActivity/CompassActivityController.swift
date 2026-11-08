@@ -102,7 +102,8 @@ final class CompassActivityController: CompassActivityPresenting {
   }
 
   /// This is a sampled last-reading display, not a promise of live vehicle orientation.
-  /// Unchanged readings need no expiry heartbeat; changed readings remain rate-limited.
+  /// Unchanged readings get only the slow stale-date renewal; changed readings remain
+  /// rate-limited.
   static let changedReadingInterval: TimeInterval = 1
 
   private struct ScheduledReading {
