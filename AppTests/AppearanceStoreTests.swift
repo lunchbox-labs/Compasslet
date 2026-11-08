@@ -78,7 +78,9 @@ struct AppearanceStoreTests {
 
   @Test func activityCardsRespectIndependentTimestampChoices() throws {
     let sample = Date(timeIntervalSince1970: 100)
-    func render(_ appearance: AppearanceValues, small: Bool, stale: Bool = false) throws -> Data {
+    func render(_ appearance: AppearanceValues, small: Bool, stale: Bool = false) throws
+      -> RenderedPixels
+    {
       let state = CompassActivityAttributes.ContentState(
         bearing: 45, status: .usable, sampleTime: sample, expiry: nil, appearance: appearance)
       let renderer = ImageRenderer(
@@ -86,7 +88,7 @@ struct AppearanceStoreTests {
           .frame(width: 300, height: 160)
           .environment(\.dynamicTypeSize, .large)
           .environment(\.colorScheme, .light))
-      return try #require(renderer.uiImage?.pngData())
+      return try #require(renderer.renderedPixels)
     }
     let original = AppearanceValues()
     var hidden = original
@@ -115,12 +117,12 @@ struct AppearanceStoreTests {
     let state = CompassActivityAttributes.ContentState(
       bearing: 45, status: .usable, sampleTime: Date(timeIntervalSince1970: 100),
       expiry: nil, appearance: appearance)
-    func render(_ view: some View) throws -> Data {
+    func render(_ view: some View) throws -> RenderedPixels {
       let renderer = ImageRenderer(
         content: view.frame(width: 300, height: 160)
           .environment(\.dynamicTypeSize, .large)
           .environment(\.colorScheme, .light))
-      return try #require(renderer.uiImage?.pngData())
+      return try #require(renderer.renderedPixels)
     }
     for small in [false, true] {
       let card = CompassActivityCard(state: state, isSmall: small)
@@ -224,7 +226,7 @@ struct AppearanceStoreTests {
   @Test func lockScreenReadingAlwaysShowsItsLine() throws {
     let sample = Date(timeIntervalSince1970: 100)
     func render(_ mode: ActivityTimestampMode, width: CGFloat, textSize: DynamicTypeSize) throws
-      -> Data
+      -> RenderedPixels
     {
       var appearance = AppearanceValues()
       appearance.lockScreenTimestamp = mode
@@ -237,7 +239,7 @@ struct AppearanceStoreTests {
           .environment(\.dynamicTypeSize, textSize)
           .environment(\.colorScheme, .light))
       renderer.scale = 3
-      return try #require(renderer.uiImage?.pngData())
+      return try #require(renderer.renderedPixels)
     }
     for textSize in [DynamicTypeSize.large, .accessibility5] {
       for width in [298.0, 380, 418] {
@@ -517,26 +519,26 @@ struct AppearanceStoreTests {
       return try #require(renderer.uiImage)
     }
     let initial = AppearanceValues()
-    let original = try #require(render(initial).pngData())
+    let original = try #require(render(initial).renderedPixels)
     var changed = initial
     changed.minorTicks = .none
-    #expect(try #require(render(changed).pngData()) != original)
+    #expect(try #require(render(changed).renderedPixels) != original)
     changed = initial
     changed.cardinalLabels = .hidden
-    #expect(try #require(render(changed).pngData()) != original)
+    #expect(try #require(render(changed).renderedPixels) != original)
     changed = initial
     changed.rotation = .arrow
-    #expect(try #require(render(changed).pngData()) != original)
+    #expect(try #require(render(changed).renderedPixels) != original)
     changed.showDirection = false
     changed.showDegrees = false
     let steady = try render(changed, reduceMotion: true)
     let restored = try render(changed.requiringReadout(), reduceMotion: true)
-    #expect(steady.pngData() == restored.pngData())
+    #expect(try #require(steady.renderedPixels) == restored.renderedPixels)
     changed.reducedMotionDial = .rotatingDial
     let dial = try render(changed, reduceMotion: true)
     #expect(dial.size.height > steady.size.height)
     // Keep the Dial is a static example, identical to the ordinary dial preview.
-    #expect(try render(changed).pngData() == dial.pngData())
+    #expect(try #require(render(changed).renderedPixels) == dial.renderedPixels)
   }
 
   @Test func readoutSelectionPreservesHiddenLegacyValuesUntilExplicitChoice() throws {
