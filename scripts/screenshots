@@ -3,7 +3,9 @@
 
 capture     Build the app once, then run ScreenshotTests on each device and appearance. The
             test shows one screen at a time and asks for a screenshot by writing a request
-            file; this script answers with a full simulator screenshot and a done file.
+            file; this script answers with a full simulator screenshot and a done file. A
+            simulator with more than one display, such as iPhone Duo, gets one image per
+            display, named inner for the largest and outer for the smallest.
             --set accessibility captures the simulator part of the App Store accessibility
             evidence instead: fixed devices, text sizes, Bold Text, Increase Contrast,
             Reduce Transparency and Dark Mode, as listed in ACCESSIBILITY_SET.
@@ -180,6 +182,55 @@ def image_name(label, appearance, screen, tag=""):
     return "-".join(part for part in (label, appearance, tag, screen) if part) + ".png"
 
 
+# simctl lists the displays it could capture, as "--display=3  LCD-1 (primary-1) 2007x2853".
+DISPLAY_CHOICE = re.compile(r"^\s*--display=(\S+)\s.*?(\d+)x(\d+)\s*$", re.MULTILINE)
+
+
+def display_names(choices):
+    """Names each display by size: inner for the largest, outer for the smallest, and the
+    simctl id for any between them."""
+    ordered = sorted(choices, key=lambda choice: int(choice[1]) * int(choice[2]), reverse=True)
+    names = {}
+    for index, (display, _, _) in enumerate(ordered):
+        if index == 0:
+            names[display] = "inner"
+        elif index == len(ordered) - 1:
+            names[display] = "outer"
+        else:
+            names[display] = "display-" + display
+    return [(display, names[display]) for display, _, _ in choices]
+
+
+def take_screenshot(udid, path):
+    """Saves the simulator's screen at path. A simulator with several displays is saved once
+    per display, with the display's name after the file's stem. Returns each saved file with
+    its display name, empty for a single display; nothing when a screenshot wasn't saved."""
+    arguments = ["xcrun", "simctl", "io", udid, "screenshot"]
+    result = subprocess.run(arguments + [str(path)], check=False, capture_output=True, text=True)
+    if result.returncode == 0 and path.exists():
+        return [(path.name, "")]
+    output = (result.stdout or "") + (result.stderr or "")
+    choices = DISPLAY_CHOICE.findall(output)
+    if len(choices) < 2:
+        print(output, end="", file=sys.stderr)
+        return []
+    saved = []
+    for display, display_name in display_names(choices):
+        display_path = path.with_name(path.stem + "-" + display_name + path.suffix)
+        result = subprocess.run(arguments + ["--display=" + display, str(display_path)],
+                                check=False, capture_output=True, text=True)
+        if result.returncode != 0 or not display_path.exists():
+            print((result.stdout or "") + (result.stderr or ""), end="", file=sys.stderr)
+            return []
+        saved.append((display_path.name, display_name))
+    return saved
+
+
+def screenshot_entries(screen, saved):
+    return [dict({"screen": screen, "file": file}, **({"display": display} if display else {}))
+            for file, display in saved]
+
+
 def device_label(name):
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
@@ -242,10 +293,9 @@ class ScreenshotResponder(threading.Thread):
                 screen = request.stem
                 request.unlink()
                 name = image_name(self.label, self.appearance, screen, self.tag)
-                result = subprocess.run(["xcrun", "simctl", "io", self.udid, "screenshot",
-                                         str(self.output / name)], check=False)
-                if result.returncode == 0 and (self.output / name).exists():
-                    self.captured.append({"screen": screen, "file": name})
+                saved = take_screenshot(self.udid, self.output / name)
+                if saved:
+                    self.captured += screenshot_entries(screen, saved)
                 else:
                     self.failed.append(name)
                 (self.requests / (screen + ".done")).touch()
@@ -311,7 +361,8 @@ def prepare_device(udid, app):
 
 def capture_launch(device, capture_pass, output):
     """Saves the launch screen as a cold launch shows it. The app is held before its first line
-    of code runs, so the system's generated launch screen stays up until the capture."""
+    of code runs, so the system's generated launch screen stays up until the capture.
+    Returns its manifest entries, empty when it wasn't saved."""
     udid = device["udid"]
     quietly(["xcrun", "simctl", "terminate", udid, BUNDLE_IDENTIFIER])
     name = image_name(device["label"], capture_pass.appearance, LAUNCH_SCREEN, capture_pass.tag)
@@ -320,14 +371,12 @@ def capture_launch(device, capture_pass, output):
             capture_output=True)
         # Long enough for the launch animation to finish.
         time.sleep(2)
-        result = subprocess.run(["xcrun", "simctl", "io", udid, "screenshot",
-                                 str(output / name)], check=False)
+        saved = take_screenshot(udid, output / name)
     finally:
         quietly(["xcrun", "simctl", "terminate", udid, BUNDLE_IDENTIFIER])
-    if result.returncode == 0 and (output / name).exists():
-        return {"screen": LAUNCH_SCREEN, "file": name}
-    print("No screenshot was saved for " + name, file=sys.stderr)
-    return None
+    if not saved:
+        print("No screenshot was saved for " + name, file=sys.stderr)
+    return screenshot_entries(LAUNCH_SCREEN, saved)
 
 
 def run_pass(xcodebuild, device, capture_pass, output, screen_filter):
@@ -342,8 +391,8 @@ def run_pass(xcodebuild, device, capture_pass, output, screen_filter):
             run(["xcrun", "simctl", "privacy", udid, "reset", "location", BUNDLE_IDENTIFIER])
         if capture_pass.captures_launch:
             launch = capture_launch(device, capture_pass, output)
-            captured += [launch] if launch else []
-            failed = launch is None
+            captured += launch
+            failed = not launch
         if capture_pass.screens or not capture_pass.captures_launch:
             with tempfile.TemporaryDirectory() as requests:
                 responder = ScreenshotResponder(udid, Path(requests), output, device["label"],

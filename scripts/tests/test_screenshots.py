@@ -16,6 +16,10 @@ MODULE = runpy.run_path(str(SCRIPTS / "screenshots"))
 RUNTIME_27 = "com.apple.CoreSimulator.SimRuntime.iOS-27-0"
 RUNTIME_27_1 = "com.apple.CoreSimulator.SimRuntime.iOS-27-1"
 RUNTIME_26 = "com.apple.CoreSimulator.SimRuntime.iOS-26-4"
+TWO_DISPLAYS = ("An error was encountered processing the command (domain=NSPOSIXErrorDomain, "
+                "code=22):\nCannot choose between 2 displays. Specify one with --display:\n"
+                "    --display=3  LCD-1 (primary-1) 2007x2853\n"
+                "    --display=1  LCD (primary) 1398x2034\nInvalid argument\n")
 
 
 class DeviceSelectionTests(unittest.TestCase):
@@ -105,6 +109,49 @@ class ResponderTests(unittest.TestCase):
             self.assertTrue((requests / "compass.done").exists())
             self.assertTrue((requests / "settings.done").exists())
 
+    def test_a_simulator_with_several_displays_gets_one_image_per_display(self):
+        commands = []
+
+        def screenshot(arguments, **options):
+            commands.append(list(arguments))
+            if not any(argument.startswith("--display=") for argument in arguments):
+                return subprocess.CompletedProcess(arguments, 22, "", TWO_DISPLAYS)
+            Path(arguments[-1]).write_bytes(b"png")
+            return subprocess.CompletedProcess(arguments, 0, "", "")
+
+        with tempfile.TemporaryDirectory() as output, patch("subprocess.run",
+                                                            side_effect=screenshot):
+            saved = MODULE["take_screenshot"]("id", Path(output) / "duo-light-compass.png")
+            self.assertEqual(sorted(path.name for path in Path(output).iterdir()),
+                             ["duo-light-compass-inner.png", "duo-light-compass-outer.png"])
+        self.assertEqual(saved, [("duo-light-compass-inner.png", "inner"),
+                                 ("duo-light-compass-outer.png", "outer")])
+        self.assertEqual([command[5] for command in commands[1:]],
+                         ["--display=3", "--display=1"])
+        self.assertEqual(MODULE["screenshot_entries"]("compass", saved),
+                         [{"screen": "compass", "file": "duo-light-compass-inner.png",
+                           "display": "inner"},
+                          {"screen": "compass", "file": "duo-light-compass-outer.png",
+                           "display": "outer"}])
+
+    def test_displays_between_the_largest_and_smallest_keep_their_simctl_id(self):
+        choices = [("1", "1398", "2034"), ("3", "2007", "2853"), ("5", "1600", "2400")]
+        self.assertEqual(MODULE["display_names"](choices),
+                         [("1", "outer"), ("3", "inner"), ("5", "display-5")])
+
+    def test_a_failed_screenshot_that_lists_no_displays_is_not_retried(self):
+        commands = []
+
+        def screenshot(arguments, **options):
+            commands.append(list(arguments))
+            return subprocess.CompletedProcess(arguments, 1, "", "Invalid device\n")
+
+        with tempfile.TemporaryDirectory() as output, patch("subprocess.run",
+                                                            side_effect=screenshot):
+            saved = MODULE["take_screenshot"]("id", Path(output) / "compass.png")
+        self.assertEqual(saved, [])
+        self.assertEqual(len(commands), 1)
+
 
 class CaptureSetTests(unittest.TestCase):
     def test_every_screen_in_a_set_is_one_the_test_can_show(self):
@@ -178,8 +225,8 @@ class CreatableDeviceTests(unittest.TestCase):
 class FakeSimulators:
     """Answers the simctl and xcodebuild commands capture() runs, and records each one."""
 
-    def __init__(self, test_result=0, requests=()):
-        self.test_result, self.requests = test_result, requests
+    def __init__(self, test_result=0, requests=(), displays=1):
+        self.test_result, self.requests, self.displays = test_result, requests, displays
         self.devices = [{"udid": "17-id", "name": "iPhone 17", "isAvailable": True,
                          "deviceTypeIdentifier": "type.17"}]
         self.commands = []
@@ -201,6 +248,8 @@ class FakeSimulators:
                                  "deviceTypeIdentifier": arguments[4]})
             stdout = "se-id\n"
         elif arguments[:4] == ["xcrun", "simctl", "io", arguments[3]]:
+            if self.displays > 1 and not any(part.startswith("--display=") for part in arguments):
+                return subprocess.CompletedProcess(arguments, 22, "", TWO_DISPLAYS)
             Path(arguments[-1]).write_bytes(b"png")
         elif arguments[-1] == "test-without-building":
             directory = Path(options["env"]["TEST_RUNNER_SCREENSHOT_DIRECTORY"])
@@ -251,6 +300,19 @@ class CaptureRunTests(unittest.TestCase):
               "settings", "ax3-bold")])
         self.assertTrue(all(entry["system_settings"] == ["increase-contrast"]
                             and entry["runtime"] == RUNTIME_27 for entry in manifest))
+
+    def test_each_display_is_its_own_manifest_entry_with_the_pass_details(self):
+        simulators = FakeSimulators(requests=("settings-ax3",), displays=2)
+        error, manifest = self.capture(simulators)
+        self.assertIsNone(error)
+        self.assertEqual(
+            [(entry["file"], entry["display"], entry["text_variant"]) for entry in manifest],
+            [("iphone-se-3rd-generation-dark-increase-contrast-settings-ax3-inner.png", "inner",
+              "ax3"),
+             ("iphone-se-3rd-generation-dark-increase-contrast-settings-ax3-outer.png", "outer",
+              "ax3")])
+        self.assertTrue(all(entry["device"] == "iPhone SE (3rd generation)"
+                            for entry in manifest))
 
     def test_a_failed_test_run_still_restores_the_simulator_and_deletes_what_it_created(self):
         simulators = FakeSimulators(test_result=65)
