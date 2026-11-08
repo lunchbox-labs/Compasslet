@@ -289,7 +289,7 @@ class CaptureRunTests(unittest.TestCase):
         self.assertEqual(simulators.environments[0]["TEST_RUNNER_SCREENSHOT_MAX_PARTS"], "2")
         simulators = FakeSimulators()
         self.capture(simulators)
-        self.assertEqual(simulators.environments[0]["TEST_RUNNER_SCREENSHOT_MAX_PARTS"], "6")
+        self.assertEqual(simulators.environments[0]["TEST_RUNNER_SCREENSHOT_MAX_PARTS"], "9")
 
     def test_a_part_limit_out_of_range_stops_before_anything_runs(self):
         for value in ("0", "10", "two"):

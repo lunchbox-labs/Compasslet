@@ -30,9 +30,9 @@ MANIFEST = "screenshots.json"
 MINIMUM_IOS = 27
 LAUNCH_SCREEN = "launch-first-frame"
 # Parts of one scrolling screen, counting the first. Nine keeps part numbers to one digit, so
-# they sort in order.
-DEFAULT_MAX_PARTS = 6
+# they sort in order, and by default a run captures as many as that allows.
 MAX_PARTS_LIMIT = 9
+DEFAULT_MAX_PARTS = MAX_PARTS_LIMIT
 PART_SUFFIX = re.compile(r"^(.+)-part([2-9])$")
 
 
