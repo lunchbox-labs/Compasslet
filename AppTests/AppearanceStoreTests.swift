@@ -5,7 +5,11 @@ import Testing
 import UIKit
 @testable import Compass
 
-@Suite @MainActor
+// Two of these tests show a window in the app's one scene and wait, against a deadline, for it to
+// draw, and one also makes its window key. Swift Testing runs a suite's tests in parallel, and
+// main-actor tests still interleave at each await, so run them one at a time: neither then shares
+// the scene, key status or the main actor's drawing time with the other while it waits.
+@Suite(.serialized) @MainActor
 struct AppearanceStoreTests {
   @Test func readoutPickerFillsFormRowAndFallsBackWhenNeeded() async throws {
     let name = "readout-layout-tests-\(UUID())"
