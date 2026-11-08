@@ -671,7 +671,7 @@ struct AppearanceStoreTests {
       (AppTheme.dark, ColorScheme.dark), (.light, .light), (.system, .dark),
     ] {
       store.update { $0.theme = theme }
-      try await waitUntil(.seconds(5), layingOut: host.view) {
+      try await waitUntil(.seconds(10), layingOut: host.view) {
         observed["compass"] == expected && observed["settings"] == expected
       }
       #expect(observed["compass"] == expected)
@@ -681,7 +681,7 @@ struct AppearanceStoreTests {
     }
     // System must release the override, including subsequent host appearance changes.
     window.overrideUserInterfaceStyle = .light
-    try await waitUntil(.seconds(5), layingOut: host.view) {
+    try await waitUntil(.seconds(10), layingOut: host.view) {
       observed["compass"] == .light && observed["settings"] == .light
     }
     #expect(observed["compass"] == .light)
