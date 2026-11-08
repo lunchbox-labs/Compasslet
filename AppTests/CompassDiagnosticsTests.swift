@@ -4,7 +4,9 @@ import XCTest
 @testable import Compass
 
 final class CompassDiagnosticsTests: XCTestCase {
-  private func makeStore() throws -> CompassDiagnostics {
+  private func makeStore(
+    retainedEvents: Int = 50_000, storage: CompassDiagnostics.Storage = .init()
+  ) throws -> CompassDiagnostics {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
       UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -13,12 +15,20 @@ final class CompassDiagnosticsTests: XCTestCase {
         [.posixPermissions: 0o755], ofItemAtPath: directory.path)
       try? FileManager.default.removeItem(at: directory)
     }
-    return try CompassDiagnostics(directory: directory)
+    return try CompassDiagnostics(
+      directory: directory, retainedEvents: retainedEvents, storage: storage)
+  }
+
+  private func eventsFile(of store: CompassDiagnostics) -> URL {
+    store.directory.appendingPathComponent("events.jsonl")
+  }
+
+  private func lineCount(of store: CompassDiagnostics) throws -> Int {
+    try Data(contentsOf: eventsFile(of: store)).split(separator: 0x0A).count
   }
 
   private func appendLines(_ text: String, to store: CompassDiagnostics) throws {
-    let url = store.directory.appendingPathComponent("events.jsonl")
-    let handle = try FileHandle(forWritingTo: url)
+    let handle = try FileHandle(forWritingTo: eventsFile(of: store))
     defer { try? handle.close() }
     try handle.seekToEnd()
     try handle.write(contentsOf: Data(text.utf8))
@@ -151,13 +161,13 @@ final class CompassDiagnosticsTests: XCTestCase {
     let reopened = try CompassDiagnostics(directory: store.directory)
     XCTAssertEqual(try reopened.snapshot().events, retained)
     XCTAssertNoThrow(try reopened.exportJSON())
-    // The cut-short line doesn't swallow the next event, which numbers after the unknown ones.
+    // Opening rewrote the file without them, so the cut-short line can't swallow the next event.
+    XCTAssertEqual(try lineCount(of: reopened), retained.count)
     try reopened.observe(.activity, active: true, wall: 101, uptime: 101)
     XCTAssertTrue(try reopened.record(.activity, kind: .updateCompleted, wall: 101, uptime: 101))
     let events = try CompassDiagnostics(directory: store.directory).snapshot().events
     XCTAssertEqual(events.count, retained.count + 2)
     XCTAssertEqual(events.last?.kind, .updateCompleted)
-    XCTAssertGreaterThan(events.last?.sequence ?? 0, 91)
   }
 
   func testFailedClearDoesNotPretendDebugModeWasDisabled() throws {
@@ -177,11 +187,102 @@ final class CompassDiagnosticsTests: XCTestCase {
     XCTAssertEqual(try reopened.snapshot().events, retained)
   }
 
-  func testUnreadableSettingsLeaveTheStoreUnopened() throws {
+  func testUndecodableSettingsStartOverWithDebugModeOff() throws {
     let store = try makeStore()
     try store.setEnabled(true)
+    try store.observe(.activity, active: true, wall: 100, uptime: 100)
     try Data("{".utf8).write(to: store.directory.appendingPathComponent("settings.json"))
-    XCTAssertThrowsError(try CompassDiagnostics(directory: store.directory))
+    let reopened = try CompassDiagnostics(directory: store.directory)
+    XCTAssertFalse(reopened.isEnabled)
+    XCTAssertTrue(try reopened.snapshot().events.isEmpty)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: eventsFile(of: store).path))
+  }
+
+  func testFailedSettingsWriteAfterEraseKeepsMemoryMatchingTheFiles() throws {
+    let faults = Faults()
+    let store = try makeStore(storage: faults.storage)
+    try store.setEnabled(true)
+    try store.observe(.activity, active: true, wall: 100, uptime: 100)
+    try store.record(.activity, kind: .updateCompleted, wall: 100, uptime: 100)
+    faults.failSettings = true
+    XCTAssertThrowsError(try store.setEnabled(false))
+    faults.failSettings = false
+    // The log is already gone, but the switch was never saved off.
+    XCTAssertTrue(store.isEnabled)
+    XCTAssertTrue(try store.snapshot().events.isEmpty)
+    let reopened = try CompassDiagnostics(directory: store.directory)
+    XCTAssertTrue(reopened.isEnabled)
+    XCTAssertTrue(try reopened.snapshot().events.isEmpty)
+  }
+
+  func testFailedAppendLeavesNoFragmentBehind() throws {
+    let faults = Faults()
+    let store = try makeStore(storage: faults.storage)
+    try store.setEnabled(true)
+    try store.observe(.fullscreen, active: true, wall: 100, uptime: 100)
+    faults.cutAppends = true
+    XCTAssertThrowsError(
+      try store.record(.fullscreen, kind: .templateUpdated, wall: 100, uptime: 100))
+    faults.cutAppends = false
+    XCTAssertEqual(try store.snapshot().events.map(\.kind), [.started])
+    XCTAssertEqual(try Data(contentsOf: eventsFile(of: store)).last, 0x0A)
+    XCTAssertEqual(try lineCount(of: store), 1)
+    XCTAssertTrue(try store.record(.fullscreen, kind: .templateUpdated, wall: 100, uptime: 100))
+    let events = try store.snapshot().events
+    XCTAssertEqual(events.map(\.kind), [.started, .templateUpdated])
+    XCTAssertEqual(Set(events.map(\.sequence)).count, 2)
+    XCTAssertEqual(try CompassDiagnostics(directory: store.directory).snapshot().events, events)
+  }
+
+  func testCompactionRewritesTheFileToTheRetainedEvents() throws {
+    let store = try makeStore()
+    try store.setEnabled(true)
+    try store.observe(.activity, active: true, wall: 100, uptime: 100)
+    try store.observe(.fullscreen, active: true, wall: 100, uptime: 100)
+    for _ in 0..<1100 {
+      try store.record(.fullscreen, kind: .templateUpdated, wall: 100, uptime: 100)
+    }
+    XCTAssertEqual(try lineCount(of: store), 1102)
+    for second in 1...1801 {
+      try store.observe(
+        .fullscreen, active: true, wall: Double(100 + second), uptime: Double(100 + second))
+    }
+    let events = try store.snapshot().events
+    XCTAssertEqual(events.map(\.surface), [.activity])
+    XCTAssertEqual(try lineCount(of: store), events.count)
+  }
+
+  func testEachSurfaceKeepsItsNewestEventsUpToTheLimit() throws {
+    let store = try makeStore(retainedEvents: 3)
+    try store.setEnabled(true)
+    try store.observe(.activity, active: true, wall: 100, uptime: 100)
+    try store.observe(.fullscreen, active: true, wall: 100, uptime: 100)
+    for _ in 0..<4 {
+      try store.record(.fullscreen, kind: .templateUpdated, wall: 100, uptime: 100)
+    }
+    let events = try store.snapshot().events
+    XCTAssertEqual(events.filter { $0.surface == .fullscreen }.map(\.sequence), [4, 5, 6])
+    XCTAssertEqual(events.filter { $0.surface == .activity }.map(\.sequence), [1])
+    let reopened = try CompassDiagnostics(directory: store.directory, retainedEvents: 3)
+    XCTAssertEqual(try reopened.snapshot().events, events)
+  }
+
+  func testLegacyAppGroupStoreIsRemoved() throws {
+    let container = FileManager.default.temporaryDirectory.appendingPathComponent(
+      UUID().uuidString, isDirectory: true)
+    addTeardownBlock { try? FileManager.default.removeItem(at: container) }
+    let legacy = container.appendingPathComponent("Diagnostics", isDirectory: true)
+    try FileManager.default.createDirectory(at: legacy, withIntermediateDirectories: true)
+    for name in ["timing.sqlite", "timing.sqlite-wal", "timing.sqlite-shm"] {
+      try Data("events".utf8).write(to: legacy.appendingPathComponent(name))
+    }
+    let other = container.appendingPathComponent("Library", isDirectory: true)
+    try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+    CompassDiagnostics.removeLegacyStore(in: container)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: legacy.path))
+    XCTAssertTrue(FileManager.default.fileExists(atPath: other.path))
+    CompassDiagnostics.removeLegacyStore(in: container)
+    CompassDiagnostics.removeLegacyStore(in: nil)
   }
 
   func testPauseResumeAndRestartExcludeIdleTimeFromIntervals() throws {
@@ -254,5 +355,28 @@ final class CompassDiagnosticsTests: XCTestCase {
     let count = try store.snapshot().events.count
     try store.record(.fullscreen, kind: .updateRequested, wall: 102, uptime: 102)
     XCTAssertEqual(try store.snapshot().events.count, count)
+  }
+}
+
+/// Makes the store's settings writes fail, or its appends stop half-way, while set.
+private final class Faults: @unchecked Sendable {
+  var failSettings = false
+  var cutAppends = false
+
+  var storage: CompassDiagnostics.Storage {
+    let real = CompassDiagnostics.Storage()
+    var storage = real
+    storage.replace = { data, url in
+      if self.failSettings, url.lastPathComponent == "settings.json" {
+        throw CocoaError(.fileWriteUnknown)
+      }
+      try real.replace(data, url)
+    }
+    storage.write = { handle, data in
+      guard self.cutAppends else { return try real.write(handle, data) }
+      try real.write(handle, data.prefix(data.count / 2))
+      throw CocoaError(.fileWriteUnknown)
+    }
+    return storage
   }
 }

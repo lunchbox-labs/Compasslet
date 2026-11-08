@@ -50,8 +50,21 @@ final class CompassDiagnostics: Observable, Sendable {
     }
   }
 
+  /// The writes the store makes, so a test can make one fail part-way.
+  struct Storage: Sendable {
+    /// Replaces a whole file atomically.
+    var replace: @Sendable (Data, URL) throws -> Void = { data, url in
+      try data.write(
+        to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+    }
+    /// Writes bytes at a file handle's current offset.
+    var write: @Sendable (FileHandle, Data) throws -> Void = { try $0.write(contentsOf: $1) }
+  }
+
   static let shared: CompassDiagnostics? = {
     #if os(iOS)
+      removeLegacyStore(
+        in: FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: legacyGroup))
       do {
         var directory = try FileManager.default.url(
           for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
@@ -70,6 +83,18 @@ final class CompassDiagnostics: Observable, Sendable {
     #endif
   }()
 
+  /// The App Group that held the SQLite store before it moved to Application Support.
+  private static let legacyGroup = "group.dev.lunchbox-labs.carplay-compass"
+
+  /// Deletes the old store's `Diagnostics` folder from the App Group container, if it's there,
+  /// because its events can no longer be cleared from Settings.
+  static func removeLegacyStore(in container: URL?) {
+    guard let folder = container?.appendingPathComponent("Diagnostics", isDirectory: true),
+      FileManager.default.fileExists(atPath: folder.path)
+    else { return }
+    try? FileManager.default.removeItem(at: folder)
+  }
+
   /// One surface's active-time clock, as of its last observation.
   private struct Clock: Codable {
     var total: Double
@@ -80,12 +105,12 @@ final class CompassDiagnostics: Observable, Sendable {
     var session: String
     var active: Bool
   }
-  /// One stored event. Surface and kind stay strings, so a line written by a version that
-  /// records another surface or kind still reads, and is left out of the export.
+  /// One stored event. A line naming a surface or kind this version doesn't record doesn't
+  /// decode, so it's dropped when the store opens.
   private struct Record: Codable {
     let sequence: Int64
-    let surface: String
-    let kind: String
+    let surface: Surface
+    let kind: Kind
     let wall: Double
     let uptime: Double
     let elapsed: Double
@@ -102,42 +127,44 @@ final class CompassDiagnostics: Observable, Sendable {
     var events: [Record]
     /// How many lines the events file holds, retained or not.
     var lines: Int
+    /// The line count at which to try compacting again after a rewrite failed.
+    var retryCompactionAt = 0
     var lastObservation: [Surface: (uptime: Double, active: Bool)] = [:]
-
-    /// Adds an event to the surface's current session with the next sequence number.
-    mutating func add(
-      _ surface: Surface, _ kind: Kind, wall: Double, uptime: Double, clock: Clock
-    ) -> Record {
-      let record = Record(
-        sequence: settings.nextSequence, surface: surface.rawValue, kind: kind.rawValue, wall: wall,
-        uptime: uptime, elapsed: clock.total, session: clock.session)
-      settings.nextSequence += 1
-      events.append(record)
-      return record
-    }
   }
+
+  /// How many active seconds of events each surface keeps.
+  private static let retainedSeconds: Double = 1800
 
   let directory: URL
   private let settingsURL: URL
   private let eventsURL: URL
+  /// How many events each surface keeps at most.
+  private let retainedEvents: Int
+  private let storage: Storage
   private let process = UUID().uuidString
   private let registrar = ObservationRegistrar()
   private let state: Mutex<State>
 
-  /// Opens the store in `directory`, which must exist. A settings file that can't be read
-  /// leaves the store unopened rather than starting over.
-  init(directory: URL) throws {
+  /// Opens the store in `directory`, which must exist. Files that can't be read leave it
+  /// unopened. A settings file that reads but doesn't decode can't say whether Debug Mode is on,
+  /// so both files are deleted and the store starts off.
+  init(directory: URL, retainedEvents: Int = 50_000, storage: Storage = Storage()) throws {
+    let manager = FileManager.default
     let settingsURL = directory.appendingPathComponent("settings.json")
     let eventsURL = directory.appendingPathComponent("events.jsonl")
     var settings = Settings()
     var data = Data()
     do {
-      if FileManager.default.fileExists(atPath: settingsURL.path) {
-        settings = try JSONDecoder().decode(Settings.self, from: Data(contentsOf: settingsURL))
+      if manager.fileExists(atPath: settingsURL.path) {
+        let raw = try Data(contentsOf: settingsURL)
+        if let decoded = try? JSONDecoder().decode(Settings.self, from: raw) {
+          settings = decoded
+        } else {
+          try manager.removeItem(at: settingsURL)
+          if manager.fileExists(atPath: eventsURL.path) { try manager.removeItem(at: eventsURL) }
+        }
       }
-      if FileManager.default.fileExists(atPath: eventsURL.path) {
-        data = try Data(contentsOf: eventsURL)
-      }
+      if manager.fileExists(atPath: eventsURL.path) { data = try Data(contentsOf: eventsURL) }
     } catch { throw Failure.database }
     // A line that doesn't decode, such as one cut short when the app stopped mid-write, is
     // dropped rather than making the whole log unreadable.
@@ -146,18 +173,23 @@ final class CompassDiagnostics: Observable, Sendable {
     var events = stored.compactMap { try? decoder.decode(Record.self, from: Data($0)) }
     events.sort { $0.sequence < $1.sequence }
     settings.nextSequence = max(settings.nextSequence, (events.last?.sequence ?? 0) + 1)
-    for (surface, clock) in settings.clocks {
-      CompassDiagnostics.prune(&events, surface: surface, total: clock.total)
+    for surface in Surface.allCases {
+      guard let total = settings.clocks[surface.rawValue]?.total else { continue }
+      CompassDiagnostics.prune(&events, surface: surface, total: total, limit: retainedEvents)
     }
     var state = State(settings: settings, events: events, lines: stored.count)
     // Rewriting drops what was left out, and ends the file on a whole line for the next append.
     if events.count != stored.count || !(data.isEmpty || data.last == 0x0A) {
-      do { try CompassDiagnostics.rewrite(events, to: eventsURL) } catch { throw Failure.database }
+      do { try storage.replace(CompassDiagnostics.lines(events), eventsURL) } catch {
+        throw Failure.database
+      }
       state.lines = events.count
     }
     self.directory = directory
     self.settingsURL = settingsURL
     self.eventsURL = eventsURL
+    self.retainedEvents = retainedEvents
+    self.storage = storage
     self.state = Mutex(state)
   }
 
@@ -170,19 +202,18 @@ final class CompassDiagnostics: Observable, Sendable {
   func setEnabled(_ value: Bool) throws {
     try registrar.withMutation(of: self, keyPath: \.isEnabled) {
       try state.withLock { state in
-        var next = state
-        next.settings.enabled = value
+        state.lastObservation.removeAll()
+        var settings = state.settings
+        settings.enabled = value
         if value {
           // Resume on the next lifecycle tick, never from an old wall-clock timestamp.
-          for surface in next.settings.clocks.keys { next.settings.clocks[surface]?.active = false }
+          for surface in settings.clocks.keys { settings.clocks[surface]?.active = false }
         } else {
-          next.settings.clocks.removeAll()
-          next.events.removeAll()
+          // Erase the events before saving the switch, so a failed erase leaves Debug Mode on.
+          try erase(&state)
+          settings.clocks.removeAll()
         }
-        next.lastObservation.removeAll()
-        // Turning it off erases the events before saving the switch, so a failed erase leaves
-        // Debug Mode on with its log.
-        try commit(next, to: &state, replacingEvents: !value)
+        try commit(settings, to: &state)
       }
     }
   }
@@ -210,17 +241,19 @@ final class CompassDiagnostics: Observable, Sendable {
       let continuing = wasActive && last?.owner == process && (0...2).contains(delta)
       if continuing { total += delta }
       let session = continuing ? (last?.session ?? UUID().uuidString) : UUID().uuidString
-      let clock = Clock(
+      var settings = state.settings
+      settings.clocks[surface.rawValue] = Clock(
         total: total, wall: wall, uptime: uptime, owner: process, session: session, active: active)
-      var next = state
-      next.settings.clocks[surface.rawValue] = clock
       var added: [Record] = []
-      if active && !continuing {
-        added.append(next.add(surface, .started, wall: wall, uptime: uptime, clock: clock))
-      } else if !active && wasActive {
-        added.append(next.add(surface, .paused, wall: wall, uptime: uptime, clock: clock))
+      let kind: Kind? = active && !continuing ? .started : (wasActive && !active ? .paused : nil)
+      if let kind {
+        let event = Record(
+          sequence: settings.nextSequence, surface: surface, kind: kind, wall: wall, uptime: uptime,
+          elapsed: total, session: session)
+        added.append(event)
+        settings.nextSequence += 1
       }
-      try commit(next, to: &state, appending: added, pruning: surface)
+      try commit(settings, appending: added, pruning: surface, to: &state)
     }
   }
 
@@ -247,21 +280,23 @@ final class CompassDiagnostics: Observable, Sendable {
         clock.active, matchingSession == nil || matchingSession == clock.session,
         (0...2).contains(uptime - clock.uptime), (0...3).contains(wall - clock.wall)
       else { return false }
-      var next = state
-      let event = next.add(surface, kind, wall: wall, uptime: uptime, clock: clock)
-      // The sequence number isn't saved here: the next launch takes it from the last line.
-      try commit(next, to: &state, appending: [event], pruning: surface, savingSettings: false)
+      var settings = state.settings
+      let event = Record(
+        sequence: settings.nextSequence, surface: surface, kind: kind, wall: wall, uptime: uptime,
+        elapsed: clock.total, session: clock.session)
+      settings.nextSequence += 1
+      try commit(settings, appending: [event], pruning: surface, to: &state)
       return true
     }
   }
 
   func clear() throws {
     try state.withLock { state in
-      var next = state
-      next.settings.clocks.removeAll()
-      next.events.removeAll()
-      next.lastObservation.removeAll()
-      try commit(next, to: &state, replacingEvents: true)
+      state.lastObservation.removeAll()
+      try erase(&state)
+      var settings = state.settings
+      settings.clocks.removeAll()
+      try commit(settings, to: &state)
     }
   }
 
@@ -271,21 +306,17 @@ final class CompassDiagnostics: Observable, Sendable {
     for record in records {
       origins[record.session] = min(origins[record.session] ?? record.uptime, record.uptime)
     }
-    let events = records.compactMap { record -> Event? in
-      // A surface or kind this version doesn't record, such as a removed one, is left out.
-      guard let surface = Surface(rawValue: record.surface), let kind = Kind(rawValue: record.kind)
-      else { return nil }
+    let events = records.map { record -> Event in
       let origin = origins[record.session, default: record.uptime]
       return Event(
-        sequence: record.sequence, surface: surface, kind: kind, timestamp: record.wall,
-        elapsedSinceFirstRetainedEvent: record.uptime - origin, activeSeconds: record.elapsed,
-        session: record.session)
+        sequence: record.sequence, surface: record.surface, kind: record.kind,
+        timestamp: record.wall, elapsedSinceFirstRetainedEvent: record.uptime - origin,
+        activeSeconds: record.elapsed, session: record.session)
     }
     let summaries = Surface.allCases.map { surface in
       let selected = events.filter { $0.surface == surface }
-      let kinds = Set(selected.map(\.kind.rawValue)).sorted()
-      let intervals = kinds.compactMap { name -> IntervalSummary? in
-        guard let kind = Kind(rawValue: name) else { return nil }
+      let kinds = Set(selected.map(\.kind)).sorted { $0.rawValue < $1.rawValue }
+      let intervals = kinds.map { kind in
         let stream = selected.filter { $0.kind == kind }.sorted {
           $0.elapsedSinceFirstRetainedEvent < $1.elapsedSinceFirstRetainedEvent
         }
@@ -318,58 +349,56 @@ final class CompassDiagnostics: Observable, Sendable {
     return try encoder.encode(snapshot())
   }
 
-  /// How many active seconds of events each surface keeps, and how many events at most.
-  private static let retainedSeconds: Double = 1800
-  private static let retainedEvents = 50_000
-  private static let writeOptions: Data.WritingOptions = [
-    .atomic, .completeFileProtectionUntilFirstUserAuthentication,
-  ]
-
-  /// Writes `next` to the files and only then makes it current, so a failed write leaves the
-  /// store as it was apart from the skip state `observe` keeps in memory.
+  /// Saves `settings`, then appends `added`. Each write is applied to `state` as soon as it
+  /// succeeds, so memory always matches the files, even when a later write fails.
   private func commit(
-    _ next: State, to state: inout State, appending added: [Record] = [],
-    pruning surface: Surface? = nil, replacingEvents: Bool = false, savingSettings: Bool = true
+    _ settings: Settings, appending added: [Record] = [], pruning surface: Surface? = nil,
+    to state: inout State
   ) throws {
-    var next = next
+    do { try storage.replace(JSONEncoder().encode(settings), settingsURL) } catch {
+      throw Failure.database
+    }
+    state.settings = settings
+    if !added.isEmpty {
+      try append(added)
+      state.events.append(contentsOf: added)
+      state.lines += added.count
+    }
+    if let surface, let total = settings.clocks[surface.rawValue]?.total {
+      Self.prune(&state.events, surface: surface, total: total, limit: retainedEvents)
+    }
+    // Events that age out stay in the file, skipped when it's read, until enough build up to
+    // rewrite it. A failed rewrite waits for another 1,000 lines before it's tried again.
+    if state.lines > 2 * state.events.count + 1000, state.lines >= state.retryCompactionAt {
+      do {
+        try storage.replace(Self.lines(state.events), eventsURL)
+        state.lines = state.events.count
+      } catch { state.retryCompactionAt = state.lines + 1000 }
+    }
+  }
+
+  private func erase(_ state: inout State) throws {
+    do { try storage.replace(Data(), eventsURL) } catch { throw Failure.database }
+    state.events.removeAll()
+    state.lines = 0
+  }
+
+  /// Appends whole lines, or cuts the file back to where it ended, so a fragment of a failed
+  /// write can't run into the next line.
+  private func append(_ records: [Record]) throws {
     do {
-      if replacingEvents {
-        try Self.rewrite(next.events, to: eventsURL)
-        next.lines = next.events.count
+      if !FileManager.default.fileExists(atPath: eventsURL.path) {
+        try storage.replace(Data(), eventsURL)
       }
-      if savingSettings {
-        try JSONEncoder().encode(next.settings).write(to: settingsURL, options: Self.writeOptions)
-      }
-      if !added.isEmpty {
-        try append(added)
-        next.lines += added.count
+      let data = try Self.lines(records)
+      let handle = try FileHandle(forWritingTo: eventsURL)
+      defer { try? handle.close() }
+      let end = try handle.seekToEnd()
+      do { try storage.write(handle, data) } catch {
+        try? handle.truncate(atOffset: end)
+        throw error
       }
     } catch { throw Failure.database }
-    if let surface, let total = next.settings.clocks[surface.rawValue]?.total {
-      Self.prune(&next.events, surface: surface.rawValue, total: total)
-    }
-    // Events that age out stay in the file, left out when it's read, until enough build up to
-    // rewrite it.
-    if next.lines > 2 * next.events.count + 1000,
-      (try? Self.rewrite(next.events, to: eventsURL)) != nil
-    {
-      next.lines = next.events.count
-    }
-    state = next
-  }
-
-  private func append(_ records: [Record]) throws {
-    if !FileManager.default.fileExists(atPath: eventsURL.path) {
-      try Self.rewrite([], to: eventsURL)
-    }
-    let handle = try FileHandle(forWritingTo: eventsURL)
-    defer { try? handle.close() }
-    try handle.seekToEnd()
-    try handle.write(contentsOf: Self.lines(records))
-  }
-
-  private static func rewrite(_ records: [Record], to url: URL) throws {
-    try lines(records).write(to: url, options: writeOptions)
   }
 
   private static func lines(_ records: [Record]) throws -> Data {
@@ -382,15 +411,22 @@ final class CompassDiagnostics: Observable, Sendable {
     return data
   }
 
-  /// Keeps a surface's events from its last 30 active minutes, and at most 50,000 of them.
-  private static func prune(_ events: inout [Record], surface: String, total: Double) {
-    events.removeAll { $0.surface == surface && $0.elapsed < total - retainedSeconds }
-    var excess = events.lazy.filter { $0.surface == surface }.count - retainedEvents
-    guard excess > 0 else { return }
+  /// Keeps a surface's events from its last 30 active minutes, and at most `limit` of them.
+  /// A surface's elapsed times only grow, so its oldest event shows whether any have expired.
+  private static func prune(_ events: inout [Record], surface: Surface, total: Double, limit: Int) {
+    let cutoff = total - retainedSeconds
+    let expired = events.first { $0.surface == surface }.map { $0.elapsed < cutoff } ?? false
+    guard expired || events.count > limit else { return }
+    var excess = events.lazy.filter { $0.surface == surface && $0.elapsed >= cutoff }.count - limit
+    guard expired || excess > 0 else { return }
     var kept: [Record] = []
-    kept.reserveCapacity(events.count - excess)
+    kept.reserveCapacity(events.count)
     for record in events {
-      if excess > 0, record.surface == surface { excess -= 1 } else { kept.append(record) }
+      if record.surface == surface, record.elapsed < cutoff || excess > 0 {
+        if record.elapsed >= cutoff { excess -= 1 }
+      } else {
+        kept.append(record)
+      }
     }
     events = kept
   }

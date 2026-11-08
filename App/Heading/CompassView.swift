@@ -353,7 +353,7 @@ struct CompassView: View {
       if let notice = locationNotice {
         Button(notice) { locationNoticeTapped() }.font(.subheadline).frame(minHeight: 44)
       }
-      if CompassDiagnostics.shared?.isEnabled == true, details, compass.hasSample {
+      if details, compass.hasSample, CompassDiagnostics.shared?.isEnabled == true {
         HeadingSampleTime(compass: compass)
       }
     }
