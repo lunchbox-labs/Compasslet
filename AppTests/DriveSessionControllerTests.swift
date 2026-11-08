@@ -159,6 +159,35 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertEqual(sensor.requests, 2)
   }
 
+  func testAskingFromSettingsDoesNotAskAgainWhileThePromptShows() async {
+    let sensor = Sensor(), activity = Activity()
+    sensor.authorization = .notDetermined
+    let controller = make(sensor, activity)
+    await controller.phoneBecameActive(requestingPermission: false)
+    controller.askForLocationPermission()
+    await controller.phoneBecameActive()
+    await controller.phoneBecameActive()
+    XCTAssertEqual(sensor.requests, 1)
+  }
+
+  func testPermissionUndecidedAgainDuringADriveAsksAgainOnReturn() async {
+    let sensor = Sensor(), activity = Activity()
+    sensor.authorization = .notDetermined
+    let controller = make(sensor, activity)
+    await controller.phoneBecameActive()
+    XCTAssertEqual(sensor.requests, 1)
+    sensor.authorization = .authorized
+    sensor.receive?(.authorizationChanged)
+    await controller.carPlayActivated()
+    XCTAssertTrue(controller.isDriving)
+    sensor.authorization = .notDetermined
+    sensor.receive?(.authorizationChanged)
+    XCTAssertFalse(controller.isDriving)
+    await controller.waitForPendingOperations()
+    await controller.phoneBecameActive()
+    XCTAssertEqual(sensor.requests, 2)
+  }
+
   func testPhoneActivationCanHoldTheLocationPromptUntilAsked() async {
     let sensor = Sensor(), activity = Activity()
     sensor.authorization = .notDetermined

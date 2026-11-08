@@ -365,7 +365,7 @@ struct CompassView: View {
         PhoneLocationReadout(location: location)
       }
       if let notice = locationNotice {
-        Button(notice) { openSettings() }.font(.subheadline).frame(minHeight: 44)
+        Button(notice) { locationNoticeTapped() }.font(.subheadline).frame(minHeight: 44)
       }
       if debugEnabled, details, let sample = compass.sample {
         Text("Debug · Sample \(sample.timestamp.formatted(date: .omitted, time: .standard))")
@@ -400,7 +400,7 @@ struct CompassView: View {
         .accessibilityHint("Shows heading status and available recovery actions")
       }
       if let notice = locationNotice {
-        Button(action: { openSettings() }) {
+        Button(action: { locationNoticeTapped() }) {
           Text(compactLocationStatus).multilineTextAlignment(.center)
         }
         .frame(minHeight: 44)
@@ -467,6 +467,15 @@ struct CompassView: View {
     case .servicesDisabled: "Location Services is off"
     case .preciseLocationRequired: "Approximate location · Enable Precise Location"
     case .unavailable: "CarPlay travel direction unavailable"
+    }
+  }
+
+  /// Undecided permission asks for location right away; anything else needs Settings.
+  private func locationNoticeTapped() {
+    if drive.setupStatus == .permissionRequired {
+      drive.askForLocationPermission()
+    } else {
+      openSettings()
     }
   }
 
