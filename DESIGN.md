@@ -54,8 +54,9 @@ These system-hosted surfaces have constraints beyond an ordinary iPhone screen.
 - `Shared/CompassActivityCard.swift` keeps the Lock Screen and small mirrored card text-only.
   On the Lock Screen and in the expanded Dynamic Island, the single-line reading is as large as
   the widest reading allows, at one size for every direction, so it never jumps as the direction
-  changes. Smaller text sizes make it smaller; larger ones can't widen the line. In CarPlay the reading shortens before scaling. Both show “Last Updated” and a sample time
-  when available. At large text sizes the label shortens to “Updated”, and the elapsed timer, which
+  changes. Smaller text sizes make it smaller; larger ones can't widen the line. In CarPlay
+  the reading shortens before scaling. Both show “Last Updated” and a sample time when
+  available. At large text sizes the label shortens to “Updated”, and the elapsed timer, which
   never shrinks, drops it. Size these for a 270pt line, the card on a 375pt iPhone with
   Display Zoom. Keep the Lock Screen card within its 160pt height limit.
 - The Lock Screen card is see-through: it draws its own black tint in the dark look and white
