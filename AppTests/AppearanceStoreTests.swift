@@ -128,11 +128,16 @@ struct AppearanceStoreTests {
       // degree symbol differently even when the visible content and center are identical.
       let expected: AnyView
       if small {
-        let reading = Text(verbatim: "NE 45°")
-          .font(Font.title2.weight(.semibold)).monospacedDigit()
-          .multilineTextAlignment(.center)
-          .lineLimit(1).minimumScaleFactor(0.8)
-          .frame(maxWidth: .infinity)
+        // With no line beneath it, the reading fills the card's height alone.
+        let reading = GeometryReader { geometry in
+          CarPlayReading(
+            presentation: CompassActivityReading(state: state, isStale: false),
+            size: geometry.size, showsTimestamp: false
+          ) {
+            Text(verbatim: "Last Updated")
+          }
+          .frame(width: geometry.size.width, height: geometry.size.height)
+        }
         expected = AnyView(
           reading.padding(.horizontal, 8).padding(.vertical, 4)
             .frame(maxWidth: .infinity, maxHeight: .infinity))
