@@ -6,7 +6,6 @@ struct CarPlayPresentation: Equatable {
   private(set) var courseDegrees: Double?
   private(set) var sampleTimestamp: Date?
   let status: String
-  let reference = "Travel · True North"
 
   init(
     presentation: TravelPresentation, setup: DriveSessionController.SetupStatus,

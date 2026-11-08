@@ -45,11 +45,9 @@ struct CompassActivityCard: View {
 
   /// A reading is sized to leave room for its line beneath it: on the Lock Screen within 160
   /// points, so it always shows it, and in CarPlay within the card's height, unless even the
-  /// smallest reading leaves no room. A status takes the tallest layout that fits: diagnostics
-  /// (Lock Screen only), then the status between balanced lines, then (Lock Screen only) the
-  /// status above its line, then the status alone, so the Lock Screen card never grows past 160
-  /// points and the CarPlay card never outgrows the size CarPlay gives it. In CarPlay, a status
-  /// long enough to wrap leaves no room for the line beneath it.
+  /// smallest reading leaves no room. A status has no line beneath it and is centered on its own,
+  /// with diagnostic times beneath it on the Lock Screen when they fit, so the Lock Screen card
+  /// never grows past 160 points and the CarPlay card never outgrows the size CarPlay gives it.
   @ViewBuilder private var layouts: some View {
     if presentation.reading != nil {
       if isSmall {
@@ -69,16 +67,8 @@ struct CompassActivityCard: View {
       ViewThatFits(in: .vertical) {
         if !isSmall, let update = state.debugUpdateTime {
           VStack(spacing: 2) {
-            balanced
-            diagnostics(update: update)
-          }
-          .fixedSize(horizontal: false, vertical: true)
-        }
-        balanced.fixedSize(horizontal: false, vertical: true)
-        if !isSmall {
-          VStack(spacing: 2) {
             readout()
-            secondaryLine
+            diagnostics(update: update)
           }
           .fixedSize(horizontal: false, vertical: true)
         }
@@ -115,15 +105,6 @@ struct CompassActivityCard: View {
       if timestampMode != .hidden {
         secondaryLine
       }
-    }
-  }
-
-  private var balanced: some View {
-    VStack(spacing: 2) {
-      // An equal line above centers the reading against the line below.
-      secondaryLine.hidden().accessibilityHidden(true)
-      readout()
-      secondaryLine
     }
   }
 
@@ -190,12 +171,8 @@ struct CompassActivityCard: View {
 
   private var secondaryLine: some View {
     Group {
-      if timestampMode != .hidden {
-        if presentation.reading != nil, let sample = state.sampleTime {
-          ActivityTimestamp(sample: sample, mode: timestampMode)
-        } else {
-          Text("Travel · True North")
-        }
+      if timestampMode != .hidden, presentation.reading != nil, let sample = state.sampleTime {
+        ActivityTimestamp(sample: sample, mode: timestampMode)
       }
     }
     .font(.caption2).foregroundStyle(secondaryStyle).monospacedDigit()
@@ -216,7 +193,7 @@ struct CompassActivityCard: View {
 /// widest reading the appearance's fields can show fits the line. A text size below the default
 /// makes it proportionally smaller; a larger one can't widen the line, so it keeps that size.
 /// On a line too narrow even for `minimumSize`, the reading drops to a shorter form, the field
-/// the appearance's If Both Don’t Fit setting keeps first.
+/// the appearance's When Only One Fits setting keeps first.
 struct ActivityReading: View {
   let presentation: CompassActivityReading
   let maximumSize: CGFloat
@@ -428,7 +405,6 @@ struct CompassActivityView: View {
       } else {
         Text("—").font(.largeTitle.bold())
       }
-      Text("Travel · True North").font(.caption2)
       if presentation.reading != nil, let sample = state.sampleTime {
         ActivityTimestamp(sample: sample, mode: presentation.appearance.lockScreenTimestamp)
           .font(.caption2).foregroundStyle(.secondary)

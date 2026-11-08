@@ -86,7 +86,7 @@ struct AppearanceDetailView: View {
         Section {
           AppearanceReadoutControl(surface: surface, store: store)
           if surface != .phone, value.readoutMode == .both {
-            Picker("If Both Don’t Fit", selection: binding(\.shortReadout)) {
+            Picker("When Only One Fits", selection: binding(\.shortReadout)) {
               Text("Direction").tag(ShortReadout.direction)
               Text("Degrees").tag(ShortReadout.degrees)
             }
@@ -98,7 +98,7 @@ struct AppearanceDetailView: View {
             Text("This saved appearance hides the readout. Choose a mode to show it.")
           } else if surface != .phone, value.readoutMode == .both {
             Text(
-              "At the largest text sizes, CarPlay and Apple Watch may have room for only direction or degrees. Choose which one shows."
+              "The Dynamic Island shows only direction or degrees, and CarPlay and Apple Watch may too at the largest text sizes. Choose which one shows."
             )
           }
         }

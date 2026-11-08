@@ -101,6 +101,12 @@ struct AppearanceStoreTests {
     #expect(try render(original, small: true) == render(hidden, small: true))
     hidden.carPlayActivityTimestamp = .hidden
     #expect(try render(original, small: true) != render(hidden, small: true))
+    // A status has no line beneath it, so the Last Updated setting never changes its card.
+    for small in [false, true] {
+      #expect(
+        try render(original, small: small, stale: true) == render(hidden, small: small, stale: true)
+      )
+    }
     var elapsed = original
     elapsed.lockScreenTimestamp = .elapsed
     elapsed.carPlayActivityTimestamp = .elapsed
