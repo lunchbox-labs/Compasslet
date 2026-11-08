@@ -14,8 +14,8 @@ permissions:
   contents: read
 concurrency:
   group: pages-${{ github.ref }}
-  # A newer push to a pull request cancels its older preview build. Runs on main, which deploy,
-  # are never cancelled.
+  # A newer push to a pull request cancels its older build. Runs on main, which deploy, are never
+  # cancelled mid-run.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   build:
