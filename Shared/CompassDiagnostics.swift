@@ -285,7 +285,7 @@ final class CompassDiagnostics: Observable, Sendable {
         sequence: settings.nextSequence, surface: surface, kind: kind, wall: wall, uptime: uptime,
         elapsed: clock.total, session: clock.session)
       settings.nextSequence += 1
-      try commit(settings, appending: [event], pruning: surface, to: &state)
+      try commit(settings, appending: [event], pruning: surface, savingSettings: false, to: &state)
       return true
     }
   }
@@ -349,21 +349,20 @@ final class CompassDiagnostics: Observable, Sendable {
     return try encoder.encode(snapshot())
   }
 
-  /// Saves `settings`, then appends `added`. Each write is applied to `state` as soon as it
-  /// succeeds, so memory always matches the files, even when a later write fails.
+  /// Saves `settings` unless told not to, then appends `added`. Each write is applied to `state`
+  /// as soon as it succeeds, so memory always matches the files, even when a later write fails.
+  /// Unsaved, the next sequence number is in the last appended line, which opening reads back.
   private func commit(
     _ settings: Settings, appending added: [Record] = [], pruning surface: Surface? = nil,
-    to state: inout State
+    savingSettings: Bool = true, to state: inout State
   ) throws {
-    do { try storage.replace(JSONEncoder().encode(settings), settingsURL) } catch {
-      throw Failure.database
-    }
-    state.settings = settings
+    if savingSettings { try save(settings, to: &state) }
     if !added.isEmpty {
       try append(added)
       state.events.append(contentsOf: added)
       state.lines += added.count
     }
+    state.settings = settings
     if let surface, let total = settings.clocks[surface.rawValue]?.total {
       Self.prune(&state.events, surface: surface, total: total, limit: retainedEvents)
     }
@@ -377,7 +376,17 @@ final class CompassDiagnostics: Observable, Sendable {
     }
   }
 
+  private func save(_ settings: Settings, to state: inout State) throws {
+    do { try storage.replace(JSONEncoder().encode(settings), settingsURL) } catch {
+      throw Failure.database
+    }
+    state.settings = settings
+  }
+
+  /// Saves the next sequence number first, since the log that opening reads it back from is
+  /// about to go, then empties the log.
   private func erase(_ state: inout State) throws {
+    try save(state.settings, to: &state)
     do { try storage.replace(Data(), eventsURL) } catch { throw Failure.database }
     state.events.removeAll()
     state.lines = 0

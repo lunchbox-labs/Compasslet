@@ -204,15 +204,19 @@ final class CompassDiagnosticsTests: XCTestCase {
     try store.setEnabled(true)
     try store.observe(.activity, active: true, wall: 100, uptime: 100)
     try store.record(.activity, kind: .updateCompleted, wall: 100, uptime: 100)
-    faults.failSettings = true
+    // The save before the erase succeeds, and the one after it fails.
+    faults.settingsSavesBeforeFailure = 1
     XCTAssertThrowsError(try store.setEnabled(false))
-    faults.failSettings = false
+    faults.settingsSavesBeforeFailure = nil
     // The log is already gone, but the switch was never saved off.
     XCTAssertTrue(store.isEnabled)
     XCTAssertTrue(try store.snapshot().events.isEmpty)
     let reopened = try CompassDiagnostics(directory: store.directory)
     XCTAssertTrue(reopened.isEnabled)
     XCTAssertTrue(try reopened.snapshot().events.isEmpty)
+    // The erased events' sequence numbers aren't handed out again.
+    try reopened.observe(.activity, active: true, wall: 101, uptime: 101)
+    XCTAssertEqual(try reopened.snapshot().events.map(\.sequence), [3])
   }
 
   func testFailedAppendLeavesNoFragmentBehind() throws {
@@ -358,17 +362,18 @@ final class CompassDiagnosticsTests: XCTestCase {
   }
 }
 
-/// Makes the store's settings writes fail, or its appends stop half-way, while set.
+/// Makes the store's settings saves fail after a number of them, or its appends stop half-way.
 private final class Faults: @unchecked Sendable {
-  var failSettings = false
+  var settingsSavesBeforeFailure: Int?
   var cutAppends = false
 
   var storage: CompassDiagnostics.Storage {
     let real = CompassDiagnostics.Storage()
     var storage = real
     storage.replace = { data, url in
-      if self.failSettings, url.lastPathComponent == "settings.json" {
-        throw CocoaError(.fileWriteUnknown)
+      if url.lastPathComponent == "settings.json", let remaining = self.settingsSavesBeforeFailure {
+        guard remaining > 0 else { throw CocoaError(.fileWriteUnknown) }
+        self.settingsSavesBeforeFailure = remaining - 1
       }
       try real.replace(data, url)
     }
