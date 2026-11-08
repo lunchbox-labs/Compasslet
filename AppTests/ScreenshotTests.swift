@@ -235,8 +235,18 @@ final class ScreenshotTests: XCTestCase {
           .environment(\.legibilityWeight, .bold))
     },
     Screen(name: "live-activity-status") { AnyView(LiveActivityScreen(status: .slow)) },
+    // The longest status, and the one that ends in an ellipsis.
     Screen(name: "live-activity-status-largest-text") {
-      AnyView(LiveActivityScreen(status: .slow).environment(\.dynamicTypeSize, .accessibility5))
+      AnyView(
+        LiveActivityScreen(status: .unavailable)
+          .environment(\.dynamicTypeSize, .accessibility5)
+          .environment(\.legibilityWeight, .bold))
+    },
+    Screen(name: "live-activity-finding-largest-text") {
+      AnyView(
+        LiveActivityScreen(status: .unreliable)
+          .environment(\.dynamicTypeSize, .accessibility5)
+          .environment(\.legibilityWeight, .bold))
     },
     Screen(name: "carplay-dial") { AnyView(CarPlayDialScreen()) },
   ]

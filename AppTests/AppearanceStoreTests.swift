@@ -186,8 +186,8 @@ struct AppearanceStoreTests {
     var cases: [Case] = []
     for textSize in [DynamicTypeSize.xSmall, .large, .accessibility5] {
       for mode in [ActivityTimestampMode.time, .elapsed, .hidden] {
-        // "Move steadily to show travel" is the longest status.
-        for status in [TravelStatus.usable, .slow] {
+        // "Travel unavailable" is the longest status.
+        for status in [TravelStatus.usable, .unavailable] {
           for diagnostics in [false, true] {
             var appearance = AppearanceValues()
             appearance.lockScreenTimestamp = mode
@@ -203,7 +203,7 @@ struct AppearanceStoreTests {
     for (system, readout) in [
       (DynamicTypeSize.xSmall, ReadoutTextSize.accessibility5), (.accessibility5, .xSmall),
     ] {
-      for status in [TravelStatus.usable, .slow] {
+      for status in [TravelStatus.usable, .unavailable] {
         var appearance = AppearanceValues()
         appearance.useSystemTextSize = false
         appearance.customTextSize = readout
@@ -232,6 +232,61 @@ struct AppearanceStoreTests {
           let size = host.sizeThatFits(in: CGSize(width: width, height: 1000))
           // The card reports its full height above 160 points, so an overflow shows here.
           #expect(size.height <= 160, "\(test) \(weight) \(width): \(size.height)")
+        }
+      }
+    }
+  }
+
+  /// A status shrinks to fit its two lines rather than growing its card, so the height tests
+  /// can't show one that's cut off. At the largest text size with Bold Text, each must fit its
+  /// two lines, and its card's height, at the smallest size its card allows, and never break a
+  /// word across its lines at full size instead of shrinking.
+  @Test func activityStatusesFitAtTheLargestTextSize() {
+    let traits = UITraitCollection(preferredContentSizeCategory: .accessibilityExtraExtraExtraLarge)
+    let pointSize = UIFont.preferredFont(forTextStyle: .title2, compatibleWith: traits).pointSize
+    let states = [TravelStatus.waiting, .slow, .unreliable, .unavailable].map {
+      CompassActivityAttributes.ContentState(bearing: nil, status: $0, sampleTime: nil, expiry: nil)
+    }
+    let statuses =
+      states.map { CompassActivityReading(state: $0, isStale: false).status }
+      + [CompassActivityReading(state: states[0], isStale: true).status]
+    func width(_ text: Substring, _ font: UIFont) -> CGFloat {
+      (String(text) as NSString).size(withAttributes: [.font: font]).width
+    }
+    func height(_ text: String, _ font: UIFont, width: CGFloat) -> CGFloat {
+      let bounds = (text as NSString).boundingRect(
+        with: CGSize(width: width, height: .greatestFiniteMagnitude),
+        options: .usesLineFragmentOrigin, attributes: [.font: font], context: nil)
+      return bounds.height
+    }
+    // CarPlay's card less its insets, at half size, and the Lock Screen card less its insets, at
+    // 80%, where the height tests already hold the card to 160 points.
+    let insets = CompassActivityCard.lockScreenInsets
+    var cards: [(width: CGFloat, height: CGFloat, scale: CGFloat)] = [(224, 70, 0.5)]
+    for width: CGFloat in [298, 380, 418] {
+      cards.append((width - insets.leading - insets.trailing, .greatestFiniteMagnitude, 0.8))
+    }
+    // Bold Text makes semibold at least bold; heavy leaves margin.
+    for weight in [UIFont.Weight.semibold, .bold, .heavy] {
+      let fullSize = UIFont.systemFont(ofSize: pointSize, weight: weight)
+      for card in cards {
+        let font = UIFont.systemFont(ofSize: pointSize * card.scale, weight: weight)
+        for status in statuses {
+          let words = status.split(separator: " ")
+          for word in words {
+            #expect(width(word, font) <= card.width, "\(word) \(weight) \(card)")
+          }
+          let lines = height(status, font, width: card.width)
+          #expect(lines <= font.lineHeight * 2 + 1, "\(status) \(weight) \(card): \(lines)")
+          #expect(lines <= card.height, "\(status) \(weight) \(card): \(lines)")
+          // A word too wide at full size is broken across the lines unless the status then needs
+          // more than two lines, or more than its card's height, anyway, which makes it shrink.
+          if words.contains(where: { width($0, fullSize) > card.width }) {
+            let unscaled = height(status, fullSize, width: card.width)
+            #expect(
+              unscaled > min(fullSize.lineHeight * 2 + 1, card.height),
+              "\(status) \(weight) \(card): \(unscaled)")
+          }
         }
       }
     }

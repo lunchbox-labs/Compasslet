@@ -510,7 +510,7 @@ struct CompassActivityControllerTests {
         == "45 degrees, northeast, last recorded travel direction")
     #expect(presentation(.usable, bearing: 359.6).bearing == "N 0°")
     // A stale payload, any non-usable status, or an out-of-range bearing is never spoken as a
-    // recorded travel direction; each falls back to its visible status line.
+    // recorded travel direction; each falls back to its spoken status.
     let withoutReading =
       [presentation(.usable, bearing: 45, isStale: true)]
       + [TravelStatus.waiting, .slow, .unreliable, .unavailable].map {
@@ -520,7 +520,7 @@ struct CompassActivityControllerTests {
       #expect(value.reading == nil)
       #expect(value.bearing == "—")
       #expect(!value.spokenDescription.contains("last recorded"))
-      #expect(value.spokenDescription == value.status)
+      #expect(value.spokenDescription == value.spokenStatus)
       #expect(value.compactBearing == "—")
     }
     #expect(
@@ -528,6 +528,16 @@ struct CompassActivityControllerTests {
     let statuses = [TravelStatus.waiting, .slow, .unreliable, .unavailable]
       .map { presentation($0).status }
     #expect(Set(statuses).count == statuses.count)
+    let spoken = [TravelStatus.waiting, .slow, .unreliable, .unavailable]
+      .map { presentation($0).spokenStatus }
+    #expect(Set(spoken).count == spoken.count)
+    // A status that isn't shortened is spoken as it shows.
+    for value in [
+      presentation(.waiting), presentation(.unavailable),
+      presentation(.usable, bearing: 45, isStale: true),
+    ] {
+      #expect(value.spokenStatus == value.status)
+    }
     // Shorter forms are offered only when both fields are shown, and never without a reading.
     #expect(usable.bearingCandidates == ["NE 45°", "45°", "NE"])
     var keepsDirection = AppearanceValues()
@@ -537,6 +547,11 @@ struct CompassActivityControllerTests {
         == ["NE 45°", "NE", "45°"])
     #expect(presentation(.waiting).bearingCandidates.isEmpty)
     #expect(presentation(.waiting).status == "Start moving")
+    // The shortened statuses are spoken in full.
+    #expect(presentation(.slow).status == "Keep moving")
+    #expect(presentation(.slow).spokenDescription == "Keep moving to show travel direction")
+    #expect(presentation(.unreliable).status == "Finding…")
+    #expect(presentation(.unreliable).spokenDescription == "Finding travel direction")
     var degreesOnly = AppearanceValues()
     degreesOnly.showDirection = false
     let custom = presentation(.usable, bearing: 180, appearance: degreesOnly)
