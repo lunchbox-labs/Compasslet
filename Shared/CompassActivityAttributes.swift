@@ -25,7 +25,8 @@ struct CompassActivityReading {
 
   let reading: Reading?
   /// The visible status line; a system-stale activity is unavailable whatever its payload says.
-  /// Each is kept to about two words so it fits the Live Activity at the largest text sizes.
+  /// Each is kept about as short as "Start moving" so it fits the Live Activity at the largest
+  /// text sizes with Bold Text.
   let status: String
   /// The status as VoiceOver speaks it, in full where the visible line is shortened.
   let spokenStatus: String

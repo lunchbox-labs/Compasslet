@@ -203,7 +203,7 @@ struct AppearanceStoreTests {
     for (system, readout) in [
       (DynamicTypeSize.xSmall, ReadoutTextSize.accessibility5), (.accessibility5, .xSmall),
     ] {
-      for status in [TravelStatus.usable, .slow] {
+      for status in [TravelStatus.usable, .unavailable] {
         var appearance = AppearanceValues()
         appearance.useSystemTextSize = false
         appearance.customTextSize = readout
@@ -232,6 +232,42 @@ struct AppearanceStoreTests {
           let size = host.sizeThatFits(in: CGSize(width: width, height: 1000))
           // The card reports its full height above 160 points, so an overflow shows here.
           #expect(size.height <= 160, "\(test) \(weight) \(width): \(size.height)")
+        }
+      }
+    }
+  }
+
+  /// A status shrinks to fit its two lines rather than growing its card, so the height tests
+  /// can't show one that's cut off. At the largest text size with Bold Text, each must fit its
+  /// two lines, with no word broken, at the smallest size its card allows.
+  @Test func activityStatusesFitAtTheLargestTextSize() {
+    let traits = UITraitCollection(preferredContentSizeCategory: .accessibilityExtraExtraExtraLarge)
+    let pointSize = UIFont.preferredFont(forTextStyle: .title2, compatibleWith: traits).pointSize
+    let states = [TravelStatus.waiting, .slow, .unreliable, .unavailable].map {
+      CompassActivityAttributes.ContentState(bearing: nil, status: $0, sampleTime: nil, expiry: nil)
+    }
+    let statuses =
+      states.map { CompassActivityReading(state: $0, isStale: false).status }
+      + [CompassActivityReading(state: states[0], isStale: true).status]
+    // The Lock Screen card less its insets, at 80%, and CarPlay's card less its insets, at half.
+    let insets = CompassActivityCard.lockScreenInsets
+    var cards: [(width: CGFloat, scale: CGFloat)] = [(224, 0.5)]
+    for width: CGFloat in [298, 380, 418] {
+      cards.append((width - insets.leading - insets.trailing, 0.8))
+    }
+    for weight in [UIFont.Weight.semibold, .bold] {
+      for card in cards {
+        let font = UIFont.systemFont(ofSize: pointSize * card.scale, weight: weight)
+        for status in statuses {
+          for word in status.split(separator: " ") {
+            let width = (String(word) as NSString).size(withAttributes: [.font: font]).width
+            #expect(width <= card.width, "\(word) \(weight) \(card): \(width)")
+          }
+          let lines = (status as NSString).boundingRect(
+            with: CGSize(width: card.width, height: .greatestFiniteMagnitude),
+            options: .usesLineFragmentOrigin, attributes: [.font: font], context: nil)
+          #expect(
+            lines.height <= font.lineHeight * 2 + 1, "\(status) \(weight) \(card): \(lines.height)")
         }
       }
     }
