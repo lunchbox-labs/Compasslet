@@ -307,7 +307,7 @@ final class DriveSessionController: ObservableObject {
     if !isCarPlayConnected, !isCarAudioConnected { session.carAbsentSince = session.startedAt }
     presentation = TravelPresentation(sample: nil, status: .waiting)
     state = .driving(session)
-    scheduleHeartbeat(for: session, after: session.startedAt)
+    scheduleHeartbeat(for: session)
     armDeadline(for: session)
     await startActivity(for: session)
   }
@@ -500,34 +500,19 @@ final class DriveSessionController: ObservableObject {
     session.liveActivity = status
   }
 
-  /// Sets the beat after the one due at `due`, keeping to the drive's own seconds so the beat's
-  /// work and a late wake don't stretch the gaps that diagnostics measure. A beat that woke past
-  /// the next slot skips to the first one still to come rather than catching up.
-  private func scheduleHeartbeat(for session: DriveSession, after due: Date) {
-    let date = nextBeat(after: due)
+  /// Sets the next beat an interval after now, so each gap is at least the interval and a late
+  /// beat brings no burst of catch-up beats. Diagnostics skip calls under 1 s apart.
+  private func scheduleHeartbeat(for session: DriveSession) {
+    let date = clock.now.addingTimeInterval(Self.heartbeatInterval)
     session.heartbeat = clock.timer(at: date) { [weak self, weak session] in
       guard let self, let session else { return }
-      self.beat(session, due: date)
+      self.beat(session)
     }
-  }
-
-  /// The first slot after `due`, a whole number of intervals on, that is still to come. A clock
-  /// set back would otherwise put it far off, so then it is an interval from now.
-  private func nextBeat(after due: Date) -> Date {
-    let interval = Self.heartbeatInterval
-    let now = clock.now
-    var date = due.addingTimeInterval(interval)
-    if date <= now {
-      let missed = (now.timeIntervalSince(date) / interval).rounded(.down)
-      date = date.addingTimeInterval((missed + 1) * interval)
-    }
-    guard date.timeIntervalSince(now) <= interval else { return now.addingTimeInterval(interval) }
-    return date
   }
 
   /// The drive's regular work. Once this stops running, as when the app's process ends, the
   /// Live Activity goes stale on its own.
-  private func beat(_ session: DriveSession, due: Date) {
+  private func beat(_ session: DriveSession) {
     guard session === current else { return }
     let carAudio = readCarAudioRoute()
     if carAudio != isCarAudioConnected { carAudioChanged(connected: carAudio) }
@@ -543,7 +528,7 @@ final class DriveSessionController: ObservableObject {
     if session.liveActivity == .active { activity.renew() }
     expireReading(of: session)
     armDeadline(for: session)
-    scheduleHeartbeat(for: session, after: due)
+    scheduleHeartbeat(for: session)
   }
 
   /// Ends the drive when the car has been away too long, or when location stopped because the

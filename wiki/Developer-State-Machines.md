@@ -99,8 +99,9 @@ stateDiagram-v2
 ## Drive session
 
 A drive is the period in which travel location runs. `DriveSessionController.state`
-(`App/Driving/DriveSessionController.swift`) holds it as one value: `idle`, recording in `liveActivityFailed` whether the last start ended
-because its Live Activity couldn't start, or `driving` with one `DriveSession` object.
+(`App/Driving/DriveSessionController.swift`) holds it as one value: `idle`, recording in
+`liveActivityFailed` whether the last start ended because its Live Activity couldn't start,
+or `driving` with one `DriveSession` object.
 The session holds everything that belongs to one drive: `startedAt`, the course filter, the
 last reading, `hasReceivedReading`, `locationNeedsForeground`, `carAbsentSince`,
 `notInUseSince`, the background time held for that wait, its heartbeat and deadline timers, and
@@ -174,10 +175,10 @@ run while a drive does, both in process, so they only advance while the process 
 - The heartbeat (`heartbeatInterval`, `beat`) runs once a second. It re-reads the car audio
   route, refreshes setup, enforces the eight-hour limit, observes the `activity` diagnostics
   surface (which counts a gap over 2 s as a new session), lets an active Live Activity renew
-  its stale date once it has gone 60 s without a write, and checks every limit again. Beats
-  keep to whole seconds from `startedAt` (`scheduleHeartbeat`, `nextBeat`), so the beat's work
-  doesn't stretch the gap; a beat that wakes late skips to the next slot still to come rather
-  than catching up, and a clock set back puts the next beat a second from now.
+  its stale date once it has gone 60 s without a write, and checks every limit again. Each
+  beat sets the next one an interval after it ran (`scheduleHeartbeat`), so beats are never
+  under 1 s apart, which diagnostics would skip, and a late beat brings no burst of catch-up
+  beats.
 - One deadline timer (`armDeadline`, `deadlineCame`) fires at the first moment past the
   earliest of the absence limit, the not-in-use limit and the reading's 5 s lifetime, so each
   takes effect on time rather than at the next heartbeat. A change that moves a limit later

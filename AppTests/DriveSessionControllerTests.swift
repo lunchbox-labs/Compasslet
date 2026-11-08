@@ -1139,25 +1139,21 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertEqual(activity.renewals, 10)
   }
 
-  func testALateHeartbeatKeepsToTheDrivesSecondsWithoutCatchingUp() async {
+  func testALateHeartbeatSetsTheNextOneAnIntervalAfterItRan() async {
     let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
     let start = time
     await controller.carPlayActivated()
     XCTAssertEqual(clock.pending, [start + 1])
-    // A beat that wakes late sets the next one at the drive's next second, not a second later.
+    // A beat that wakes late sets the next one a full interval after it ran.
     time = start + 1.4
     tick()
     XCTAssertEqual(activity.renewals, 1)
-    XCTAssertEqual(clock.pending, [start + 2])
-    // A wake that misses slots beats once and waits for the next slot still to come.
-    time = start + 4.5
+    XCTAssertEqual(clock.pending, [time.addingTimeInterval(1)])
+    // A wake that misses several intervals beats once, with no burst to catch up.
+    time = start + 5.5
     tick()
     XCTAssertEqual(activity.renewals, 2)
-    XCTAssertEqual(clock.pending, [start + 5])
-    time = start + 5
-    tick()
-    XCTAssertEqual(activity.renewals, 3)
-    XCTAssertEqual(clock.pending, [start + 6])
+    XCTAssertEqual(clock.pending, [time.addingTimeInterval(1)])
     await controller.endDrive()
   }
 
