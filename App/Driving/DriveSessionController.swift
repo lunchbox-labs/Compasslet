@@ -142,7 +142,7 @@ final class DriveSessionController {
   /// sparse where GPS is weak, such as in a garage. It stays within the background time iOS gives.
   static let notInUseLimit: TimeInterval = 15
   /// How long a reading shows travel before it counts as old.
-  static let readingLifetime: TimeInterval = 5
+  static let readingLifetime = CompassSample.travelLifetime
   /// How long a drive runs at most.
   static let driveLimit: TimeInterval = 8 * 60 * 60
   /// How often a drive re-reads the car audio route and setup, observes diagnostics and renews

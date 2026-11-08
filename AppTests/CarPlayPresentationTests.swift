@@ -291,6 +291,23 @@ final class CarPlayPresentationTests: XCTestCase {
     }
   }
 
+  func testFutureDatedAndMagneticSamplesShowDirectionUnavailable() {
+    let now = Date(timeIntervalSince1970: 100)
+    for (reference, timestamp) in [
+      (NorthReference.trueNorth, now.addingTimeInterval(0.5)), (.magnetic, now),
+    ] {
+      let value = CarPlayPresentation(
+        presentation: .init(
+          sample: CompassSample(
+            degrees: 90, source: .vehicleCourse, reference: reference,
+            accuracyDegrees: 1, timestamp: timestamp), status: .usable),
+        setup: .ready, driving: true, now: now)
+      XCTAssertEqual(value.bearing, "—")
+      XCTAssertNil(value.courseDegrees)
+      XCTAssertEqual(value.status, "Direction unavailable")
+    }
+  }
+
   func testLifecycleEventsDoNotWaitForActivation() async {
     var events: [String] = []
     var continuation: CheckedContinuation<Void, Never>?

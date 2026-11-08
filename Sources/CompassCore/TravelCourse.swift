@@ -93,7 +93,9 @@ public struct TravelCourseFilter: Sendable {
       reading.timestamp.timeIntervalSince1970.isFinite
     else { return reject(.unavailable) }
     let age = now.timeIntervalSince(reading.timestamp)
-    guard age.isFinite, age >= 0, age <= 5 else { return reject(.unavailable) }
+    guard age.isFinite, age >= 0, age <= CompassSample.travelLifetime else {
+      return reject(.unavailable)
+    }
     guard reading.speedMetersPerSecond.isFinite, reading.speedMetersPerSecond >= 2,
       reading.speedAccuracyMetersPerSecond.isFinite, reading.speedAccuracyMetersPerSecond >= 0,
       reading.speedMetersPerSecond - reading.speedAccuracyMetersPerSecond >= 1
@@ -110,7 +112,7 @@ public struct TravelCourseFilter: Sendable {
     let sample = CompassSample(
       degrees: reading.courseDegrees, source: .vehicleCourse, reference: .trueNorth,
       accuracyDegrees: reading.courseAccuracyDegrees, timestamp: reading.timestamp)
-    let smoothed = smoother.update(sample, now: now, maximumAge: 5)
+    let smoothed = smoother.update(sample, now: now, maximumAge: CompassSample.travelLifetime)
     previousTimestamp = reading.timestamp
     return TravelPresentation(sample: smoothed, status: .usable)
   }

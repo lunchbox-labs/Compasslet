@@ -168,6 +168,15 @@ struct TravelCourseTests {
       degrees: degrees, source: source, reference: reference, accuracyDegrees: 1, timestamp: time)
   }
 
+  /// The Live Activity stores these raw values, so a renamed case would leave activities started
+  /// before an update unable to decode.
+  @Test func travelStatusRawValuesStayTheSame() {
+    let statuses: [TravelStatus] = [.waiting, .usable, .slow, .unreliable, .unavailable]
+    #expect(
+      statuses.map(\.rawValue) == ["waiting", "usable", "slow", "unreliable", "unavailable"])
+    for status in statuses { #expect(TravelStatus(rawValue: status.rawValue) == status) }
+  }
+
   @Test func aTravelSampleIsCurrentForFiveSecondsFromItsTime() throws {
     let sample = try #require(travelSample())
     #expect(CompassSample.travelLifetime == 5)
