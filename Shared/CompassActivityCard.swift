@@ -43,57 +43,64 @@ struct CompassActivityCard: View {
     .accessibilityLabel(CompassActivityView.accessibilitySummary(state: state, isStale: isStale))
   }
 
-  /// The tallest layout that fits: diagnostics (Lock Screen only), then the reading between
-  /// balanced lines, then (Lock Screen only) the reading above its Last Updated line, then a bare
-  /// Last Updated, then the reading alone, so the Lock Screen card never grows past 160 points
-  /// and the CarPlay card never outgrows the size CarPlay gives it. In CarPlay, a status long
-  /// enough to wrap leaves no room for the line beneath it. A Lock Screen reading is already
-  /// taller than the card's smallest height, so it sits directly above its line, unbalanced.
-  private var layouts: some View {
-    ViewThatFits(in: .vertical) {
-      if !isSmall, let update = state.debugUpdateTime {
-        VStack(spacing: 2) {
-          withLine(diagnosticLines: state.sampleTime == nil ? 1 : 2)
-          diagnostics(update: update)
+  /// A Lock Screen reading is sized to leave room in 160 points for every line beneath it, so it
+  /// always shows them, directly beneath it. Otherwise, the tallest layout that fits: diagnostics
+  /// (Lock Screen only), then the status between balanced lines, then (Lock Screen only) the
+  /// status above its line, then the status alone, so the Lock Screen card never grows past 160
+  /// points and the CarPlay card never outgrows the size CarPlay gives it. In CarPlay, a status
+  /// long enough to wrap leaves no room for the line beneath it, and at large text sizes the
+  /// reading drops its Last Updated line to a bare label, then goes alone.
+  @ViewBuilder private var layouts: some View {
+    if !isSmall, presentation.reading != nil {
+      lockScreenReading
+    } else {
+      ViewThatFits(in: .vertical) {
+        if !isSmall, let update = state.debugUpdateTime {
+          VStack(spacing: 2) {
+            balanced
+            diagnostics(update: update)
+          }
+          .fixedSize(horizontal: false, vertical: true)
         }
-        .fixedSize(horizontal: false, vertical: true)
-      }
-      withLine().fixedSize(horizontal: false, vertical: true)
-      if !isSmall, presentation.reading == nil {
+        balanced.fixedSize(horizontal: false, vertical: true)
+        if !isSmall {
+          VStack(spacing: 2) {
+            readout()
+            secondaryLine
+          }
+          .fixedSize(horizontal: false, vertical: true)
+        }
         VStack(spacing: 2) {
           readout()
-          secondaryLine
+          if presentation.reading != nil, timestampMode != .hidden {
+            Text("Last Updated").font(.caption2).foregroundStyle(secondaryStyle)
+              .lineLimit(1).minimumScaleFactor(Self.captionScale)
+          }
         }
-        .fixedSize(horizontal: false, vertical: true)
-      }
-      VStack(spacing: 2) {
-        readout()
-        if presentation.reading != nil, timestampMode != .hidden {
-          Text("Last Updated").font(.caption2).foregroundStyle(secondaryStyle)
-            .lineLimit(1).minimumScaleFactor(Self.captionScale)
+        // CarPlay's card has a fixed height, so a status there shrinks to fit it rather than
+        // growing past it.
+        if isSmall {
+          readout()
+        } else {
+          readout().fixedSize(horizontal: false, vertical: true)
         }
-      }
-      // CarPlay's card has a fixed height, so a status there shrinks to fit it rather than
-      // growing past it.
-      if isSmall {
-        readout()
-      } else {
-        readout().fixedSize(horizontal: false, vertical: true)
       }
     }
   }
 
-  /// The reading with its line beneath it: on the Lock Screen a reading sits directly above it,
-  /// leaving room for `diagnosticLines` more; otherwise the line is balanced by an equal one.
-  @ViewBuilder private func withLine(diagnosticLines: Int = 0) -> some View {
-    if !isSmall, presentation.reading != nil {
-      VStack(spacing: 2) {
-        readout(diagnosticLines: diagnosticLines)
+  /// The Lock Screen reading, with its Last Updated line and any diagnostic times beneath it.
+  private var lockScreenReading: some View {
+    let diagnosticLines = state.debugUpdateTime == nil ? 0 : state.sampleTime == nil ? 1 : 2
+    return VStack(spacing: 2) {
+      readout(diagnosticLines: diagnosticLines)
+      if timestampMode != .hidden {
         secondaryLine
       }
-    } else {
-      balanced
+      if let update = state.debugUpdateTime {
+        diagnostics(update: update)
+      }
     }
+    .fixedSize(horizontal: false, vertical: true)
   }
 
   private var balanced: some View {
@@ -314,11 +321,9 @@ struct LockScreenHeight: Layout {
   func placeSubviews(
     in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()
   ) {
-    // Proposed the same height it was measured with, so the card keeps the layout it was sized
-    // for: its own height, once rounded to whole pixels, can be a fraction too short for it.
     subviews.first?.place(
       at: CGPoint(x: bounds.midX, y: bounds.midY), anchor: .center,
-      proposal: .init(width: bounds.width, height: Self.heights.upperBound))
+      proposal: .init(width: bounds.width, height: min(bounds.height, Self.heights.upperBound)))
   }
 }
 
