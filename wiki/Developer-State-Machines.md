@@ -44,7 +44,7 @@ active.
 | [Phone heading](#phone-heading) | `HeadingController` | No |
 | [Phone location and city](#phone-location-and-city) | `PhoneLocationController` | No |
 | [Welcome tour and tip](#welcome-tour-and-tip) | `OnboardingState` | Yes (`UserDefaults`, TipKit) |
-| [Diagnostics](#diagnostics) | `CompassDiagnostics` | Yes (App Group SQLite) |
+| [Diagnostics](#diagnostics) | `CompassDiagnostics` | Yes (files in Application Support) |
 
 ## Location eligibility
 
@@ -418,7 +418,22 @@ one tip. The location prompt waits until the tour ends.
 `CompassDiagnostics` (`Shared/CompassDiagnostics.swift`) is off by default. Turning it off
 erases all events. While on, each surface (`activity`, `fullscreen`) has a clock that is active
 or paused; gaps over 2 seconds and process changes start a new session rather than adding time.
-Events are kept for 30 active minutes per surface, up to 50,000. `shared` is created once per
-process; if the App Group container can't be opened then, diagnostics stay unavailable until
-relaunch. The export is a temporary file removed when its share sheet closes or Debug Mode is
-turned off.
+Events are kept for 30 active minutes per surface, up to 50,000. Only the app's process writes
+the store, under one lock, so each call is written before it returns and events keep the order
+of the calls. The store is two files in Application Support's `Diagnostics` folder:
+`settings.json` holds the switch, the clocks and the next sequence number, and is saved on each
+observation and switch change; `events.jsonl` holds one event per line. Recording an event
+doesn't save settings, because opening the store takes the next sequence number from the last
+line; disabling and clearing save it before they erase the log. Each write is applied in memory
+as soon as it succeeds, so memory matches the files when a later write fails: turning Debug Mode
+off erases the events first, so if saving the switch then fails, Debug Mode stays on with an
+empty log. A failed append is cut back off the file, so no fragment joins the next line. Opening
+the store drops lines that don't decode, including those naming a surface or kind this version
+doesn't record. A settings file that doesn't decode deletes both files and starts with Debug
+Mode off. Events past retention stay in the file, skipped when it's read, until enough build up
+to rewrite it; a failed rewrite waits for another 1,000 lines. `isEnabled` is observable, so
+Settings and the debug sample time update as it changes. `shared` is created once per process.
+It first deletes the old SQLite store's `Diagnostics` folder from the App Group container, since
+that log can no longer be cleared from Settings. If the folder or its files can't be read then,
+diagnostics stay unavailable until relaunch. The export is a temporary file removed when its
+share sheet closes or Debug Mode is turned off.

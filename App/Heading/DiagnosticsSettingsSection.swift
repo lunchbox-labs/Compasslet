@@ -2,7 +2,6 @@ import SwiftUI
 import UIKit
 
 struct DiagnosticsSettingsSection: View {
-  @State private var enabled = false
   @State private var error: String?
   // Keep the file until onDismiss, after SwiftUI clears the presentation item.
   @State private var exportURL: URL?
@@ -22,7 +21,7 @@ struct DiagnosticsSettingsSection: View {
       DiagnosticsShareSheet(url: item.url)
     }
     .task {
-      do { enabled = try store().isEnabled() } catch { self.error = error.localizedDescription }
+      do { _ = try store() } catch { self.error = error.localizedDescription }
     }
     .confirmationDialog("Delete the saved diagnostic logs?", isPresented: $confirmingClear) {
       Button("Clear Logs", role: .destructive) {
@@ -37,6 +36,8 @@ struct DiagnosticsSettingsSection: View {
     var id: URL { url }
   }
 
+  private var enabled: Bool { CompassDiagnostics.shared?.isEnabled ?? false }
+
   private func store() throws -> CompassDiagnostics {
     guard let store = CompassDiagnostics.shared else {
       throw CompassDiagnostics.Failure.unavailable
@@ -47,7 +48,6 @@ struct DiagnosticsSettingsSection: View {
   private func setEnabled(_ value: Bool) {
     do {
       try store().setEnabled(value)
-      enabled = value
       error = nil
       if !value {
         confirmingClear = false
