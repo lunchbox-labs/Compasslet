@@ -85,22 +85,26 @@ does next. The
 [State Machines](https://github.com/lunchbox-labs/compasslet/wiki/Developer-State-Machines)
 wiki page maps each one, its owner and its known failure states.
 
-Before changing code that holds state across flags, timers, tasks or app and scene lifecycles,
-find the machine it belongs to on that page, or treat it as a new one. Update the page's states,
-transitions, diagrams and source references as part of the change. Agents that can't push to
-the wiki give the requester a patch for the wiki repository instead.
+Before changing code that keeps state across timers, tasks or app and scene lifecycles, find
+the machine it belongs to on that page, or add it as a new machine with its own section and
+Overview row. Prepare the page's updates to states, transitions, diagrams and source
+references, including the commit they cite, with the change, and push them once it merges.
+Agents that can't push to the wiki give the requester a patch for the wiki repository instead.
 
-Test every transition the change adds or alters, not only the expected path: failure and
-denial, relaunch and process termination, backgrounding and return, and competing signals
-arriving in either order (for example, a permission change during a start, or CarPlay
-disconnecting while a timer is pending). For a new machine, or a change that would add another
-flag to an existing one, prefer one explicit state value, such as an enum with associated
-data, over separate booleans, so impossible combinations can't be represented.
+Test every transition the change adds or alters through observable behavior, not only the
+expected path: failure and denial, relaunch and process termination, backgrounding and return,
+and competing signals arriving in either order (for example, a permission change during a
+start, or CarPlay disconnecting while a timer is pending). Report any transition you couldn't
+exercise as a validation gap. For a new machine, or a change that would add another flag to an
+existing one, prefer one explicit state value, such as an enum with associated data, over
+separate booleans, so impossible combinations can't be represented.
 
-When mapping or testing a machine turns up a reachable state the app doesn't handle, such as a
-dead end, a resource that is never released or a state that outlives its process, file a `bug`
-issue with how to reach it and the code that allows it, and link it from that machine's section
-of the wiki page. Fix it in the current change only when that is the change's purpose.
+When mapping or testing a machine turns up a reachable state the app doesn't handle and the
+page doesn't list, such as a dead end, a resource that is never released or a state that
+outlives its process, file a `bug` issue with how to reach it and the code that allows it.
+Add it to the page's known failure states and to that machine's section. Fix it in the current
+change only when that is the change's purpose; a change that fixes a listed failure state
+removes it from the page.
 
 ## Screenshots
 
