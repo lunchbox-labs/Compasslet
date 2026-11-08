@@ -42,3 +42,25 @@ class SimulatorArchitectureTests(unittest.TestCase):
                     exclusions = [arg for arg in arguments if arg.startswith('EXCLUDED_ARCHS')]
                     self.assertEqual(exclusions, ['EXCLUDED_ARCHS=x86_64'] if arch == 'arm64' else [])
                     self.assertIn('platform=iOS Simulator,id=phone', arguments)
+                    self.assertIn('test', arguments)
+
+    def test_ios_entrypoint_passes_test_options_before_the_action(self):
+        import json
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'scripts').symlink_to(SCRIPTS)
+            devices = {'devices': {
+                'com.apple.CoreSimulator.SimRuntime.iOS-27-0': [{'udid': 'phone', 'name': 'iPhone', 'isAvailable': True}]}}
+            (root / 'xcrun').write_text('#!/usr/bin/env python3\nimport sys, json\nif sys.argv[1:3] == ["simctl", "list"]: print(' + repr(json.dumps(devices)) + ')\n')
+            (root / 'xcodebuild').write_text('#!/usr/bin/env python3\nimport json, sys\nfrom pathlib import Path\nPath("arguments.json").write_text(json.dumps(sys.argv[1:]))\n')
+            (root / 'uname').write_text('#!/bin/sh\necho arm64\n')
+            for executable in ('xcrun', 'xcodebuild', 'uname'):
+                (root / executable).chmod(0o755)
+            result = subprocess.run(['bash', str(SCRIPTS / 'test-ios'), '-test-iterations', '20', '-run-tests-until-failure'],
+                                    cwd=root, env={**os.environ, 'PATH': directory + ':' + os.environ['PATH']},
+                                    capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            arguments = json.loads((root / 'arguments.json').read_text())
+            action = arguments.index('test')
+            self.assertEqual(arguments[action - 3:action + 1],
+                             ['-test-iterations', '20', '-run-tests-until-failure', 'test'])

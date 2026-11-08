@@ -42,6 +42,15 @@ npm ci --prefix scripts/tests/workflows --ignore-scripts --no-audit --no-fund
 npm test --prefix scripts/tests/workflows
 ```
 
+To check whether the simulator tests are flaky, use Actions → Repeat Tests → Run workflow on the
+branch to test. It runs them up to `iterations` times (20 by default) and stops at the first
+failure, keeping that failure's result bundle for 7 days. It runs only by hand, so it never blocks
+a merge. Locally, `scripts/test-ios` passes its options to `xcodebuild`:
+
+```sh
+bash scripts/test-ios -test-iterations 20 -run-tests-until-failure
+```
+
 Simulator tests inject heading and location input, so they don't validate the physical sensors
 or in-car CarPlay operation. Physical-device checks are on the
 [Development](wiki/Developer-Development.md#device-validation) wiki page.
