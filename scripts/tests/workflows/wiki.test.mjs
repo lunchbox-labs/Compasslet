@@ -32,8 +32,13 @@ test('pushes to main publish only when the wiki, its script or this workflow cha
   assert.deepEqual(workflow.on.push.paths, ['wiki/**', 'scripts/sync-wiki', '.github/workflows/wiki.yml']);
 });
 
-test('only the sync job can write, and runs never overlap or cancel', () => {
+test('only the sync job can write, and an in-progress sync is never cancelled', () => {
   assert.deepEqual(workflow.permissions, { contents: 'read' });
   assert.deepEqual(workflow.jobs.sync.permissions, { contents: 'write' });
   assert.equal(workflow.concurrency['cancel-in-progress'], false);
+});
+
+test('every run publishes the newest main, not the commit that started it', () => {
+  const checkout = workflow.jobs.sync.steps.find(step => step.uses?.startsWith('actions/checkout@'));
+  assert.equal(checkout.with.ref, 'main');
 });

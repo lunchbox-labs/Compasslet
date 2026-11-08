@@ -24,6 +24,8 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
+          # Always publish the newest main, so re-running an older run can't roll pages back.
+          ref: main
           persist-credentials: false
       - name: Make the wiki match the wiki folder
         env:
@@ -35,4 +37,4 @@ jobs:
           export GIT_CONFIG_KEY_0="http.$GITHUB_SERVER_URL/.extraheader"
           export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $basic"
           bash scripts/sync-wiki wiki "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.wiki.git" \
-            "$GITHUB_REPOSITORY@${GITHUB_SHA::7}"
+            "$GITHUB_REPOSITORY@$(git rev-parse --short HEAD)"

@@ -20,15 +20,25 @@ if [[ ! -f "$source_dir/Home.md" ]]; then
   exit 1
 fi
 source_dir=$(cd "$source_dir" && pwd)
+if [[ -n "$(find "$source_dir" -type l)" ]]; then
+  printf '%s contains symbolic links; publish the files themselves.\n' "$source_dir" >&2
+  exit 1
+fi
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 git clone --quiet -- "$wiki_url" "$work/wiki"
 cd "$work/wiki"
+bot_email='41898282+github-actions[bot]@users.noreply.github.com'
+last_author=$(git log -1 --format=%ae 2>/dev/null || true)
 
 find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} +
 cp -R -- "$source_dir/." .
 git add --all
+if [[ -n "$last_author" && "$last_author" != "$bot_email" ]] && ! git diff --cached --quiet; then
+  printf '::warning::The wiki was last edited outside this sync; these changes replace it:\n'
+  git diff --cached --stat
+fi
 if git diff --cached --quiet; then
   printf 'The wiki already matches %s.\n' "$source_dir"
   exit 0
@@ -39,7 +49,7 @@ if [[ -n "$source_name" ]]; then
   message="Sync the wiki from $source_name"
 fi
 git -c user.name='github-actions[bot]' \
-  -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+  -c user.email="$bot_email" \
   commit --quiet -m "$message"
 git diff --stat HEAD~1 HEAD 2>/dev/null || git show --stat --format= HEAD
 git push --quiet origin HEAD

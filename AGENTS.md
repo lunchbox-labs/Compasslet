@@ -87,10 +87,10 @@ known failure states.
 Before changing code that keeps state across timers, tasks or app and scene lifecycles, find
 the machine it belongs to on that page, or add it as a new machine with its own section and
 Overview row. Update the page's states, transitions, diagrams and source references in the
-same pull request as the change. Its line links cite one commit on `main`, and readers search
-for the named symbol when lines have moved, so name code the change adds by file and symbol
-without a line link. Re-pin the page to a newer `main` commit only when refreshing every
-reference.
+same pull request as the change. Its file and line references are to one commit on `main`, and
+readers search for the named symbol when lines have moved, so name code the change adds by
+file and symbol without a line number. Re-pin the page to a newer `main` commit only when
+refreshing every reference.
 
 Test every transition the change adds or alters through observable behavior, not only the
 expected path: failure and denial, relaunch and process termination, backgrounding and return,
@@ -105,7 +105,8 @@ page doesn't list, such as a dead end, a resource that is never released or a st
 outlives its process, file a `bug` issue with how to reach it and the code that allows it.
 Add it to the page's known failure states and to that machine's section. Fix it in the current
 change only when that is the change's purpose; a change that fixes a listed failure state
-removes it from the page.
+marks it fixed on the page, with the pull request that fixed it, and removes it from that
+machine's open failure states.
 
 ## Wiki
 
