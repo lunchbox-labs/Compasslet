@@ -33,9 +33,9 @@ active.
 | --- | --- | --- |
 | [Location eligibility](#location-eligibility) | `DriveSessionController.setupStatus` | No (read from Core Location) |
 | [Location permission request](#location-permission-request) | `DriveSessionController.requestedPermission` | No |
-| [Drive session](#drive-session) | `DriveSessionController` | No |
+| [Drive session](#drive-session) | `DriveSessionController.state` | No |
 | [Car presence and the absence limit](#car-presence-and-the-absence-limit) | `DriveSessionController` | No |
-| [Live Activity lifecycle](#live-activity-lifecycle) | `compactStatus`, `CompassActivityController` | The system activity does |
+| [Live Activity lifecycle](#live-activity-lifecycle) | `DriveSession.liveActivity`, `CompassActivityController` | The system activity does |
 | [Live Activity content](#live-activity-content) | `CompassActivityController` | The last content state does |
 | [Background start intent](#background-start-intent) | `StartLiveActivityIntent` | No |
 | [CarPlay scene](#carplay-scene) | `CarPlaySceneDelegate`, `CarPlayLifecycleBridge` | No |
@@ -64,13 +64,13 @@ stateDiagram-v2
 ```
 
 It is refreshed at creation, on phone activation, after the permission request, on CarPlay
-activation, on a manual start, on each drive tick, on each sensor event, and on
-`authorizationChanged` while no drive runs (`observeAuthorization`, line 330). Any state other
-than `ready` ends a running drive (lines 94, 275 and 358).
-`beginDrive` sets `unavailable` directly when the sensor refuses to start (line 185) and clears
-the sensor callback without restoring the authorization observer. The next refresh replaces
-the status. This can't happen in practice, because the sensor checks the same conditions the
-refresh checked just before.
+activation, on a manual start, on each drive heartbeat, on each sensor event, and on
+`authorizationChanged` while no drive runs (`observeAuthorization`). Any state other than
+`ready` ends a running drive (`phoneBecameActive`, `beat` and `receive`).
+`beginDrive` sets `unavailable` directly when the sensor refuses to start, leaves the drive
+plainly idle and clears the sensor callback without restoring
+the authorization observer. The next refresh replaces the status. This can't happen in
+practice, because the sensor checks the same conditions the refresh checked just before.
 
 ## Location permission request
 
@@ -98,17 +98,36 @@ stateDiagram-v2
 
 ## Drive session
 
-A drive is the period in which travel location runs. It is held in `isDriving`, a
-`generation` token that invalidates callbacks from earlier drives, `startedAt`, the ticker task
-and the sensor callback.
+A drive is the period in which travel location runs. `DriveSessionController.state`
+(`App/Driving/DriveSessionController.swift`) holds it as one value: `idle`, recording in
+`liveActivityFailed` whether the last start ended because its Live Activity couldn't start,
+or `driving` with one `DriveSession` object.
+The session holds everything that belongs to one drive: `startedAt`, the course filter, the
+last reading, `hasReceivedReading`, `locationNeedsForeground`, `carAbsentSince`,
+`notInUseSince`, the background time held for that wait, its heartbeat and deadline timers, and
+the drive's Live Activity status. Every sensor callback, timer and Live Activity callback holds
+the session it was made for and does nothing once `session === current` fails, so nothing from
+an earlier drive reaches the next one. State that spans drives stays on the controller:
+`active`, `suppressed`, `requestedPermission`, `setupStatus`, the CarPlay and car audio flags
+and `preparation`.
 
 ```mermaid
 stateDiagram-v2
     [*] --> Idle
     Idle --> Driving: beginDrive (CarPlay activation, manual start, Start intent)
-    Idle --> Idle: setup not ready, sensor start fails, suppressed, Live Activities off without CarPlay
+    Idle --> Idle: setup not ready, suppressed, already driving, or sensor start fails
+    Idle --> LiveActivityUnavailable: manual start without CarPlay while Live Activities are off
     Driving --> Idle: stopDrive
+    Driving --> LiveActivityUnavailable: Live Activity fails to start without CarPlay
+    LiveActivityUnavailable --> Driving: beginDrive
+    LiveActivityUnavailable --> Idle: sensor start fails
+    LiveActivityUnavailable --> Idle: phone activation while Live Activities are allowed
+    LiveActivityUnavailable --> LiveActivityUnavailable: manual start without CarPlay while Live Activities are off
 ```
+
+`Idle` and `LiveActivityUnavailable` are `idle(liveActivityFailed: false)` and
+`idle(liveActivityFailed: true)`. A sensor start failure needs no state of its own: it shows
+as `setupStatus == .unavailable`, and `compactStatus` is `inactive` either way.
 
 Inside a drive, each reading is classified on its own by the
 [travel course filter](#travel-course-filter), so the presentation moves between any of these
@@ -120,47 +139,58 @@ statuses in any order:
 | `usable` | Valid course, speed and accuracy |
 | `slow` | Speed under 2 m/s, invalid speed accuracy, or speed minus its accuracy under 1 m/s |
 | `unreliable` | Invalid course, course accuracy over 30°, or horizontal accuracy over 50 m |
-| `unavailable` | Missing, old or future reading; the last reading over 5 s old (tick, line 296); or a location interruption |
+| `unavailable` | Missing, old or future reading; the last reading over 5 s old (`readingLifetime`, `expireReading`); or a location interruption |
 
-Entry (`beginDrive`, line 178) starts a new location manager and background activity session,
-reads the car audio route, resets the filter, sets the presentation to `waiting`, starts the
-250 ms ticker and starts the Live Activity.
+Entry (`beginDrive`) starts a new location manager and background activity session, reads the
+car audio route, sets the presentation to `waiting`, starts the 1 s heartbeat, sets the
+deadline timer and starts the Live Activity.
 
-`stopDrive` (line 415) runs on any of:
+`stopDrive` runs on any of:
 
 - setup leaving `ready`, from a refresh, a sensor event or `authorizationLost`;
-- eight hours since `startedAt`, or a clock that moved backwards (line 275);
-- the car absence limit (line 279, see below);
+- eight hours since `startedAt`, or a clock that moved backwards (`driveLimit`, `beat`);
+- the car absence limit (`endsAtLimit`, see below);
 - location reporting `notInUse` while Compasslet isn't active on CarPlay, with no newer
-  reading within 15 s (`notInUseLimit`, line 286; see
+  reading within 15 s (`notInUseLimit`, `endsAtLimit`; see
   [Background start intent](#background-start-intent));
 - an explicit end from the phone button, the End intent or the Start intent's foreground
-  retry (`endDrive`, line 257);
+  retry (`endDrive`);
 - a Live Activity dismissal or failed start while Compasslet's CarPlay scene isn't connected
-  (lines 212 and 234).
+  (`startActivity`).
 
-It bumps `generation`, cancels the ticker, stops the sensor, restores the authorization
-observer, clears every reading and the not-in-use wait, and queues `activity.end()`. Background
-time held for that wait is released only after the activity has ended.
+It replaces the session with `idle`, cancels the session's timers, stops the sensor, restores
+the authorization observer and queues `activity.end()`. Background time held for the
+not-in-use wait is released only after the activity has ended.
 
-`suppressed` (line 49) is set when a drive is ended while the CarPlay scene is active, so the
-same activation doesn't restart it. It clears when the scene resigns or disconnects. Whenever
+`suppressed` is set when a drive is ended while the CarPlay scene is active, so the same
+activation doesn't restart it. It clears when the scene resigns or disconnects. Whenever
 setup is `ready` and no drive runs, CarPlay shows "Drive ended. Reopen Compasslet on CarPlay to
 start." (`CarPlayPresentation.swift:27`), whether the drive was ended, suppressed or never
 started. A new drive starts on the next scene activation, the phone's Live Activity button or
 the Start intent; permission returning alone never starts one.
 
-The ticker is an in-process `Task.sleep` loop, so the eight-hour limit, the absence limit, the
-not-in-use limit and the five-second reading expiry only advance while the process is running.
-Each tick also lets an active Live Activity renew its stale date once it has gone 60 s without
-a write (line 295).
+Time comes from an injected `DriveClock` (`SystemDriveClock` in the app). Two kinds of timer
+run while a drive does, both in process, so they only advance while the process runs:
+
+- The heartbeat (`heartbeatInterval`, `beat`) runs once a second. It re-reads the car audio
+  route, refreshes setup, enforces the eight-hour limit, observes the `activity` diagnostics
+  surface (which counts a gap over 2 s as a new session), lets an active Live Activity renew
+  its stale date once it has gone 60 s without a write, and checks every limit again. Each
+  beat sets the next one an interval after it ran (`scheduleHeartbeat`), so beats are never
+  under 1 s apart, which diagnostics would skip, and a late beat brings no burst of catch-up
+  beats.
+- One deadline timer (`armDeadline`, `deadlineCame`) fires at the first moment past the
+  earliest of the absence limit, the not-in-use limit and the reading's 5 s lifetime, so each
+  takes effect on time rather than at the next heartbeat. A change that moves a limit later
+  leaves the earlier timer, which sets the next one when it fires; a clock already before a
+  limit's start makes it due at once.
 
 ## Car presence and the absence limit
 
 Two signals show the car: Compasslet's CarPlay scene (`isCarPlayConnected`) and the iPhone
-audio route going to CarPlay (`isCarAudioConnected`, from `CarAudioRouteMonitor` and polled on
-every tick at line 271). A drive started from a CarPlay automation may only ever see the audio
-route.
+audio route going to CarPlay (`isCarAudioConnected`, from `CarAudioRouteMonitor` and re-read on
+every heartbeat in `beat`). A drive started from a CarPlay automation may only ever see the
+audio route.
 
 ```mermaid
 stateDiagram-v2
@@ -172,14 +202,26 @@ stateDiagram-v2
     Absent --> Ended: 60 s absent (carPlayAbsenceLimit)
 ```
 
-`Absent` is `carPlayAbsentSince != nil`; the limit is checked on the tick.
+`Absent` is `DriveSession.carAbsentSince != nil`. The deadline timer ends the drive at the first
+moment past 60 s, and every heartbeat checks it too.
 
 ## Live Activity lifecycle
 
-The drive's view of its Live Activity is `compactStatus` (line 15). `CompassActivityController`
-holds the system activity's `handle`, a `starting` flag and its own `generation`. All activity
-operations run in order on one queue (`enqueue`, line 454), so a start always follows the
-survivor cleanup and an end always follows queued updates.
+The drive's view of its Live Activity is `DriveSession.liveActivity`, a
+`DriveSessionController.LiveActivityStatus`: `starting`, `active`, `dismissed` or
+`unavailable`. With no drive there is no status, so a drive-less `starting` can't be
+represented. `compactStatus` and `isLiveActivityRunning` are computed from `state`:
+`compactStatus` is `inactive` when idle, `unavailable` after a Live Activity start failed
+without CarPlay, and otherwise the drive's status. `isLiveActivityRunning` is true while a
+drive runs with its activity `starting` or `active`; the phone's Live Activity button reads it.
+
+`CompassActivityController` holds the system activity's `handle`, a `starting` flag and its
+own `generation`. Its `start()`, `end()`, content writes and rewrites all run in order on its
+one queue (`operation`, `enqueue`), each joining it when it is called, so a start always
+follows the survivor cleanup or an earlier end, and an end always follows queued writes. An
+end called while a request waits in the queue or is in flight overtakes it: a waiting request
+is never made, a request in flight has its result ended, and either way `start()` throws
+`cancelled`.
 
 ```mermaid
 stateDiagram-v2
@@ -194,17 +236,16 @@ stateDiagram-v2
     starting --> inactive: drive ends
     active --> inactive: drive ends
     dismissed --> inactive: drive ends
-    unavailable --> inactive: next phone activation while idle, if Live Activities are allowed
+    unavailable --> inactive: drive ends, or the next phone activation while idle if Live Activities are allowed
 ```
 
-Activities left from an earlier process are ended by `prepare()` (line 82), once per process,
-before the first drive, phone activation or intent. `end()` also ends every surviving activity
-(`CompassActivityController.swift:239`). The End intent reports a surviving activity as ended,
-not as not running (`hasLiveActivity`, line 307).
+Activities left from an earlier process are ended by `prepare()`, once per process, before the
+first drive, phone activation or intent. `end()` also ends every surviving activity
+(`LocalCompassActivitySystem.endSurvivors`). The End intent reports a surviving activity as
+ended, not as not running (`hasLiveActivity`).
 
-Every write sets a stale date 5 minutes ahead (`staleInterval`, `stamped`,
-`CompassActivityController.swift:246`). While `compactStatus` is `active`, each drive tick
-calls `renew()` (`CompassActivityController.swift:187`), which rewrites the last content once
+Every write sets a stale date 5 minutes ahead (`staleInterval`, `stamped`). While the drive's
+status is `active`, each heartbeat calls `renew()`, which rewrites the last content once
 nothing has been written for 60 seconds. When the process is terminated during a drive (force
 quit, crash or memory pressure), nothing renews the activity, so the system marks it stale
 within 5 minutes and the card shows travel as unavailable instead of the last direction. It
@@ -212,7 +253,13 @@ stays until the app next launches, the End shortcut runs, or ActivityKit's own l
 
 ## Live Activity content
 
-`CompassActivityController.publish` (`CompassActivityController.swift:123`) decides what
+While the drive's status is `starting` or `active`, it hands each presentation to the
+controller with `show` and each location interruption with `invalidateReading`. The controller
+keeps only the newest presentation not yet written and a clear that stays pending until it is
+written; a clear also drops a presentation handed over before it and the rewrites queued before
+it. One queued drain (`drain`) writes the clear first and then the latest presentation, again
+whenever more arrives during a write, and only while an activity shows. A successful start
+drains what was handed over during the request. `CompassActivityController.write` decides what
 reaches the card:
 
 - a usable reading is written only when its rounded degrees or cardinal point change, and at
@@ -224,8 +271,8 @@ reaches the card:
   unavailable;
 - `waiting` is always written.
 
-`validity` and the queue's `generation` drop queued writes that a later clear or end has
-overtaken. Appearance changes and stale-date renewals rewrite the last content with a new
+`validity` and the queue's `generation` drop queued rewrites that a later clear, dismissal or
+end has overtaken. Appearance changes and stale-date renewals rewrite the last content with a new
 stale date without changing its sample time.
 
 ## Background start intent
@@ -248,15 +295,19 @@ stateDiagram-v2
     Foreground --> Done: user doesn't continue (drive stays ended)
 ```
 
-`needsForegroundStart` (`DriveSessionController.swift:312`) is the `Waiting` state. Its result
-is the only consumer of `locationNeedsForeground`.
+`needsForegroundStart` (`DriveSessionController.swift`) is the `Waiting` state. It waits for
+the drive to change (`nextChange`, woken by `signalChange` on each sensor event, CarPlay
+connection and drive end), for the second after a reading, or for the timeout, rather than
+polling. A cancelled wait reports that no foreground start is needed. Its result is the only
+consumer of `locationNeedsForeground`.
 
-Any `notInUse` report while Compasslet isn't active on CarPlay starts a wait (`notInUseSince`,
-line 368). During `Waiting` the intent ends the drive first; after `Waiting` has settled, or
-when it was skipped, the wait is what ends it. A reading taken after the report (line 379) or
-CarPlay activation (line 141) clears it; otherwise the tick ends the drive 15 seconds after the
-report. The drive holds background time from the report until the wait clears or the drive's
-Live Activity has ended, so suspension can't stop the tick first.
+Any `notInUse` report while Compasslet isn't active on CarPlay starts a wait
+(`DriveSession.notInUseSince`, in `receive`). During `Waiting` the intent ends the drive first;
+after `Waiting` has settled, or when it was skipped, the wait is what ends it. A reading taken
+after the report or CarPlay activation (`clearNotInUse`) clears it; otherwise the deadline
+timer ends the drive at the first moment past 15 seconds after the report. The drive holds
+background time from the report until the wait clears or the drive's Live Activity has ended,
+so suspension can't stop the timer first.
 
 ```mermaid
 stateDiagram-v2

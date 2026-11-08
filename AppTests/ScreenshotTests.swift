@@ -671,7 +671,7 @@ final class ScreenshotTests: XCTestCase {
   private static func drive(location: FixedTravelSensor.Access) -> DriveSessionController {
     DriveSessionController(
       sensor: FixedTravelSensor(access: location), activity: IdleActivity(),
-      automaticTick: false)
+      clock: TestDriveClock(now: Date()))
   }
 }
 
@@ -790,8 +790,9 @@ private final class IdleActivity: CompassActivityPresenting {
   var hasActivities: Bool { false }
   func start() async throws {}
   func renew() {}
-  func update(_ presentation: TravelPresentation) async {}
-  func end() async {}
+  func show(_ presentation: TravelPresentation) {}
+  func end() -> Task<Void, Never> { Task {} }
+  func waitForPendingOperations() async {}
 }
 
 /// The Lock Screen and CarPlay Live Activity cards as the app renders them, since the

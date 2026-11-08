@@ -21,6 +21,11 @@ protocol CompassActivitySystem: AnyObject {
 }
 
 /// Owns only the current compact presentation. Call start from an eligible drive start.
+///
+/// Starts, writes, rewrites and ends run in order on one queue, `operation`, each joining it when
+/// it is called. A drive hands over only its latest presentation (`show`) and a clear that stays
+/// pending until written (`invalidateReading`); one queued drain writes them once an activity
+/// shows.
 @MainActor
 final class CompassActivityController: CompassActivityPresenting {
   enum Failure: Error { case unavailable, cancelled }
@@ -29,7 +34,9 @@ final class CompassActivityController: CompassActivityPresenting {
   private let now: () -> Date
   private var handle: (any CompassActivityHandle)?
   private var starting = false
+  /// Changes when the activity is dismissed or ended, so work queued for it stops.
   private var generation = UUID()
+  /// Changes when the reading is cleared, so queued rewrites of older content stop.
   private var validity = UUID()
   private var lastUsableWrite: Date?
   /// When the activity's content and stale date were last written.
@@ -38,6 +45,14 @@ final class CompassActivityController: CompassActivityPresenting {
   private var appearance: AppearanceValues
   private var appearanceObservation: AnyCancellable?
   private var lastContent: CompassActivityAttributes.ContentState?
+  /// The bearing the card shows, kept through stops until a changed reading or a clear.
+  private var retainedBearing: Double?
+  /// The newest presentation handed over and not yet written.
+  private var pendingPresentation: TravelPresentation?
+  /// Whether a clear of the retained reading waits to be written.
+  private var pendingInvalidation = false
+  /// Whether a drain of the pending clear and presentation is queued or running.
+  private var drainQueued = false
 
   var canStartActivities: Bool { system.enabled }
   var hasActivities: Bool { system.hasActivities }
@@ -66,11 +81,26 @@ final class CompassActivityController: CompassActivityPresenting {
 
   func start() async throws {
     guard handle == nil else { return }
-    guard !starting else { throw Failure.unavailable }
-    guard system.enabled else { throw Failure.unavailable }
+    guard !starting, system.enabled else { throw Failure.unavailable }
     starting = true
+    // A new activity has no retained reading to clear.
+    pendingInvalidation = false
     let token = generation
+    let previous = operation
+    let requesting = Task { @MainActor [weak self] in
+      await previous?.value
+      guard let self else { throw Failure.cancelled }
+      try await self.request(token)
+    }
+    operation = Task { _ = await requesting.result }
+    try await requesting.value
+  }
+
+  /// Requests the activity at the head of the queue, then writes what was handed over meanwhile.
+  private func request(_ token: UUID) async throws {
     do {
+      // An end called while this waited in the queue cancels it before anything shows.
+      guard generation == token else { throw Failure.cancelled }
       var initial = CompassActivityAttributes.ContentState(bearing: nil, status: .waiting)
       initial.appearance = appearance
       initial = stamped(initial)
@@ -83,22 +113,31 @@ final class CompassActivityController: CompassActivityPresenting {
       lastContent = initial
       try? CompassDiagnostics.shared?.observe(.activity, active: true)
       starting = false
-      created.onDismiss = { [weak self] in
-        guard let self, self.generation == token else { return }
-        self.generation = UUID()
-        self.handle = nil
-        self.lastContent = nil
-        try? CompassDiagnostics.shared?.observe(.activity, active: false)
-        self.lastUsableWrite = nil
-        self.lastWrite = nil
-        self.scheduledReading = nil
-        self.onDismiss?()
-      }
-      if initial.appearance != appearance { await updateAppearance(appearance)?.value }
+      created.onDismiss = { [weak self] in self?.dismissed(token) }
+      if initial.appearance != appearance { await rewrite(on: created) }
+      await drain()
     } catch {
-      if generation == token { starting = false }
+      if generation == token {
+        starting = false
+        pendingPresentation = nil
+      }
       throw error
     }
+  }
+
+  /// The user or the system ended the activity, so nothing queued for it is written.
+  private func dismissed(_ token: UUID) {
+    guard generation == token else { return }
+    generation = UUID()
+    handle = nil
+    lastContent = nil
+    try? CompassDiagnostics.shared?.observe(.activity, active: false)
+    lastUsableWrite = nil
+    lastWrite = nil
+    retainedBearing = nil
+    pendingPresentation = nil
+    pendingInvalidation = false
+    onDismiss?()
   }
 
   /// This is a sampled last-reading display, not a promise of live vehicle orientation.
@@ -106,73 +145,78 @@ final class CompassActivityController: CompassActivityPresenting {
   /// rate-limited.
   static let changedReadingInterval: TimeInterval = 1
 
-  private struct ScheduledReading {
-    let bearing: Double
-    let token = UUID()
-  }
-  private var scheduledReading: ScheduledReading?
-
-  func update(_ presentation: TravelPresentation) async {
-    await publish(presentation, retainLastReading: true)
+  func show(_ presentation: TravelPresentation) {
+    pendingPresentation = presentation
+    queueDrain()
   }
 
-  func invalidateReading() async {
-    await publish(.init(sample: nil, status: .unavailable), retainLastReading: false)
+  func invalidateReading() {
+    // A presentation handed over before the failure is older than it.
+    pendingPresentation = nil
+    pendingInvalidation = true
+    // Rewrites already queued would show the reading again before the clear.
+    validity = UUID()
+    queueDrain()
   }
 
-  private func publish(_ presentation: TravelPresentation, retainLastReading: Bool) async {
-    guard let handle else { return }
+  private func queueDrain() {
+    guard !drainQueued else { return }
+    drainQueued = true
+    enqueue { [weak self] in
+      guard let self else { return }
+      await self.drain()
+      self.drainQueued = false
+    }
+  }
+
+  /// Writes the pending clear, then the latest presentation, until nothing waits or the activity
+  /// is gone. A clear that arrives during a write is written before anything handed over with it.
+  private func drain() async {
+    let token = generation
+    while generation == token, let handle {
+      if pendingInvalidation {
+        pendingInvalidation = false
+        await write(.init(sample: nil, status: .unavailable), retainingReading: false, on: handle)
+      } else if let latest = pendingPresentation {
+        pendingPresentation = nil
+        await write(latest, retainingReading: true, on: handle)
+      } else {
+        return
+      }
+    }
+  }
+
+  private func write(
+    _ presentation: TravelPresentation, retainingReading: Bool, on handle: any CompassActivityHandle
+  ) async {
     let date = now()
-    let state = Self.content(presentation, now: date)
+    var content = Self.content(presentation, now: date)
     let expiredTravelSample =
       presentation.sample.map {
         $0.source == .vehicleCourse && $0.reference == .trueNorth
           && date.timeIntervalSince1970.isFinite && date.timeIntervalSince($0.timestamp) > 5
       } ?? false
-    if state.bearing == nil, retainLastReading, scheduledReading != nil,
+    if content.bearing == nil, retainingReading, retainedBearing != nil,
       (presentation.status != .usable || expiredTravelSample), presentation.status != .waiting
     {
       return
     }
-    if let bearing = state.bearing {
+    if let bearing = content.bearing {
       if let lastUsableWrite, date.timeIntervalSince(lastUsableWrite) < Self.changedReadingInterval
       {
         return
       }
-      if let scheduledReading, Self.sameReading(scheduledReading.bearing, bearing) {
-        return
-      }
+      if let retainedBearing, Self.sameReading(retainedBearing, bearing) { return }
       lastUsableWrite = date
-      scheduledReading = ScheduledReading(bearing: bearing)
+      retainedBearing = bearing
     } else {
       validity = UUID()
-      scheduledReading = nil
+      retainedBearing = nil
     }
-    let validityToken = validity
-    let readingToken = scheduledReading?.token
-    let token = generation
-    let previous = operation
-    let task = Task { @MainActor [weak self] in
-      await previous?.value
-      guard let self, self.generation == token,
-        state.bearing == nil || self.validity == validityToken
-      else { return }
-      // Revalidate after waiting so an expired sample never becomes a new bearing.
-      var content = Self.content(presentation, now: self.now())
-      if state.bearing != nil, content.bearing == nil {
-        // Do not replace the last accepted reading with a sample that expired in the queue.
-        if self.scheduledReading?.token == readingToken {
-          self.scheduledReading = self.lastContent?.bearing.map { ScheduledReading(bearing: $0) }
-        }
-        return
-      }
-      content.appearance = self.appearance
-      content = self.stamped(content)
-      self.lastContent = content
-      await handle.update(content)
-    }
-    operation = task
-    await task.value
+    content.appearance = appearance
+    content = stamped(content)
+    lastContent = content
+    await handle.update(content)
   }
 
   /// Changes only presentation, serialized with course updates and teardown.
@@ -204,42 +248,52 @@ final class CompassActivityController: CompassActivityPresenting {
     guard let handle else { return nil }
     let token = generation
     let validityToken = validity
-    let previous = operation
-    let task = Task { @MainActor [weak self] in
-      await previous?.value
-      guard let self, self.generation == token, self.validity == validityToken,
-        var content = self.lastContent
-      else { return }
-      content.appearance = self.appearance
-      content = self.stamped(content)
-      self.lastContent = content
-      await handle.update(content)
+    return enqueue { [weak self] in
+      guard let self, self.generation == token, self.validity == validityToken else { return }
+      await self.rewrite(on: handle)
     }
-    operation = task
-    return task
   }
 
-  func end() async {
+  private func rewrite(on handle: any CompassActivityHandle) async {
+    guard var content = lastContent else { return }
+    content.appearance = appearance
+    content = stamped(content)
+    lastContent = content
+    await handle.update(content)
+  }
+
+  @discardableResult
+  func end() -> Task<Void, Never> {
     generation = UUID()
     starting = false
     lastUsableWrite = nil
     lastWrite = nil
-    scheduledReading = nil
+    retainedBearing = nil
+    pendingPresentation = nil
+    pendingInvalidation = false
     let owned = handle
     handle = nil
     lastContent = nil
     try? CompassDiagnostics.shared?.observe(.activity, active: false)
     owned?.onDismiss = nil
-    let previous = operation
     let system = system
-    let task = Task { @MainActor in
-      await previous?.value
+    return enqueue {
       let finalState = CompassActivityAttributes.ContentState(bearing: nil, status: .unavailable)
       await owned?.end(finalState)
       await system.endSurvivors(finalState)
     }
+  }
+
+  /// Runs `work` after everything queued before it.
+  @discardableResult
+  private func enqueue(_ work: @escaping @MainActor () async -> Void) -> Task<Void, Never> {
+    let previous = operation
+    let task = Task { @MainActor in
+      await previous?.value
+      await work()
+    }
     operation = task
-    await task.value
+    return task
   }
 
   /// The content with a stale date measured from now, recorded as the latest write.

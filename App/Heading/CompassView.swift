@@ -278,9 +278,7 @@ struct CompassView: View {
   }
 
   /// A drive whose Live Activity was dismissed or couldn't start offers to start it again.
-  private var liveActivityRunning: Bool {
-    drive.isDriving && drive.compactStatus != .dismissed && drive.compactStatus != .unavailable
-  }
+  private var liveActivityRunning: Bool { drive.isLiveActivityRunning }
 
   private var liveActivityAction: String {
     liveActivityRunning ? "End Live Activity" : "Start Live Activity"
