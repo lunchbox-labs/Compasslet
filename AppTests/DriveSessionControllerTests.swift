@@ -685,11 +685,32 @@ final class DriveSessionControllerTests: XCTestCase {
     controller.tick()
     XCTAssertTrue(controller.isDriving)
     time += 1
+    activity.pauseEnd = true
+    controller.tick()
+    XCTAssertFalse(controller.isDriving)
+    while activity.endContinuation == nil { await Task.yield() }
+    // The background time lasts until the Live Activity has ended.
+    XCTAssertEqual(backgroundReleases, 0)
+    activity.endContinuation?.resume()
+    await controller.waitForPendingOperations()
+    XCTAssertEqual(activity.ends, 2)
+    XCTAssertEqual(sensor.stops, 1)
+    XCTAssertEqual(backgroundReleases, 1)
+  }
+
+  func testReadingTakenBeforeTheNotInUseReportStillEndsTheDrive() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    setCarAudio(true, controller)
+    await controller.startLiveActivity()
+    let earlier = reading()
+    time += 1
+    sensor.receive?(.notInUse)
+    sensor.receive?(earlier)
+    XCTAssertEqual(backgroundReleases, 0)
+    time += DriveSessionController.notInUseLimit + 1
     controller.tick()
     await controller.waitForPendingOperations()
     XCTAssertFalse(controller.isDriving)
-    XCTAssertEqual(activity.ends, 2)
-    XCTAssertEqual(sensor.stops, 1)
     XCTAssertEqual(backgroundReleases, 1)
   }
 

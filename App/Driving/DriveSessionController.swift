@@ -26,8 +26,9 @@ final class DriveSessionController: ObservableObject {
   /// How long a drive keeps running without CarPlay before it ends.
   static let carPlayAbsenceLimit: TimeInterval = 60
   /// How long a drive waits for a reading after location reports that the app isn't in use
-  /// before it ends, since the report can arrive while readings still flow.
-  static let notInUseLimit: TimeInterval = 5
+  /// before it ends, since the report can arrive while readings still flow and readings can be
+  /// sparse where GPS is weak, such as in a garage. It stays within the background time iOS gives.
+  static let notInUseLimit: TimeInterval = 15
 
   private let sensor: any TravelLocationSensor
   private let activity: any CompassActivityPresenting
@@ -355,7 +356,8 @@ final class DriveSessionController: ObservableObject {
       lastReading = nil
       publish(filter.update(nil, now: now()))
     case .reading(let reading):
-      clearNotInUse()
+      // A reading taken before the report doesn't show that location still runs.
+      if let notInUseSince, reading.timestamp > notInUseSince { clearNotInUse() }
       lastReading = reading
       hasReceivedReading = true
       publish(filter.update(reading, now: now()))
@@ -401,7 +403,10 @@ final class DriveSessionController: ObservableObject {
     drainGeneration = nil
     isDriving = false
     carPlayAbsentSince = nil
-    clearNotInUse()
+    // The background time keeps the app running until the Live Activity has ended.
+    notInUseSince = nil
+    let releaseBackgroundTime = self.releaseBackgroundTime
+    self.releaseBackgroundTime = nil
     try? CompassDiagnostics.shared?.observe(.activity, active: false)
     ticker?.cancel()
     ticker = nil
@@ -417,6 +422,7 @@ final class DriveSessionController: ObservableObject {
     return enqueue { [activity] in
       activity.onDismiss = nil
       await activity.end()
+      releaseBackgroundTime?()
     }
   }
 
