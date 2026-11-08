@@ -2,13 +2,19 @@ import CompassCore
 import SwiftUI
 
 /// The Live Activity on the Lock Screen and in CarPlay: the reading on one line, with Last Updated
-/// beneath it. The Lock Screen card uses a larger readout and stays within the 84 to 160 point
-/// height Apple allows; the small card fills the size CarPlay gives it.
+/// beneath it. The Lock Screen card shows the reading as large as fits and stays within the 84 to
+/// 160 point height Apple allows; the small card fills the size CarPlay gives it.
 struct CompassActivityCard: View {
   let state: CompassActivityAttributes.ContentState
   var isStale = false
   var isSmall = false
   @Environment(\.dynamicTypeSize) private var systemTextSize
+  /// The height of one caption line at the system text size, which the Lock Screen reading leaves
+  /// room for beneath it.
+  @ScaledMetric(relativeTo: .caption2) private var captionLineHeight: CGFloat = 13.5
+
+  /// The Lock Screen card's space between its edges and its text.
+  static let lockScreenInsets = EdgeInsets(top: 8, leading: 14, bottom: 8, trailing: 14)
 
   private var presentation: CompassActivityReading {
     CompassActivityReading(state: state, isStale: isStale)
@@ -30,8 +36,7 @@ struct CompassActivityCard: View {
       } else {
         LockScreenHeight {
           layouts
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(Self.lockScreenInsets)
             .frame(maxWidth: .infinity)
         }
       }
@@ -44,17 +49,18 @@ struct CompassActivityCard: View {
   /// balanced lines, then (Lock Screen only) the reading above its Last Updated line, then a bare
   /// Last Updated, then the reading alone, so the Lock Screen card never grows past 160 points
   /// and the CarPlay card never outgrows the size CarPlay gives it. In CarPlay, a status long
-  /// enough to wrap leaves no room for the line beneath it.
+  /// enough to wrap leaves no room for the line beneath it. A Lock Screen reading is already
+  /// taller than the card's smallest height, so it sits directly above its line, unbalanced.
   private var layouts: some View {
     ViewThatFits(in: .vertical) {
       if !isSmall, let update = state.debugUpdateTime {
         VStack(spacing: 2) {
-          balanced
+          centered
           diagnostics(update: update)
         }
         .fixedSize(horizontal: false, vertical: true)
       }
-      balanced.fixedSize(horizontal: false, vertical: true)
+      centered.fixedSize(horizontal: false, vertical: true)
       if !isSmall {
         VStack(spacing: 2) {
           readout
@@ -79,6 +85,17 @@ struct CompassActivityCard: View {
     }
   }
 
+  @ViewBuilder private var centered: some View {
+    if !isSmall, presentation.reading != nil {
+      VStack(spacing: 2) {
+        readout
+        secondaryLine
+      }
+    } else {
+      balanced
+    }
+  }
+
   private var balanced: some View {
     VStack(spacing: 2) {
       // An equal line above centers the reading against the line below.
@@ -99,11 +116,13 @@ struct CompassActivityCard: View {
     .lineLimit(1).minimumScaleFactor(0.85)
   }
 
-  /// At large text sizes the reading drops to a shorter form (degrees, then direction) before
-  /// any text is scaled down, so an enlarged size stays enlarged; the accessibility label keeps
-  /// every detail. Status text wraps to a second line before it shrinks: in CarPlay to no less
-  /// than half size, so two lines still fit its card at the largest text sizes, and on the Lock
-  /// Screen, where it also uses a smaller style, to no less than 80%.
+  /// On the Lock Screen the reading is as large as fits, at one size for every direction (see
+  /// `ActivityReading`). In CarPlay, at large text sizes, the reading drops to a shorter form
+  /// (degrees, then direction) before any text is scaled down, so an enlarged size stays
+  /// enlarged; the accessibility label keeps every detail. Status text wraps to a second line
+  /// before it shrinks: in CarPlay to no less than half size, so two lines still fit its card at
+  /// the largest text sizes, and on the Lock Screen, where it also uses a smaller style, to no
+  /// less than 80%.
   private var readout: some View {
     Group {
       if presentation.reading == nil {
@@ -115,17 +134,30 @@ struct CompassActivityCard: View {
             .multilineTextAlignment(.center)
             .lineLimit(2).minimumScaleFactor(0.8)
         }
-      } else {
+      } else if isSmall {
         ViewThatFits(in: .horizontal) {
           ForEach(presentation.bearingCandidates, id: \.self) { candidate in
             readoutText(candidate).lineLimit(1).minimumScaleFactor(0.8)
           }
         }
+      } else {
+        ActivityReading(presentation: presentation, maximumSize: readingMaximumSize)
       }
     }
     .dynamicTypeSize(presentation.appearance.readoutTextSize(system: systemTextSize))
     .frame(maxWidth: .infinity)
     .contentTransition(.identity)
+  }
+
+  /// The largest Lock Screen reading that leaves room in 160 points for the caption lines shown
+  /// beneath it at the system text size: Last Updated, and the diagnostic times when present.
+  private var readingMaximumSize: CGFloat {
+    var lines = timestampMode == .hidden ? 0 : 1
+    if state.debugUpdateTime != nil { lines += state.sampleTime == nil ? 1 : 2 }
+    let insets = Self.lockScreenInsets.top + Self.lockScreenInsets.bottom
+    let captions = CGFloat(lines) * (captionLineHeight + 2)
+    let height = LockScreenHeight.heights.upperBound - insets - captions
+    return height / ActivityReading.lineHeight
   }
 
   private func readoutText(_ text: String) -> some View {
@@ -160,6 +192,67 @@ struct CompassActivityCard: View {
     let opacity = LockScreenBackdrop.secondaryTextOpacity
     return AnyShapeStyle(HierarchicalShapeStyle.primary.opacity(opacity))
   }
+}
+
+/// A Live Activity reading on one line at one size for every direction, so it never grows or
+/// shrinks as the travel direction changes: the largest size, up to `maximumSize`, at which the
+/// widest reading the appearance's fields can show fits the line. A text size below the default
+/// makes it proportionally smaller; a larger one can't widen the line, so it keeps that size,
+/// which is already larger than the largest text size. On a line too narrow even for
+/// `minimumSize`, the reading drops to a shorter form (degrees, then direction) as before.
+struct ActivityReading: View {
+  let presentation: CompassActivityReading
+  let maximumSize: CGFloat
+  var minimumSize: CGFloat = 34
+  @ScaledMetric(relativeTo: .largeTitle) private var textScale: CGFloat = 1
+
+  /// A line's height as a multiple of its font size, with a little margin over the system font's.
+  static let lineHeight: CGFloat = 1.22
+  /// The step between the sizes tried, small enough that the chosen size nearly fills the line.
+  static let sizeStep: CGFloat = 2
+
+  /// The sizes tried, largest first.
+  static func sizes(minimum: CGFloat, maximum: CGFloat) -> [CGFloat] {
+    let largest = max(minimum, maximum.rounded(.down))
+    return Array(stride(from: largest, through: minimum, by: -sizeStep))
+  }
+
+  var body: some View {
+    let scale = min(textScale, 1)
+    ViewThatFits(in: .horizontal) {
+      ForEach(Self.sizes(minimum: minimumSize, maximum: maximumSize), id: \.self) { size in
+        // The widest reading, hidden and flat, sets the line's width at this size, so the size
+        // chosen fits every direction, not just the one shown.
+        VStack(spacing: 0) {
+          text(presentation.bearing, size: size * scale)
+          text(presentation.widestBearing, size: size).fixedSize().hidden().frame(height: 0)
+        }
+      }
+      ForEach(Array(presentation.bearingCandidates.dropFirst()), id: \.self) { candidate in
+        text(candidate, size: minimumSize * scale).minimumScaleFactor(0.8)
+      }
+    }
+  }
+
+  private func text(_ text: String, size: CGFloat) -> some View {
+    Text(verbatim: text)
+      .font(.system(size: size, weight: .semibold)).monospacedDigit()
+      .lineLimit(1)
+  }
+}
+
+extension CompassActivityReading {
+  /// The widest reading the appearance's fields can show, for sizing a reading once for every
+  /// direction: "NW" is the widest point, and monospaced digits make every three-digit angle as
+  /// wide as any other.
+  var widestBearing: String {
+    [
+      appearance.showDirection ? Self.widestPoint.abbreviation : nil,
+      appearance.showDegrees ? "000°" : nil,
+    ].compactMap { $0 }.joined(separator: " ")
+  }
+
+  static let widestPoint = CompassPoint.northwest
 }
 
 extension View {
@@ -215,6 +308,10 @@ struct CompassActivityView: View {
   let state: CompassActivityAttributes.ContentState
   var isStale = false
   var maximumTextSize: DynamicTypeSize = .accessibility5
+  @Environment(\.dynamicTypeSize) private var systemTextSize
+
+  /// The largest reading in the expanded Dynamic Island, whose regions have fixed bounds.
+  static let maximumReadingSize: CGFloat = 44
 
   /// One spoken description for every presentation, so a retained reading is only ever
   /// announced as recorded travel when one is actually shown.
@@ -238,10 +335,11 @@ struct CompassActivityView: View {
     let presentation = CompassActivityReading(state: state, isStale: isStale)
     VStack(spacing: 4) {
       if presentation.reading != nil {
-        CompassReadout(
-          bearing: state.bearing ?? 0, appearance: presentation.appearance,
-          maximumTextSize: maximumTextSize
+        ActivityReading(
+          presentation: presentation, maximumSize: Self.maximumReadingSize, minimumSize: 28
         )
+        .dynamicTypeSize(
+          min(presentation.appearance.readoutTextSize(system: systemTextSize), maximumTextSize))
       } else {
         Text("—").font(.largeTitle.bold())
       }

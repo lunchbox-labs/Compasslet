@@ -124,23 +124,30 @@ struct AppearanceStoreTests {
     }
     for small in [false, true] {
       let card = CompassActivityCard(state: state, isSmall: small)
-      let reading = Text(verbatim: "NE 45°")
-        .font((small ? Font.title2 : Font.largeTitle).weight(.semibold)).monospacedDigit()
-        .multilineTextAlignment(.center)
-        .lineLimit(1).minimumScaleFactor(0.8)
-        .frame(maxWidth: .infinity)
       // Match the card's text proposal and placement; a bare Text can rasterize its trailing
       // degree symbol differently even when the visible content and center are identical.
       let expected: AnyView
       if small {
+        let reading = Text(verbatim: "NE 45°")
+          .font(Font.title2.weight(.semibold)).monospacedDigit()
+          .multilineTextAlignment(.center)
+          .lineLimit(1).minimumScaleFactor(0.8)
+          .frame(maxWidth: .infinity)
         expected = AnyView(
           reading.padding(.horizontal, 8).padding(.vertical, 4)
             .frame(maxWidth: .infinity, maxHeight: .infinity))
       } else {
+        // With no line beneath it, the reading may fill the card's whole height.
+        let insets = CompassActivityCard.lockScreenInsets
+        let height = LockScreenHeight.heights.upperBound - insets.top - insets.bottom
+        let reading = ActivityReading(
+          presentation: CompassActivityReading(state: state, isStale: false),
+          maximumSize: height / ActivityReading.lineHeight
+        )
+        .frame(maxWidth: .infinity)
         expected = AnyView(
           LockScreenHeight {
-            reading.padding(.horizontal, 14).padding(.vertical, 8)
-              .frame(maxWidth: .infinity)
+            reading.padding(insets).frame(maxWidth: .infinity)
           })
       }
       #expect(try render(card) == render(expected), "small=\(small)")
@@ -232,6 +239,85 @@ struct AppearanceStoreTests {
   /// The narrowest Lock Screen card's content: a 375-point iPhone with Display Zoom is 320
   /// points wide, less 22 points for the banner and 28 for the card's side insets.
   private static let narrowestLine: CGFloat = 270
+  /// A 402-point iPhone's Lock Screen card content, less the same banner and insets.
+  private static let typicalLine: CGFloat = 352
+
+  /// The height of a Lock Screen reading on a line of the given width, with room for any size.
+  private func readingHeight(
+    bearing: Double, appearance: AppearanceValues = AppearanceValues(), width: CGFloat,
+    textSize: DynamicTypeSize = .large, weight: LegibilityWeight = .regular
+  ) -> CGFloat {
+    let state = CompassActivityAttributes.ContentState(
+      bearing: bearing, status: .usable, sampleTime: nil, expiry: nil, appearance: appearance)
+    let host = UIHostingController(
+      rootView: ActivityReading(
+        presentation: CompassActivityReading(state: state, isStale: false), maximumSize: 200
+      )
+      .environment(\.locale, Locale(identifier: "en_US"))
+      .environment(\.dynamicTypeSize, textSize)
+      .environment(\.legibilityWeight, weight))
+    return host.sizeThatFits(in: CGSize(width: width, height: 1000)).height
+  }
+
+  @Test func lockScreenReadingKeepsOneSizeForEveryDirection() {
+    // Every point, and one-, two- and three-digit angles.
+    let bearings = Array(stride(from: 0.0, to: 360, by: 22.5)) + [7, 359]
+    var degreesOnly = AppearanceValues()
+    degreesOnly.showDirection = false
+    var directionOnly = AppearanceValues()
+    directionOnly.showDegrees = false
+    for appearance in [AppearanceValues(), degreesOnly, directionOnly] {
+      for weight in [LegibilityWeight.regular, .bold] {
+        for width in [Self.narrowestLine, Self.typicalLine] {
+          let heights = Set(
+            bearings.map {
+              readingHeight(bearing: $0, appearance: appearance, width: width, weight: weight)
+            })
+          #expect(heights.count == 1, "\(appearance) \(weight) \(width): \(heights)")
+        }
+      }
+    }
+  }
+
+  @Test func widestBearingIsAtLeastAsWideAsEveryReading() {
+    func width(_ text: String, weight: LegibilityWeight) -> CGFloat {
+      let host = UIHostingController(
+        rootView: Text(verbatim: text)
+          .font(.system(size: 100, weight: .semibold)).monospacedDigit()
+          .environment(\.legibilityWeight, weight))
+      let unbounded = CGFloat.greatestFiniteMagnitude
+      return host.sizeThatFits(in: CGSize(width: unbounded, height: unbounded)).width
+    }
+    let state = CompassActivityAttributes.ContentState(
+      bearing: 0, status: .usable, sampleTime: nil, expiry: nil)
+    let widest = CompassActivityReading(state: state, isStale: false).widestBearing
+    for weight in [LegibilityWeight.regular, .bold] {
+      let limit = width(widest, weight: weight)
+      for point in CompassPoint.allCases {
+        for degrees in ["0°", "111°", "359°", "888°"] {
+          let reading = "\(point.abbreviation) \(degrees)"
+          #expect(width(reading, weight: weight) <= limit + 0.5, "\(reading) \(weight)")
+        }
+      }
+    }
+  }
+
+  @Test func lockScreenReadingIsFarLargerThanTheLargeTitle() {
+    let host = UIHostingController(
+      rootView: Text(verbatim: "NE 47°").font(.largeTitle.weight(.semibold)).monospacedDigit()
+        .environment(\.dynamicTypeSize, .large))
+    let title = host.sizeThatFits(in: CGSize(width: Self.typicalLine, height: 1000)).height
+    let reading = readingHeight(bearing: 47, width: Self.typicalLine)
+    #expect(reading >= title * 1.6, "\(reading) vs \(title)")
+  }
+
+  @Test func lockScreenReadingFollowsSmallerTextSizesOnly() {
+    let standard = readingHeight(bearing: 47, width: Self.typicalLine)
+    #expect(readingHeight(bearing: 47, width: Self.typicalLine, textSize: .xSmall) < standard)
+    // A larger text size can't widen the line, and the reading is already larger than it.
+    #expect(
+      readingHeight(bearing: 47, width: Self.typicalLine, textSize: .accessibility5) == standard)
+  }
 
   private func idealWidth(_ view: some View) -> CGFloat {
     let styled = view.font(.caption2).monospacedDigit()
