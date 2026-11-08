@@ -398,7 +398,7 @@ private final class LocalCompassActivityHandle: CompassActivityHandle {
       })
     else { return }
     var content = state
-    if (try? CompassDiagnostics.shared?.isEnabled()) == true {
+    if CompassDiagnostics.shared?.isEnabled == true {
       content.debugUpdateTime = Date()
     }
     let diagnostics = CompassDiagnostics.shared

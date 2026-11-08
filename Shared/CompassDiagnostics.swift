@@ -1,8 +1,16 @@
 import Foundation
-import SQLite3
+import Observation
+import Synchronization
 
 /// Local timing evidence only. An event never proves that CarPlay painted a frame.
-final class CompassDiagnostics: @unchecked Sendable {
+///
+/// Only the app's own process writes it: from the main actor on drive heartbeats and CarPlay
+/// renders, and from Live Activity updates off it. Every call runs under one lock and returns
+/// once written, so a session's start, pause and total land in the order the calls were made.
+/// The store is two files in the app's Application Support: `settings.json` holds the switch,
+/// each surface's clock and the next sequence number, and `events.jsonl` holds one event per
+/// line, appended as it is recorded.
+final class CompassDiagnostics: Observable, Sendable {
   enum Surface: String, Codable, CaseIterable { case activity, fullscreen }
   enum Kind: String, Codable {
     case started, paused, updateRequested, updateCompleted
@@ -36,21 +44,18 @@ final class CompassDiagnostics: @unchecked Sendable {
     case unavailable, database
     var errorDescription: String? {
       switch self {
-      case .unavailable: "Shared diagnostics are unavailable. Check the app’s App Group signing."
+      case .unavailable: "Diagnostics are unavailable. The app’s storage couldn’t be opened."
       case .database: "The local diagnostics store could not be read or written."
       }
     }
   }
 
-  static let group = "group.dev.lunchbox-labs.carplay-compass"
   static let shared: CompassDiagnostics? = {
     #if os(iOS)
-      guard
-        var directory = FileManager.default.containerURL(
-          forSecurityApplicationGroupIdentifier: group)
-      else { return nil }
-      directory.appendPathComponent("Diagnostics", isDirectory: true)
       do {
+        var directory = try FileManager.default.url(
+          for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+        directory.appendPathComponent("Diagnostics", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         var values = URLResourceValues()
         values.isExcludedFromBackup = true
@@ -58,75 +63,127 @@ final class CompassDiagnostics: @unchecked Sendable {
         try FileManager.default.setAttributes(
           [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
           ofItemAtPath: directory.path)
-        return try CompassDiagnostics(url: directory.appendingPathComponent("timing.sqlite"))
+        return try CompassDiagnostics(directory: directory)
       } catch { return nil }
     #else
       return nil
     #endif
   }()
 
-  let url: URL
-  private let database: OpaquePointer
-  private let lock = NSLock()
-  private let process = UUID().uuidString
-  private var lastObservation: [Surface: (uptime: Double, active: Bool)] = [:]
+  /// One surface's active-time clock, as of its last observation.
+  private struct Clock: Codable {
+    var total: Double
+    var wall: Double
+    var uptime: Double
+    /// The process that wrote it, so a relaunch starts a new session.
+    var owner: String
+    var session: String
+    var active: Bool
+  }
+  /// One stored event. Surface and kind stay strings, so a line written by a version that
+  /// records another surface or kind still reads, and is left out of the export.
+  private struct Record: Codable {
+    let sequence: Int64
+    let surface: String
+    let kind: String
+    let wall: Double
+    let uptime: Double
+    let elapsed: Double
+    let session: String
+  }
+  private struct Settings: Codable {
+    var enabled = false
+    var clocks: [String: Clock] = [:]
+    var nextSequence: Int64 = 1
+  }
+  private struct State {
+    var settings: Settings
+    /// The retained events, oldest first.
+    var events: [Record]
+    /// How many lines the events file holds, retained or not.
+    var lines: Int
+    var lastObservation: [Surface: (uptime: Double, active: Bool)] = [:]
 
-  init(url: URL) throws {
-    self.url = url
-    var handle: OpaquePointer?
-    guard
-      sqlite3_open_v2(
-        url.path, &handle,
-        SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX, nil) == SQLITE_OK,
-      let handle
-    else {
-      if let handle { sqlite3_close(handle) }
-      throw Failure.database
-    }
-    database = handle
-    sqlite3_busy_timeout(handle, 100)
-    do {
-      try execute("PRAGMA journal_mode=WAL")
-      try execute("PRAGMA journal_size_limit=1048576")
-      try execute(
-        "CREATE TABLE IF NOT EXISTS settings (id INTEGER PRIMARY KEY, enabled INTEGER NOT NULL)")
-      try execute("INSERT OR IGNORE INTO settings VALUES (1, 0)")
-      try execute(
-        """
-        CREATE TABLE IF NOT EXISTS clocks (
-          surface TEXT PRIMARY KEY, total REAL NOT NULL, wall REAL NOT NULL,
-          uptime REAL NOT NULL, owner TEXT NOT NULL, session TEXT NOT NULL, active INTEGER NOT NULL)
-        """)
-      try execute(
-        """
-        CREATE TABLE IF NOT EXISTS events (
-          sequence INTEGER PRIMARY KEY AUTOINCREMENT, surface TEXT NOT NULL, kind TEXT NOT NULL,
-          wall REAL NOT NULL, uptime REAL NOT NULL, elapsed REAL NOT NULL, session TEXT NOT NULL)
-        """)
-      try execute("CREATE INDEX IF NOT EXISTS events_surface ON events(surface, elapsed)")
-    } catch {
-      sqlite3_close(handle)
-      throw error
+    /// Adds an event to the surface's current session with the next sequence number.
+    mutating func add(
+      _ surface: Surface, _ kind: Kind, wall: Double, uptime: Double, clock: Clock
+    ) -> Record {
+      let record = Record(
+        sequence: settings.nextSequence, surface: surface.rawValue, kind: kind.rawValue, wall: wall,
+        uptime: uptime, elapsed: clock.total, session: clock.session)
+      settings.nextSequence += 1
+      events.append(record)
+      return record
     }
   }
-  deinit { sqlite3_close(database) }
 
-  func isEnabled() throws -> Bool {
-    try locked { try enabled() }
+  let directory: URL
+  private let settingsURL: URL
+  private let eventsURL: URL
+  private let process = UUID().uuidString
+  private let registrar = ObservationRegistrar()
+  private let state: Mutex<State>
+
+  /// Opens the store in `directory`, which must exist. A settings file that can't be read
+  /// leaves the store unopened rather than starting over.
+  init(directory: URL) throws {
+    let settingsURL = directory.appendingPathComponent("settings.json")
+    let eventsURL = directory.appendingPathComponent("events.jsonl")
+    var settings = Settings()
+    var data = Data()
+    do {
+      if FileManager.default.fileExists(atPath: settingsURL.path) {
+        settings = try JSONDecoder().decode(Settings.self, from: Data(contentsOf: settingsURL))
+      }
+      if FileManager.default.fileExists(atPath: eventsURL.path) {
+        data = try Data(contentsOf: eventsURL)
+      }
+    } catch { throw Failure.database }
+    // A line that doesn't decode, such as one cut short when the app stopped mid-write, is
+    // dropped rather than making the whole log unreadable.
+    let stored = data.split(separator: 0x0A)
+    let decoder = JSONDecoder()
+    var events = stored.compactMap { try? decoder.decode(Record.self, from: Data($0)) }
+    events.sort { $0.sequence < $1.sequence }
+    settings.nextSequence = max(settings.nextSequence, (events.last?.sequence ?? 0) + 1)
+    for (surface, clock) in settings.clocks {
+      CompassDiagnostics.prune(&events, surface: surface, total: clock.total)
+    }
+    var state = State(settings: settings, events: events, lines: stored.count)
+    // Rewriting drops what was left out, and ends the file on a whole line for the next append.
+    if events.count != stored.count || !(data.isEmpty || data.last == 0x0A) {
+      do { try CompassDiagnostics.rewrite(events, to: eventsURL) } catch { throw Failure.database }
+      state.lines = events.count
+    }
+    self.directory = directory
+    self.settingsURL = settingsURL
+    self.eventsURL = eventsURL
+    self.state = Mutex(state)
+  }
+
+  /// Whether Debug Mode is on. A view that reads it updates when it changes.
+  var isEnabled: Bool {
+    registrar.access(self, keyPath: \.isEnabled)
+    return state.withLock { $0.settings.enabled }
   }
 
   func setEnabled(_ value: Bool) throws {
-    try transaction {
-      try execute("UPDATE settings SET enabled=? WHERE id=1", [value ? "1" : "0"])
-      if !value {
-        // Disable and erase under the same write lock, including other SQLite connections.
-        try execute("DELETE FROM events")
-        try execute("DELETE FROM clocks")
-      } else {
-        // Resume on the next lifecycle tick, never from an old wall-clock timestamp.
-        try execute("UPDATE clocks SET active=0")
+    try registrar.withMutation(of: self, keyPath: \.isEnabled) {
+      try state.withLock { state in
+        var next = state
+        next.settings.enabled = value
+        if value {
+          // Resume on the next lifecycle tick, never from an old wall-clock timestamp.
+          for surface in next.settings.clocks.keys { next.settings.clocks[surface]?.active = false }
+        } else {
+          next.settings.clocks.removeAll()
+          next.events.removeAll()
+        }
+        next.lastObservation.removeAll()
+        // Turning it off erases the events before saving the switch, so a failed erase leaves
+        // Debug Mode on with its log.
+        try commit(next, to: &state, replacingEvents: !value)
       }
-      lastObservation.removeAll()
     }
   }
 
@@ -137,51 +194,43 @@ final class CompassDiagnostics: @unchecked Sendable {
     uptime: Double = ProcessInfo.processInfo.systemUptime
   ) throws {
     guard wall.isFinite, uptime.isFinite else { return }
-    let due = locked {
-      if let previous = lastObservation[surface], previous.active == active,
+    try state.withLock { state in
+      if let previous = state.lastObservation[surface], previous.active == active,
         (0..<1).contains(uptime - previous.uptime)
       {
-        return false
+        return
       }
-      lastObservation[surface] = (uptime, active)
-      return true
-    }
-    guard due, try isEnabled() else { return }
-    try transaction {
-      guard try enabled() else { return }
-      let row = try rows(
-        "SELECT total,wall,uptime,owner,session,active FROM clocks WHERE surface=?",
-        [surface.rawValue]
-      ).first
-      var total = row.flatMap { Double($0[0]) } ?? 0
-      let wasActive = row?[5] == "1"
+      state.lastObservation[surface] = (uptime, active)
+      guard state.settings.enabled else { return }
+      let last = state.settings.clocks[surface.rawValue]
+      var total = last?.total ?? 0
+      let wasActive = last?.active ?? false
       guard active || wasActive else { return }
-      let delta = uptime - (row.flatMap { Double($0[2]) } ?? uptime)
-      let continuing = wasActive && row?[3] == process && (0...2).contains(delta)
+      let delta = uptime - (last?.uptime ?? uptime)
+      let continuing = wasActive && last?.owner == process && (0...2).contains(delta)
       if continuing { total += delta }
-      let session = continuing ? (row?[4] ?? UUID().uuidString) : UUID().uuidString
-      try execute(
-        "INSERT OR REPLACE INTO clocks VALUES (?,?,?,?,?,?,?)",
-        [
-          surface.rawValue, String(total), String(wall), String(uptime), process, session,
-          active ? "1" : "0",
-        ])
+      let session = continuing ? (last?.session ?? UUID().uuidString) : UUID().uuidString
+      let clock = Clock(
+        total: total, wall: wall, uptime: uptime, owner: process, session: session, active: active)
+      var next = state
+      next.settings.clocks[surface.rawValue] = clock
+      var added: [Record] = []
       if active && !continuing {
-        try insert(surface, .started, wall: wall, uptime: uptime, total: total, session: session)
+        added.append(next.add(surface, .started, wall: wall, uptime: uptime, clock: clock))
       } else if !active && wasActive {
-        try insert(surface, .paused, wall: wall, uptime: uptime, total: total, session: session)
+        added.append(next.add(surface, .paused, wall: wall, uptime: uptime, clock: clock))
       }
-      try prune(surface, total: total)
+      try commit(next, to: &state, appending: added, pruning: surface)
     }
   }
 
   /// Capture before asynchronous work so its completion cannot enter a later recording session.
   func recordingSession(_ surface: Surface) throws -> String? {
-    try transaction(readOnly: true) {
-      guard try enabled() else { return nil }
-      return try rows(
-        "SELECT session FROM clocks WHERE surface=? AND active=1", [surface.rawValue]
-      ).first?.first
+    state.withLock { state in
+      guard state.settings.enabled, let clock = state.settings.clocks[surface.rawValue],
+        clock.active
+      else { return nil }
+      return clock.session
     }
   }
 
@@ -193,84 +242,74 @@ final class CompassDiagnostics: @unchecked Sendable {
     uptime: Double = ProcessInfo.processInfo.systemUptime
   ) throws -> Bool {
     guard wall.isFinite, uptime.isFinite else { return false }
-    guard try isEnabled() else { return false }
-    return try transaction {
-      guard try enabled(),
-        let row = try rows(
-          "SELECT total,wall,uptime,session,active FROM clocks WHERE surface=?", [surface.rawValue]
-        ).first,
-        row[4] == "1", matchingSession == nil || matchingSession == row[3],
-        let lastUptime = Double(row[2]), let lastWall = Double(row[1]),
-        (0...2).contains(uptime - lastUptime), (0...3).contains(wall - lastWall),
-        let total = Double(row[0])
+    return try state.withLock { state in
+      guard state.settings.enabled, let clock = state.settings.clocks[surface.rawValue],
+        clock.active, matchingSession == nil || matchingSession == clock.session,
+        (0...2).contains(uptime - clock.uptime), (0...3).contains(wall - clock.wall)
       else { return false }
-      try insert(surface, kind, wall: wall, uptime: uptime, total: total, session: row[3])
-      try prune(surface, total: total)
+      var next = state
+      let event = next.add(surface, kind, wall: wall, uptime: uptime, clock: clock)
+      // The sequence number isn't saved here: the next launch takes it from the last line.
+      try commit(next, to: &state, appending: [event], pruning: surface, savingSettings: false)
       return true
     }
   }
 
   func clear() throws {
-    try transaction {
-      try execute("DELETE FROM events")
-      try execute("DELETE FROM clocks")
-      lastObservation.removeAll()
+    try state.withLock { state in
+      var next = state
+      next.settings.clocks.removeAll()
+      next.events.removeAll()
+      next.lastObservation.removeAll()
+      try commit(next, to: &state, replacingEvents: true)
     }
   }
 
   func snapshot() throws -> Snapshot {
-    try transaction(readOnly: true) {
-      var origins: [String: Double] = [:]
-      for row in try rows("SELECT session,MIN(uptime) FROM events GROUP BY session") {
-        origins[row[0]] = Double(row[1])
-      }
-      let events = try rows(
-        "SELECT sequence,surface,kind,wall,uptime,elapsed,session FROM events ORDER BY sequence"
-      ).compactMap { row -> Event? in
-        // A surface or kind this version doesn't record, such as a removed one, is left out
-        // rather than making the whole store unreadable.
-        guard let surface = Surface(rawValue: row[1]), let kind = Kind(rawValue: row[2]) else {
-          return nil
-        }
-        guard let sequence = Int64(row[0]), let wall = Double(row[3]),
-          let uptime = Double(row[4]), let elapsed = Double(row[5])
-        else { throw Failure.database }
-        let origin = origins[row[6], default: uptime]
-        return Event(
-          sequence: sequence, surface: surface, kind: kind, timestamp: wall,
-          elapsedSinceFirstRetainedEvent: uptime - origin, activeSeconds: elapsed, session: row[6])
-      }
-      let clocks = try rows("SELECT surface,total FROM clocks")
-      let summaries = Surface.allCases.map { surface in
-        let selected = events.filter { $0.surface == surface }
-        let kinds = Set(selected.map(\.kind.rawValue)).sorted()
-        let intervals = kinds.compactMap { name -> IntervalSummary? in
-          guard let kind = Kind(rawValue: name) else { return nil }
-          let stream = selected.filter { $0.kind == kind }.sorted {
-            $0.elapsedSinceFirstRetainedEvent < $1.elapsedSinceFirstRetainedEvent
-          }
-          var previous: [String: Double] = [:]
-          var differences: [Double] = []
-          for event in stream {
-            if let time = previous[event.session], event.elapsedSinceFirstRetainedEvent >= time {
-              differences.append(event.elapsedSinceFirstRetainedEvent - time)
-            }
-            previous[event.session] = event.elapsedSinceFirstRetainedEvent
-          }
-          return IntervalSummary(
-            kind: kind, count: stream.count,
-            meanIntervalSeconds: differences.isEmpty
-              ? nil : differences.reduce(0, +) / Double(differences.count))
-        }
-        let total = clocks.first { $0[0] == surface.rawValue }.flatMap { Double($0[1]) } ?? 0
-        return SurfaceSummary(
-          surface: surface, activeSeconds: min(1800, total), intervals: intervals)
-      }
-      return Snapshot(
-        explanation:
-          "Timing evidence, not screen visibility or paint. Each surface retains up to 30 observed active-feed minutes across sessions (maximum 50000 events). Gaps over 2 seconds and process restarts are not counted. Intervals are grouped by event kind within sessions. Timestamps are Unix seconds. Event elapsed times are relative to the first retained event in that session; raw boot uptime is not exported.",
-        surfaces: summaries, events: events)
+    let (records, clocks) = state.withLock { ($0.events, $0.settings.clocks) }
+    var origins: [String: Double] = [:]
+    for record in records {
+      origins[record.session] = min(origins[record.session] ?? record.uptime, record.uptime)
     }
+    let events = records.compactMap { record -> Event? in
+      // A surface or kind this version doesn't record, such as a removed one, is left out.
+      guard let surface = Surface(rawValue: record.surface), let kind = Kind(rawValue: record.kind)
+      else { return nil }
+      let origin = origins[record.session, default: record.uptime]
+      return Event(
+        sequence: record.sequence, surface: surface, kind: kind, timestamp: record.wall,
+        elapsedSinceFirstRetainedEvent: record.uptime - origin, activeSeconds: record.elapsed,
+        session: record.session)
+    }
+    let summaries = Surface.allCases.map { surface in
+      let selected = events.filter { $0.surface == surface }
+      let kinds = Set(selected.map(\.kind.rawValue)).sorted()
+      let intervals = kinds.compactMap { name -> IntervalSummary? in
+        guard let kind = Kind(rawValue: name) else { return nil }
+        let stream = selected.filter { $0.kind == kind }.sorted {
+          $0.elapsedSinceFirstRetainedEvent < $1.elapsedSinceFirstRetainedEvent
+        }
+        var previous: [String: Double] = [:]
+        var differences: [Double] = []
+        for event in stream {
+          if let time = previous[event.session], event.elapsedSinceFirstRetainedEvent >= time {
+            differences.append(event.elapsedSinceFirstRetainedEvent - time)
+          }
+          previous[event.session] = event.elapsedSinceFirstRetainedEvent
+        }
+        return IntervalSummary(
+          kind: kind, count: stream.count,
+          meanIntervalSeconds: differences.isEmpty
+            ? nil : differences.reduce(0, +) / Double(differences.count))
+      }
+      let total = clocks[surface.rawValue]?.total ?? 0
+      return SurfaceSummary(
+        surface: surface, activeSeconds: min(Self.retainedSeconds, total), intervals: intervals)
+    }
+    return Snapshot(
+      explanation:
+        "Timing evidence, not screen visibility or paint. Each surface retains up to 30 observed active-feed minutes across sessions (maximum 50000 events). Gaps over 2 seconds and process restarts are not counted. Intervals are grouped by event kind within sessions. Timestamps are Unix seconds. Event elapsed times are relative to the first retained event in that session; raw boot uptime is not exported.",
+      surfaces: summaries, events: events)
   }
 
   func exportJSON() throws -> Data {
@@ -279,69 +318,80 @@ final class CompassDiagnostics: @unchecked Sendable {
     return try encoder.encode(snapshot())
   }
 
-  private func enabled() throws -> Bool {
-    try rows("SELECT enabled FROM settings WHERE id=1").first?.first == "1"
-  }
-  private func insert(
-    _ surface: Surface, _ kind: Kind, wall: Double, uptime: Double, total: Double, session: String
+  /// How many active seconds of events each surface keeps, and how many events at most.
+  private static let retainedSeconds: Double = 1800
+  private static let retainedEvents = 50_000
+  private static let writeOptions: Data.WritingOptions = [
+    .atomic, .completeFileProtectionUntilFirstUserAuthentication,
+  ]
+
+  /// Writes `next` to the files and only then makes it current, so a failed write leaves the
+  /// store as it was apart from the skip state `observe` keeps in memory.
+  private func commit(
+    _ next: State, to state: inout State, appending added: [Record] = [],
+    pruning surface: Surface? = nil, replacingEvents: Bool = false, savingSettings: Bool = true
   ) throws {
-    try execute(
-      "INSERT INTO events(surface,kind,wall,uptime,elapsed,session) VALUES (?,?,?,?,?,?)",
-      [surface.rawValue, kind.rawValue, String(wall), String(uptime), String(total), session])
-  }
-  private func prune(_ surface: Surface, total: Double) throws {
-    try execute(
-      "DELETE FROM events WHERE surface=? AND elapsed < ?",
-      [surface.rawValue, String(total - 1800)])
-    try execute(
-      "DELETE FROM events WHERE surface=? AND sequence < COALESCE((SELECT sequence FROM events WHERE surface=? ORDER BY sequence DESC LIMIT 1 OFFSET 49999),0)",
-      [surface.rawValue, surface.rawValue])
-  }
-  private func locked<T>(_ body: () throws -> T) rethrows -> T {
-    lock.lock()
-    defer { lock.unlock() }
-    return try body()
-  }
-  private func transaction<T>(readOnly: Bool = false, _ body: () throws -> T) throws -> T {
-    try locked {
-      try execute(readOnly ? "BEGIN" : "BEGIN IMMEDIATE")
-      do {
-        let value = try body()
-        try execute("COMMIT")
-        return value
-      } catch {
-        try? execute("ROLLBACK")
-        throw error
+    var next = next
+    do {
+      if replacingEvents {
+        try Self.rewrite(next.events, to: eventsURL)
+        next.lines = next.events.count
       }
-    }
-  }
-  private func execute(_ sql: String, _ values: [String] = []) throws {
-    _ = try rows(sql, values)
-  }
-  private func rows(_ sql: String, _ values: [String] = []) throws -> [[String]] {
-    var statement: OpaquePointer?
-    guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK,
-      let statement
-    else { throw Failure.database }
-    defer { sqlite3_finalize(statement) }
-    for (index, value) in values.enumerated() {
-      let result = value.withCString {
-        sqlite3_bind_text(
-          statement, Int32(index + 1), $0, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+      if savingSettings {
+        try JSONEncoder().encode(next.settings).write(to: settingsURL, options: Self.writeOptions)
       }
-      guard result == SQLITE_OK else { throw Failure.database }
-    }
-    var result: [[String]] = []
-    while true {
-      switch sqlite3_step(statement) {
-      case SQLITE_ROW:
-        result.append(
-          (0..<sqlite3_column_count(statement)).map {
-            sqlite3_column_text(statement, $0).map { String(cString: $0) } ?? ""
-          })
-      case SQLITE_DONE: return result
-      default: throw Failure.database
+      if !added.isEmpty {
+        try append(added)
+        next.lines += added.count
       }
+    } catch { throw Failure.database }
+    if let surface, let total = next.settings.clocks[surface.rawValue]?.total {
+      Self.prune(&next.events, surface: surface.rawValue, total: total)
     }
+    // Events that age out stay in the file, left out when it's read, until enough build up to
+    // rewrite it.
+    if next.lines > 2 * next.events.count + 1000,
+      (try? Self.rewrite(next.events, to: eventsURL)) != nil
+    {
+      next.lines = next.events.count
+    }
+    state = next
+  }
+
+  private func append(_ records: [Record]) throws {
+    if !FileManager.default.fileExists(atPath: eventsURL.path) {
+      try Self.rewrite([], to: eventsURL)
+    }
+    let handle = try FileHandle(forWritingTo: eventsURL)
+    defer { try? handle.close() }
+    try handle.seekToEnd()
+    try handle.write(contentsOf: Self.lines(records))
+  }
+
+  private static func rewrite(_ records: [Record], to url: URL) throws {
+    try lines(records).write(to: url, options: writeOptions)
+  }
+
+  private static func lines(_ records: [Record]) throws -> Data {
+    let encoder = JSONEncoder()
+    var data = Data()
+    for record in records {
+      data.append(try encoder.encode(record))
+      data.append(0x0A)
+    }
+    return data
+  }
+
+  /// Keeps a surface's events from its last 30 active minutes, and at most 50,000 of them.
+  private static func prune(_ events: inout [Record], surface: String, total: Double) {
+    events.removeAll { $0.surface == surface && $0.elapsed < total - retainedSeconds }
+    var excess = events.lazy.filter { $0.surface == surface }.count - retainedEvents
+    guard excess > 0 else { return }
+    var kept: [Record] = []
+    kept.reserveCapacity(events.count - excess)
+    for record in events {
+      if excess > 0, record.surface == surface { excess -= 1 } else { kept.append(record) }
+    }
+    events = kept
   }
 }
