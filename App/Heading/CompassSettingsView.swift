@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 struct CompassSettingsView: View {
-  @ObservedObject var drive: DriveSessionController
+  let drive: DriveSessionController
   let showTour: () -> Void
   @Environment(\.dismiss) private var dismiss
   @AccessibilityFocusState private var closeFocused: Bool
@@ -90,7 +90,7 @@ struct CompassSettingsView: View {
 }
 
 struct PhoneLocationReadout: View {
-  @ObservedObject var location: PhoneLocationController
+  let location: PhoneLocationController
 
   var body: some View {
     VStack(spacing: 8) {

@@ -1,13 +1,13 @@
-import Combine
 import CompassCore
 import Foundation
+import Observation
 
-@MainActor
-final class AppearanceStore: ObservableObject {
+@MainActor @Observable
+final class AppearanceStore {
   static let shared = AppearanceStore()
   nonisolated static let suiteName = "group.dev.lunchbox-labs.carplay-compass"
   nonisolated private static let key = "compassAppearance"
-  @Published private(set) var preferences: AppearancePreferences
+  private(set) var preferences: AppearancePreferences
   private let defaults: UserDefaults?
 
   init(defaults: UserDefaults? = UserDefaults(suiteName: suiteName)) {

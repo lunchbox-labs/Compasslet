@@ -12,15 +12,17 @@ struct CompassView: View {
     PhoneLocationController()
   }
 
-  @ObservedObject var drive: DriveSessionController
+  let drive: DriveSessionController
   @Environment(\.scenePhase) private var scenePhase
   @Environment(\.openURL) private var openURL
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-  @StateObject private var compass = CompassView.makeHeadingController()
-  @StateObject private var location = CompassView.makeLocationController()
-  @ObservedObject private var appearanceStore = AppearanceStore.shared
-  @StateObject private var onboarding: OnboardingState
+  /// Only the dial, readout and accuracy views read its sample, so heading-rate updates redraw
+  /// them without the screen around them.
+  @State private var compass = CompassView.makeHeadingController()
+  @State private var location = CompassView.makeLocationController()
+  private let appearanceStore = AppearanceStore.shared
+  @State private var onboarding: OnboardingState
   @State private var showingSettings: Bool
   /// True from opening Settings until its sheet has fully gone, unlike `showingSettings`, which
   /// turns false as the sheet starts to close.
@@ -41,12 +43,12 @@ struct CompassView: View {
 
   init(
     drive: DriveSessionController,
-    onboarding: @autoclosure @escaping () -> OnboardingState = OnboardingState(),
+    onboarding: OnboardingState = OnboardingState(),
     // Only the screenshots open the screen with Settings already presented.
     showingSettings: Bool = false
   ) {
     self.drive = drive
-    _onboarding = StateObject(wrappedValue: onboarding())
+    _onboarding = State(initialValue: onboarding)
     _showingSettings = State(initialValue: showingSettings)
     _settingsOnScreen = State(initialValue: showingSettings)
   }
@@ -63,15 +65,9 @@ struct CompassView: View {
   }
   /// Only a rotating dial shown under Reduce Motion steps; steady text keeps smoothed headings.
   private var stepsHeading: Bool { reduceMotion && !steadyReading }
-  private var roundedDegrees: Int? {
-    compass.sample.map { Int($0.angle.degrees.rounded()) % 360 }
-  }
-  private var accessibilitySummary: String {
-    guard let sample = compass.sample, let roundedDegrees else { return compass.status.title }
-    let direction = CompassPoint(angle: sample.angle).name
-    let prefix = compass.status == .inactive ? "Last reading. " : ""
-    return
-      "\(prefix)\(roundedDegrees) degrees, \(direction), magnetic heading. Accuracy plus or minus \(Int(min(sample.accuracyDegrees, 360).rounded())) degrees."
+  /// The readout's text size, from the system's and the Appearance setting.
+  private var readoutTextSize: DynamicTypeSize {
+    appearance.readoutTextSize(system: dynamicTypeSize)
   }
 
   var body: some View {
@@ -319,7 +315,9 @@ struct CompassView: View {
   /// width `ViewThatFits` offers, or every layout but the last fails to fit.
   private func information(details: Bool, width: CGFloat) -> some View {
     VStack(spacing: details ? 16 : 8) {
-      if compass.sample != nil, appearance.hasReadout { phoneReadout }
+      if compass.hasSample, appearance.hasReadout {
+        HeadingReadout(compass: compass, appearance: appearance, textSize: readoutTextSize)
+      }
       statusAndLocation(details: details)
         .frame(idealWidth: max(0, width), maxWidth: .infinity)
     }
@@ -329,15 +327,10 @@ struct CompassView: View {
 
   private func statusAndLocation(details: Bool) -> some View {
     VStack(spacing: details ? 16 : 8) {
-      if let sample = compass.sample {
+      if compass.hasSample {
         // The readout already speaks its accuracy. With both center readouts hidden,
         // this line becomes the single VoiceOver stop for the heading instead.
-        Text(
-          "\(compass.status == .inactive ? "Last reading · " : "")Accuracy ±\(Int(min(sample.accuracyDegrees, 360).rounded()))°"
-        )
-        .font(.subheadline).foregroundStyle(.secondary)
-        .accessibilityHidden(appearance.hasReadout)
-        .accessibilityLabel(accessibilitySummary)
+        HeadingAccuracy(compass: compass, hiddenFromVoiceOver: appearance.hasReadout)
         if steadyReading {
           Text("Dial hidden while Reduce Motion is on")
             .font(.caption2).foregroundStyle(.secondary)
@@ -365,29 +358,23 @@ struct CompassView: View {
       if let notice = locationNotice {
         Button(notice) { locationNoticeTapped() }.font(.subheadline).frame(minHeight: 44)
       }
-      if debugEnabled, details, let sample = compass.sample {
-        Text("Debug · Sample \(sample.timestamp.formatted(date: .omitted, time: .standard))")
-          .font(.caption2).foregroundStyle(.secondary)
+      if debugEnabled, details, compass.hasSample {
+        HeadingSampleTime(compass: compass)
       }
     }
   }
 
   private func essentialReading(height: CGFloat) -> some View {
     VStack(spacing: 8) {
-      if compass.sample != nil {
+      if compass.hasSample {
         if compass.status == .inactive {
           Text("Last reading").font(.caption).foregroundStyle(.secondary)
             .accessibilityHidden(true)
         }
         GeometryReader { available in
-          PhoneCompassReadout(
-            bearing: compass.sample?.angle.degrees ?? 0, appearance: appearance,
-            maximumTextSize: max(17, min(available.size.height / 2.5, available.size.width / 2.8))
-          )
-          .dynamicTypeSize(appearance.readoutTextSize(system: dynamicTypeSize))
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
-          .accessibilityElement(children: .ignore)
-          .accessibilityLabel(accessibilitySummary)
+          HeadingReadout(
+            compass: compass, appearance: appearance, textSize: readoutTextSize,
+            filling: max(17, min(available.size.height / 2.5, available.size.width / 2.8)))
         }
       } else {
         Button(action: { showingHeadingStatus = true }) {
@@ -438,21 +425,12 @@ struct CompassView: View {
     }
   }
 
-  private var phoneReadout: some View {
-    PhoneCompassReadout(bearing: compass.sample?.angle.degrees ?? 0, appearance: appearance)
-      .dynamicTypeSize(appearance.readoutTextSize(system: dynamicTypeSize))
-      .accessibilityElement(children: .ignore)
-      .accessibilityLabel(accessibilitySummary)
-  }
-
   // The dial repeats the readout visually; VoiceOver gets one heading stop from the text.
   @ViewBuilder private func dial(size: CGFloat) -> some View {
     if !steadyReading {
-      CompassDial(
-        bearing: compass.sample?.angle.degrees, appearance: appearance, showsReadout: false
-      )
-      .frame(width: max(0, size), height: max(0, size))
-      .accessibilityHidden(true)
+      HeadingDial(compass: compass, appearance: appearance)
+        .frame(width: max(0, size), height: max(0, size))
+        .accessibilityHidden(true)
     }
   }
 
@@ -497,6 +475,90 @@ struct CompassView: View {
       withAnimation(reduceMotion ? nil : .easeOut(duration: 0.25)) { onboarding.replay() }
     } else if fromGear {
       settingsButtonFocused = true
+    }
+  }
+}
+
+extension HeadingController {
+  /// What VoiceOver reads for the heading, or the status without a reading.
+  fileprivate var accessibilitySummary: String {
+    guard let sample else { return status.title }
+    let degrees = Int(sample.angle.degrees.rounded()) % 360
+    let direction = CompassPoint(angle: sample.angle).name
+    let prefix = status == .inactive ? "Last reading. " : ""
+    return
+      "\(prefix)\(degrees) degrees, \(direction), magnetic heading. Accuracy plus or minus \(Int(min(sample.accuracyDegrees, 360).rounded())) degrees."
+  }
+}
+
+// The views below read the heading's sample, so its updates redraw only them.
+
+/// The rotating dial. It repeats the readout visually, so the caller hides it from VoiceOver.
+private struct HeadingDial: View {
+  let compass: HeadingController
+  let appearance: AppearanceValues
+
+  var body: some View {
+    CompassDial(
+      bearing: compass.sample?.angle.degrees, appearance: appearance, showsReadout: false)
+  }
+}
+
+/// The large reading, one VoiceOver stop for the whole heading. With `filling`, it caps its text
+/// at that size and fills the space offered, as the last-resort layout needs.
+private struct HeadingReadout: View {
+  let compass: HeadingController
+  let appearance: AppearanceValues
+  let textSize: DynamicTypeSize
+  var filling: CGFloat?
+
+  var body: some View {
+    if let filling {
+      reading(maximumTextSize: filling)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(compass.accessibilitySummary)
+    } else {
+      reading(maximumTextSize: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(compass.accessibilitySummary)
+    }
+  }
+
+  private func reading(maximumTextSize: CGFloat) -> some View {
+    PhoneCompassReadout(
+      bearing: compass.sample?.angle.degrees ?? 0, appearance: appearance,
+      maximumTextSize: maximumTextSize
+    )
+    .dynamicTypeSize(textSize)
+  }
+}
+
+/// The reading's accuracy, and the heading's VoiceOver stop when no readout shows.
+private struct HeadingAccuracy: View {
+  let compass: HeadingController
+  let hiddenFromVoiceOver: Bool
+
+  var body: some View {
+    if let sample = compass.sample {
+      Text(
+        "\(compass.status == .inactive ? "Last reading · " : "")Accuracy ±\(Int(min(sample.accuracyDegrees, 360).rounded()))°"
+      )
+      .font(.subheadline).foregroundStyle(.secondary)
+      .accessibilityHidden(hiddenFromVoiceOver)
+      .accessibilityLabel(compass.accessibilitySummary)
+    }
+  }
+}
+
+/// When the shown sample was taken, while diagnostics are on.
+private struct HeadingSampleTime: View {
+  let compass: HeadingController
+
+  var body: some View {
+    if let sample = compass.sample {
+      Text("Debug · Sample \(sample.timestamp.formatted(date: .omitted, time: .standard))")
+        .font(.caption2).foregroundStyle(.secondary)
     }
   }
 }

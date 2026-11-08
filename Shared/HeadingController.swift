@@ -1,7 +1,7 @@
-import Combine
 import CompassCore
 import CoreLocation
 import Foundation
+import Observation
 
 /// Events contain magnetic device heading only; travel course never enters this pipeline.
 enum HeadingEvent {
@@ -23,18 +23,22 @@ protocol HeadingSensor: AnyObject {
 @MainActor
 final class DeviceHeadingSensor: NSObject, HeadingSensor, @preconcurrency CLLocationManagerDelegate
 {
-  private let manager = CLLocationManager()
+  /// Made on the first start, so a sensor that never starts, such as one a view builds and
+  /// discards, allocates no manager.
+  private var manager: CLLocationManager?
   var receive: ((HeadingEvent) -> Void)?
   var available: Bool { CLLocationManager.headingAvailable() }
 
-  override init() {
-    super.init()
-    manager.delegate = self
-    manager.headingFilter = 1
+  func start() {
+    if manager == nil {
+      let manager = CLLocationManager()
+      manager.delegate = self
+      manager.headingFilter = 1
+      self.manager = manager
+    }
+    manager?.startUpdatingHeading()
   }
-
-  func start() { manager.startUpdatingHeading() }
-  func stop() { manager.stopUpdatingHeading() }
+  func stop() { manager?.stopUpdatingHeading() }
 
   func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
     receive?(
@@ -56,8 +60,8 @@ final class DeviceHeadingSensor: NSObject, HeadingSensor, @preconcurrency CLLoca
 }
 
 /// All visible readouts are removed on invalid, stale, or interrupted input.
-@MainActor
-final class HeadingController: ObservableObject {
+@MainActor @Observable
+final class HeadingController {
   enum Status: Equatable {
     case inactive, waiting, live, stale, calibration, unavailable, denied, interrupted
 
@@ -76,14 +80,20 @@ final class HeadingController: ObservableObject {
 
   }
 
-  @Published private(set) var status: Status = .inactive
-  @Published private(set) var sample: CompassSample?
+  /// Set through `setStatus(_:)`, only when it changes, so a status that holds across readings
+  /// doesn't redraw the views that show it at the heading rate.
+  private(set) var status: Status = .inactive
+  /// The heading shown, which changes at the heading rate. Only the views that draw it read it;
+  /// the rest of the screen reads `hasSample`. Set through `setSample(_:)`.
+  private(set) var sample: CompassSample?
+  /// Whether there is a heading to show, which changes far less often than `sample`.
+  private(set) var hasSample = false
   private let sensor: any HeadingSensor
   private let now: () -> Date
-  private var smoother = CompassSmoother(fraction: 0.25)
-  private var active = false
-  private var reducedMotion = false
-  private var session: UUID?
+  @ObservationIgnored private var smoother = CompassSmoother(fraction: 0.25)
+  @ObservationIgnored private var active = false
+  @ObservationIgnored private var reducedMotion = false
+  @ObservationIgnored private var session: UUID?
   static let maximumAge: TimeInterval = 5
   /// In stepped mode the shown heading holds until the sensor moves at least this far, so a
   /// rotating dial steps between settled readings instead of drifting with every small sample.
@@ -107,10 +117,10 @@ final class HeadingController: ObservableObject {
     stop()
     active = true
     guard sensor.available else {
-      status = .unavailable
+      setStatus(.unavailable)
       return
     }
-    status = .waiting
+    setStatus(.waiting)
     sensor.start()
   }
 
@@ -120,7 +130,7 @@ final class HeadingController: ObservableObject {
     sensor.stop()
     if preservingLastReading {
       smoother?.reset()
-      if sample != nil || status == .waiting { status = .inactive }
+      if sample != nil || status == .waiting { setStatus(.inactive) }
     } else {
       clear(.inactive)
     }
@@ -174,13 +184,13 @@ final class HeadingController: ObservableObject {
       if reducedMotion {
         smoother?.reset()
         if let held = heldReading(for: reading) {
-          sample = held
-          status = .live
+          setSample(held)
+          setStatus(.live)
           return
         }
       }
-      sample = smoother?.update(reading, now: now(), maximumAge: Self.maximumAge)
-      status = sample == nil ? .interrupted : .live
+      setSample(smoother?.update(reading, now: now(), maximumAge: Self.maximumAge))
+      setStatus(sample == nil ? .interrupted : .live)
     }
   }
 
@@ -195,9 +205,18 @@ final class HeadingController: ObservableObject {
       accuracyDegrees: reading.accuracyDegrees, timestamp: reading.timestamp)
   }
 
+  private func setStatus(_ next: Status) {
+    if status != next { status = next }
+  }
+
+  private func setSample(_ next: CompassSample?) {
+    sample = next
+    if hasSample != (next != nil) { hasSample = next != nil }
+  }
+
   private func clear(_ next: Status) {
-    sample = nil
+    setSample(nil)
     smoother?.reset()
-    status = next
+    setStatus(next)
   }
 }

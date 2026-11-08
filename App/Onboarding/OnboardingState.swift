@@ -1,8 +1,9 @@
 import Foundation
+import Observation
 import TipKit
 
-@MainActor
-final class OnboardingState: ObservableObject {
+@MainActor @Observable
+final class OnboardingState {
   enum Step: Int, CaseIterable {
     case compass, liveActivity, shortcuts
   }
@@ -10,8 +11,8 @@ final class OnboardingState: ObservableObject {
   static let tourCompletedKey = "onboarding.tourCompleted"
   static let tipGenerationKey = "onboarding.liveActivityTipGeneration"
 
-  @Published private(set) var step: Step?
-  @Published private(set) var liveActivityTip: LiveActivityButtonTip
+  private(set) var step: Step?
+  private(set) var liveActivityTip: LiveActivityButtonTip
   private let defaults: UserDefaults
 
   init(defaults: UserDefaults = .standard) {

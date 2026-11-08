@@ -1,6 +1,6 @@
-import Combine
 import CompassCore
 import Foundation
+import Observation
 
 /// The drive's time and timers, so tests can set the time and run what has come due.
 @MainActor
@@ -43,8 +43,8 @@ final class SystemDriveClock: DriveClock {
   }
 }
 
-@MainActor
-final class DriveSessionController: ObservableObject {
+@MainActor @Observable
+final class DriveSessionController {
   enum SetupStatus {
     case ready, permissionRequired, denied, restricted, servicesDisabled, preciseLocationRequired,
       unavailable
@@ -74,6 +74,7 @@ final class DriveSessionController: ObservableObject {
     var liveActivity = LiveActivityStatus.starting
     var filter = TravelCourseFilter()
     var lastReading: TravelReading?
+    // Views don't observe these two, which only the intents read; a view needs a tracked one.
     /// Whether this drive has had a location reading, which shows location started.
     var hasReceivedReading = false
     /// Whether location reported that it can't run until the app is in use.
@@ -100,14 +101,14 @@ final class DriveSessionController: ObservableObject {
     }
   }
 
-  @Published private(set) var presentation = TravelPresentation(sample: nil, status: .unavailable)
-  @Published private var state = State.idle(liveActivityFailed: false)
-  @Published private(set) var setupStatus: SetupStatus = .ready
+  private(set) var presentation = TravelPresentation(sample: nil, status: .unavailable)
+  private var state = State.idle(liveActivityFailed: false)
+  private(set) var setupStatus: SetupStatus = .ready
   /// Whether Compasslet's CarPlay scene is connected, whether or not it's in front.
-  @Published private(set) var isCarPlayConnected = false
+  private(set) var isCarPlayConnected = false
   /// Whether the iPhone's audio goes to CarPlay, which shows that the car is connected even
   /// when Compasslet isn't open on CarPlay, as when a CarPlay automation starts the drive.
-  @Published private(set) var isCarAudioConnected = false
+  private(set) var isCarAudioConnected = false
 
   var isDriving: Bool { current != nil }
 
@@ -153,16 +154,16 @@ final class DriveSessionController: ObservableObject {
   private let clock: any DriveClock
   private let readCarAudioRoute: @MainActor () -> Bool
   private let holdBackgroundTime: @MainActor () -> @MainActor () -> Void
-  private var active = false
-  private var suppressed = false
+  @ObservationIgnored private var active = false
+  @ObservationIgnored private var suppressed = false
   /// Whether the location prompt was asked for while permission is undecided. It clears once a
   /// decision arrives, because permission can become undecided again, as after Allow Once.
-  private var requestedPermission = false
-  private var preparation: Task<Void, Never>?
+  @ObservationIgnored private var requestedPermission = false
+  @ObservationIgnored private var preparation: Task<Void, Never>?
   /// The end of the last drive's Live Activity, and the background time it releases after.
-  private var ending: Task<Void, Never>?
+  @ObservationIgnored private var ending: Task<Void, Never>?
   /// Waits in `needsForegroundStart` for the drive to change.
-  private var changeWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
+  @ObservationIgnored private var changeWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
 
   init(
     sensor: any TravelLocationSensor, activity: any CompassActivityPresenting,
@@ -435,21 +436,25 @@ final class DriveSessionController: ObservableObject {
 
   private func refreshSetupStatus() {
     if sensor.authorization != .notDetermined { requestedPermission = false }
+    let status: SetupStatus
     if !sensor.servicesEnabled {
-      setupStatus = .servicesDisabled
+      status = .servicesDisabled
     } else if !sensor.available {
-      setupStatus = .unavailable
+      status = .unavailable
     } else if sensor.authorization == .notDetermined {
-      setupStatus = .permissionRequired
+      status = .permissionRequired
     } else if sensor.authorization == .denied {
-      setupStatus = .denied
+      status = .denied
     } else if sensor.authorization == .restricted {
-      setupStatus = .restricted
+      status = .restricted
     } else if !sensor.fullAccuracy {
-      setupStatus = .preciseLocationRequired
+      status = .preciseLocationRequired
     } else {
-      setupStatus = .ready
+      status = .ready
     }
+    // It refreshes on every reading and beat, so set it only when it changes, or each one would
+    // redraw the views that show it.
+    if setupStatus != status { setupStatus = status }
   }
 
   private func receive(_ event: TravelSensorEvent, for session: DriveSession) {
@@ -496,8 +501,9 @@ final class DriveSessionController: ObservableObject {
   }
 
   private func setLiveActivity(_ status: LiveActivityStatus, for session: DriveSession) {
-    objectWillChange.send()
     session.liveActivity = status
+    // The session isn't observable, so setting the state again tells views the status changed.
+    if session === current { state = .driving(session) }
   }
 
   /// Sets the next beat an interval after now, so each gap is at least the interval and a late

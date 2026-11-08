@@ -273,7 +273,10 @@ reaches the card:
 
 `validity` and the queue's `generation` drop queued rewrites that a later clear, dismissal or
 end has overtaken. Appearance changes and stale-date renewals rewrite the last content with a new
-stale date without changing its sample time.
+stale date without changing its sample time. The controller follows the Live Activity's
+appearance through `Observations` on `AppearanceStore.preferences` (`appearanceObservation`),
+which delivers a change after the change itself, coalesces quick ones and skips values equal to
+the last one it applied.
 
 ## Background start intent
 
@@ -340,8 +343,10 @@ Connection alone doesn't start one. Disconnect is reached from either
 ## CarPlay update gate
 
 `CarPlayUpdateGate` (`CarPlayPresentation.swift:57`) shows a new bearing at most every 10
-seconds. Changes without a bearing (status text, drive ended) pass immediately, so a status can
-replace a bearing within the slot, and the next bearing then waits for the slot to end.
+seconds. Changes without a bearing (status text, drive ended) pass at the next render, so a
+status can replace a bearing within the slot, and the next bearing then waits for the slot to
+end. `CarPlaySceneDelegate.render` runs every 250 ms while the scene is connected, which is
+the only way drive changes reach the template, so one shows about 250 ms after it happens.
 
 ## Travel course filter
 
@@ -381,6 +386,11 @@ status while stopped, and the next start resets to `waiting`.
 
 Under Reduce Motion with the dial kept, readings within 4 degrees of the shown one keep the
 shown angle.
+
+`HeadingController.hasSample` (`Shared/HeadingController.swift`) is derived from `sample` and
+changes only when a reading appears or clears, and `status` is set only when it changes. The
+phone screen's layout reads those two, so only the dial, readout and accuracy views in
+`App/Heading/CompassView.swift`, which read `sample`, redraw at the heading rate.
 
 ## Phone location and city
 
