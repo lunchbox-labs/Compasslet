@@ -227,7 +227,7 @@ final class ScreenshotTests: XCTestCase {
           .environment(\.dynamicTypeSize, .accessibility5)
           .environment(\.legibilityWeight, .bold))
     },
-    // When the whole reading doesn't fit, the field If Both Don’t Fit keeps shows.
+    // When the whole reading doesn't fit, the field the When Only One Fits setting keeps shows.
     Screen(name: "live-activity-widest-reading-keeps-direction-largest-text") {
       AnyView(
         LiveActivityScreen(bearing: 315, shortReadout: .direction)
@@ -235,8 +235,18 @@ final class ScreenshotTests: XCTestCase {
           .environment(\.legibilityWeight, .bold))
     },
     Screen(name: "live-activity-status") { AnyView(LiveActivityScreen(status: .slow)) },
+    // The longest status, and the one that ends in an ellipsis.
     Screen(name: "live-activity-status-largest-text") {
-      AnyView(LiveActivityScreen(status: .slow).environment(\.dynamicTypeSize, .accessibility5))
+      AnyView(
+        LiveActivityScreen(status: .unavailable)
+          .environment(\.dynamicTypeSize, .accessibility5)
+          .environment(\.legibilityWeight, .bold))
+    },
+    Screen(name: "live-activity-finding-largest-text") {
+      AnyView(
+        LiveActivityScreen(status: .unreliable)
+          .environment(\.dynamicTypeSize, .accessibility5)
+          .environment(\.legibilityWeight, .bold))
     },
     Screen(name: "carplay-dial") { AnyView(CarPlayDialScreen()) },
   ]
@@ -802,7 +812,7 @@ private struct LiveActivityScreen: View {
   var bearing: Double = 47
   var shortReadout = ShortReadout.degrees
   /// Anything but `.usable` shows that status instead of a reading.
-  var status: CompassActivityAttributes.Status = .usable
+  var status: TravelStatus = .usable
 
   private var state: CompassActivityAttributes.ContentState {
     var appearance = AppearanceValues()

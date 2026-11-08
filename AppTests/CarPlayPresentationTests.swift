@@ -107,7 +107,7 @@ final class CarPlayPresentationTests: XCTestCase {
     let header = try XCTUnwrap(screen.template.listHeader)
     XCTAssertEqual(header.title, "Sampled 59° NE")
     XCTAssertEqual(
-      header.subtitle, "Travel · True North · \(now.formatted(date: .omitted, time: .standard))")
+      header.subtitle, now.formatted(date: .omitted, time: .standard))
     XCTAssertEqual(header.bodyVariants.map(\.string), ["Updates limited to once every 10 seconds"])
     XCTAssertTrue(header.actionButtons.isEmpty)
     XCTAssertTrue(screen.template.sections.isEmpty)
@@ -116,7 +116,7 @@ final class CarPlayPresentationTests: XCTestCase {
     XCTAssertEqual(screen.template.emptyViewSubtitleVariants, [""])
     screen.update(dialValue(59, at: now, now: now.addingTimeInterval(6)), traits: car)
     XCTAssertEqual(screen.template.listHeader?.title, "—")
-    XCTAssertEqual(screen.template.listHeader?.subtitle, "Travel · True North")
+    XCTAssertNil(screen.template.listHeader?.subtitle)
   }
 
   func testStyleChangeRedrawsTheCurrentContentWithoutANewValue() throws {
@@ -268,7 +268,6 @@ final class CarPlayPresentationTests: XCTestCase {
       presentation: .init(sample: sample, status: .usable),
       setup: .ready, driving: true, now: now)
     XCTAssertEqual(value.bearing, "0° N")
-    XCTAssertEqual(value.reference, "Travel · True North")
   }
 
   func testWrongSourceFutureTimeAndNonfiniteInputNeverExposeBearing() {
@@ -288,6 +287,23 @@ final class CarPlayPresentationTests: XCTestCase {
         presentation: .init(sample: sample, status: .usable),
         setup: .ready, driving: true, now: now)
       XCTAssertEqual(value.bearing, "—")
+    }
+  }
+
+  func testFutureDatedAndMagneticSamplesShowDirectionUnavailable() {
+    let now = Date(timeIntervalSince1970: 100)
+    for (reference, timestamp) in [
+      (NorthReference.trueNorth, now.addingTimeInterval(0.5)), (.magnetic, now),
+    ] {
+      let value = CarPlayPresentation(
+        presentation: .init(
+          sample: CompassSample(
+            degrees: 90, source: .vehicleCourse, reference: reference,
+            accuracyDegrees: 1, timestamp: timestamp), status: .usable),
+        setup: .ready, driving: true, now: now)
+      XCTAssertEqual(value.bearing, "—")
+      XCTAssertNil(value.courseDegrees)
+      XCTAssertEqual(value.status, "Direction unavailable")
     }
   }
 

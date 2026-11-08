@@ -6,7 +6,6 @@ struct CarPlayPresentation: Equatable {
   private(set) var courseDegrees: Double?
   private(set) var sampleTimestamp: Date?
   let status: String
-  let reference = "Travel · True North"
 
   init(
     presentation: TravelPresentation, setup: DriveSessionController.SetupStatus,
@@ -32,12 +31,7 @@ struct CarPlayPresentation: Equatable {
       case .unreliable: status = "Direction unreliable"
       case .unavailable: status = "Direction unavailable"
       case .usable:
-        if let sample = presentation.sample,
-          sample.source == .vehicleCourse, sample.reference == .trueNorth,
-          sample.angle.degrees.isFinite,
-          now.timeIntervalSince1970.isFinite,
-          (0...5).contains(now.timeIntervalSince(sample.timestamp))
-        {
+        if let sample = presentation.sample, sample.isCurrent(at: now) {
           courseDegrees = sample.angle.degrees
           sampleTimestamp = sample.timestamp
           let degrees = Int(sample.angle.degrees.rounded()) % 360

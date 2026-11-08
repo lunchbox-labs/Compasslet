@@ -5,15 +5,11 @@ import CompassCore
 struct CompassActivityAttributes: ActivityAttributes {
   struct ContentState: Codable, Hashable, Sendable {
     var bearing: Double?
-    var status: Status
+    var status: TravelStatus
     var sampleTime: Date?
     var expiry: Date?
     var debugUpdateTime: Date? = nil
     var appearance: AppearanceValues? = nil
-  }
-
-  enum Status: String, Codable, Hashable, Sendable {
-    case waiting, usable, slow, unreliable, unavailable
   }
 }
 
@@ -29,7 +25,11 @@ struct CompassActivityReading {
 
   let reading: Reading?
   /// The visible status line; a system-stale activity is unavailable whatever its payload says.
+  /// Each is kept about as short as "Start moving" so it fits the Live Activity at the largest
+  /// text sizes with Bold Text.
   let status: String
+  /// The status as VoiceOver speaks it, in full where the visible line is shortened.
+  let spokenStatus: String
   let appearance: AppearanceValues
 
   init(state: CompassActivityAttributes.ContentState, isStale: Bool) {
@@ -41,17 +41,19 @@ struct CompassActivityReading {
     } else {
       reading = nil
     }
-    if isStale {
-      status = "Travel unavailable"
-    } else {
-      status =
+    let (visible, spoken): (String, String) =
+      if isStale {
+        ("Travel unavailable", "Travel unavailable")
+      } else {
         switch state.status {
-        case .waiting: "Start moving"
-        case .usable, .unavailable: "Travel unavailable"
-        case .slow: "Move steadily to show travel"
-        case .unreliable: "Travel direction uncertain"
+        case .waiting: ("Start moving", "Start moving")
+        case .usable, .unavailable: ("Travel unavailable", "Travel unavailable")
+        case .slow: ("Keep moving", "Keep moving to show travel direction")
+        case .unreliable: ("Finding…", "Finding travel direction")
         }
-    }
+      }
+    status = visible
+    spokenStatus = spoken
   }
 
   /// The visible reading, honoring the appearance's field choices; a dash without a reading.
@@ -77,10 +79,21 @@ struct CompassActivityReading {
     }
   }
 
+  /// The one field the compact Dynamic Island has room for: the only one shown, or the one the
+  /// appearance keeps first when both are; a dash without a reading.
+  var compactBearing: String {
+    guard let reading else { return "—" }
+    guard appearance.showDirection && appearance.showDegrees else { return bearing }
+    return switch appearance.shortReadout {
+    case .degrees: reading.degrees
+    case .direction: reading.point.abbreviation
+    }
+  }
+
   /// The spoken description without the sample time, which a view appends in the user's format.
   var spokenDescription: String {
-    guard let reading else { return "\(status), travel direction, true north" }
+    guard let reading else { return spokenStatus }
     return
-      "\(reading.roundedDegrees) degrees, \(reading.point.name), last recorded travel direction, true north"
+      "\(reading.roundedDegrees) degrees, \(reading.point.name), last recorded travel direction"
   }
 }

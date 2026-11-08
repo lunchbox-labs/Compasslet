@@ -460,9 +460,41 @@ struct CompassActivityControllerTests {
     await controller.end().value
   }
 
+  /// ActivityKit keeps an activity's content as JSON, so an activity started before an update
+  /// must still decode after it. These literals are the encoding before the status moved to
+  /// CompassCore's `TravelStatus`.
+  @Test func contentStateJSONStaysTheSame() throws {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = .sortedKeys
+    func json(_ state: CompassActivityAttributes.ContentState) throws -> String {
+      String(decoding: try encoder.encode(state), as: UTF8.self)
+    }
+    func decoded(_ json: String) throws -> CompassActivityAttributes.ContentState {
+      try JSONDecoder().decode(CompassActivityAttributes.ContentState.self, from: Data(json.utf8))
+    }
+    let full = CompassActivityAttributes.ContentState(
+      bearing: 42.5, status: .usable, sampleTime: Date(timeIntervalSinceReferenceDate: 100),
+      expiry: Date(timeIntervalSinceReferenceDate: 400),
+      debugUpdateTime: Date(timeIntervalSinceReferenceDate: 300))
+    let fullJSON =
+      #"{"bearing":42.5,"debugUpdateTime":300,"expiry":400,"sampleTime":100,"status":"usable"}"#
+    #expect(try json(full) == fullJSON)
+    #expect(try decoded(fullJSON) == full)
+    let statuses: [(TravelStatus, String)] = [
+      (.waiting, #"{"status":"waiting"}"#), (.usable, #"{"status":"usable"}"#),
+      (.slow, #"{"status":"slow"}"#), (.unreliable, #"{"status":"unreliable"}"#),
+      (.unavailable, #"{"status":"unavailable"}"#),
+    ]
+    for (status, expected) in statuses {
+      let state = CompassActivityAttributes.ContentState(bearing: nil, status: status)
+      #expect(try json(state) == expected)
+      #expect(try decoded(expected) == state)
+    }
+  }
+
   @Test func activityReadingsSpeakOnlyShownReadingsAsRecordedTravel() {
     func presentation(
-      _ status: CompassActivityAttributes.Status, bearing: Double? = nil, isStale: Bool = false,
+      _ status: TravelStatus, bearing: Double? = nil, isStale: Bool = false,
       appearance: AppearanceValues? = nil
     ) -> CompassActivityReading {
       CompassActivityReading(
@@ -475,26 +507,37 @@ struct CompassActivityControllerTests {
     #expect(usable.bearing == "NE 45°")
     #expect(
       usable.spokenDescription
-        == "45 degrees, northeast, last recorded travel direction, true north")
+        == "45 degrees, northeast, last recorded travel direction")
     #expect(presentation(.usable, bearing: 359.6).bearing == "N 0°")
     // A stale payload, any non-usable status, or an out-of-range bearing is never spoken as a
-    // recorded travel direction; each falls back to its visible status line.
+    // recorded travel direction; each falls back to its spoken status.
     let withoutReading =
       [presentation(.usable, bearing: 45, isStale: true)]
-      + [CompassActivityAttributes.Status.waiting, .slow, .unreliable, .unavailable].map {
+      + [TravelStatus.waiting, .slow, .unreliable, .unavailable].map {
         presentation($0, bearing: 45)
       } + [Double.nan, .infinity, -1, 360].map { presentation(.usable, bearing: $0) }
     for value in withoutReading {
       #expect(value.reading == nil)
       #expect(value.bearing == "—")
       #expect(!value.spokenDescription.contains("last recorded"))
-      #expect(value.spokenDescription == "\(value.status), travel direction, true north")
+      #expect(value.spokenDescription == value.spokenStatus)
+      #expect(value.compactBearing == "—")
     }
     #expect(
       presentation(.usable, bearing: 45, isStale: true).status == presentation(.unavailable).status)
-    let statuses = [CompassActivityAttributes.Status.waiting, .slow, .unreliable, .unavailable]
+    let statuses = [TravelStatus.waiting, .slow, .unreliable, .unavailable]
       .map { presentation($0).status }
     #expect(Set(statuses).count == statuses.count)
+    let spoken = [TravelStatus.waiting, .slow, .unreliable, .unavailable]
+      .map { presentation($0).spokenStatus }
+    #expect(Set(spoken).count == spoken.count)
+    // A status that isn't shortened is spoken as it shows.
+    for value in [
+      presentation(.waiting), presentation(.unavailable),
+      presentation(.usable, bearing: 45, isStale: true),
+    ] {
+      #expect(value.spokenStatus == value.status)
+    }
     // Shorter forms are offered only when both fields are shown, and never without a reading.
     #expect(usable.bearingCandidates == ["NE 45°", "45°", "NE"])
     var keepsDirection = AppearanceValues()
@@ -504,6 +547,11 @@ struct CompassActivityControllerTests {
         == ["NE 45°", "NE", "45°"])
     #expect(presentation(.waiting).bearingCandidates.isEmpty)
     #expect(presentation(.waiting).status == "Start moving")
+    // The shortened statuses are spoken in full.
+    #expect(presentation(.slow).status == "Keep moving")
+    #expect(presentation(.slow).spokenDescription == "Keep moving to show travel direction")
+    #expect(presentation(.unreliable).status == "Finding…")
+    #expect(presentation(.unreliable).spokenDescription == "Finding travel direction")
     var degreesOnly = AppearanceValues()
     degreesOnly.showDirection = false
     let custom = presentation(.usable, bearing: 180, appearance: degreesOnly)
@@ -514,6 +562,30 @@ struct CompassActivityControllerTests {
     hidden.showDirection = false
     hidden.showDegrees = false
     #expect(presentation(.usable, bearing: 270, appearance: hidden).bearing == "W")
+  }
+
+  @Test func compactDynamicIslandShowsOneField() {
+    func compact(_ appearance: AppearanceValues?, bearing: Double? = 45) -> String {
+      CompassActivityReading(
+        state: .init(
+          bearing: bearing, status: bearing == nil ? .waiting : .usable, sampleTime: nil,
+          expiry: nil, appearance: appearance),
+        isStale: false
+      ).compactBearing
+    }
+    // With both fields shown, it keeps the one When Only One Fits picks, degrees by default.
+    #expect(compact(nil) == "45°")
+    var keepsDirection = AppearanceValues()
+    keepsDirection.shortReadout = .direction
+    #expect(compact(keepsDirection) == "NE")
+    // With one field shown, it shows that one whatever the setting says.
+    var directionOnly = AppearanceValues()
+    directionOnly.showDegrees = false
+    #expect(compact(directionOnly) == "NE")
+    var degreesOnly = keepsDirection
+    degreesOnly.showDirection = false
+    #expect(compact(degreesOnly) == "45°")
+    #expect(compact(nil, bearing: nil) == "—")
   }
 
   @Test func rejectedCourseClearsPreviouslyDeliveredActivityReading() async throws {

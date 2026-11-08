@@ -32,7 +32,6 @@ struct CompassView: View {
   /// Set when Settings asks for the tour, which starts once the sheet has gone.
   @State private var tourAfterSettings = false
   @State private var showingHeadingStatus = false
-  @State private var debugEnabled = false
   @State private var showingLiveActivityFailure = false
   /// The Live Activity button's frame in global coordinates, for the tour's spotlight.
   @State private var liveActivityButtonFrame: CGRect?
@@ -162,10 +161,6 @@ struct CompassView: View {
       compass.setReducedMotion(stepsHeading)
       async let heading: Void = compass.run(preservingLastReadingOnStop: true)
       async let phoneLocation: Void = location.run(preservingLastReadingOnStop: true)
-      while !Task.isCancelled {
-        debugEnabled = (try? CompassDiagnostics.shared?.isEnabled()) ?? false
-        do { try await Task.sleep(for: .seconds(1)) } catch { break }
-      }
       _ = await activation
       _ = await heading
       _ = await phoneLocation
@@ -358,7 +353,7 @@ struct CompassView: View {
       if let notice = locationNotice {
         Button(notice) { locationNoticeTapped() }.font(.subheadline).frame(minHeight: 44)
       }
-      if debugEnabled, details, compass.hasSample {
+      if details, compass.hasSample, CompassDiagnostics.shared?.isEnabled == true {
         HeadingSampleTime(compass: compass)
       }
     }

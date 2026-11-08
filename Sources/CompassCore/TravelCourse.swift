@@ -28,9 +28,31 @@ public struct TravelReading: Sendable, Equatable {
   }
 }
 
-/// Whether a vehicle travel direction can currently be presented.
-public enum TravelStatus: Sendable, Equatable {
+/// Whether a vehicle travel direction can currently be presented. Its raw values are the Live
+/// Activity's stored content, so changing a case name breaks activities started before an update.
+public enum TravelStatus: String, Codable, Hashable, Sendable {
   case waiting, usable, slow, unreliable, unavailable
+}
+
+extension CompassSample {
+  /// How long a travel sample stays a current bearing.
+  public static let travelLifetime: TimeInterval = 5
+
+  /// Whether this is a current travel bearing at `now`: the vehicle's course against true north,
+  /// a finite heading in 0..<360, taken no more than `travelLifetime` before `now`. A sample dated
+  /// after `now`, or a nonfinite `now`, is not current. Every surface that shows travel uses it.
+  public func isCurrent(at now: Date) -> Bool {
+    source == .vehicleCourse && reference == .trueNorth && angle.degrees.isFinite
+      && (0..<360).contains(angle.degrees)
+      && isFresh(now: now, maximumAge: Self.travelLifetime)
+  }
+
+  /// Whether this was a current travel bearing and is now more than `travelLifetime` old, unlike
+  /// a sample that was never one, or one dated after `now`, which isn't current but hasn't aged.
+  public func hasExpired(at now: Date) -> Bool {
+    isCurrent(at: timestamp) && now.timeIntervalSince1970.isFinite
+      && now.timeIntervalSince(timestamp) > Self.travelLifetime
+  }
 }
 
 /// A bearing is present only when the travel measurements are usable.
@@ -71,7 +93,9 @@ public struct TravelCourseFilter: Sendable {
       reading.timestamp.timeIntervalSince1970.isFinite
     else { return reject(.unavailable) }
     let age = now.timeIntervalSince(reading.timestamp)
-    guard age.isFinite, age >= 0, age <= 5 else { return reject(.unavailable) }
+    guard age.isFinite, age >= 0, age <= CompassSample.travelLifetime else {
+      return reject(.unavailable)
+    }
     guard reading.speedMetersPerSecond.isFinite, reading.speedMetersPerSecond >= 2,
       reading.speedAccuracyMetersPerSecond.isFinite, reading.speedAccuracyMetersPerSecond >= 0,
       reading.speedMetersPerSecond - reading.speedAccuracyMetersPerSecond >= 1
@@ -88,7 +112,7 @@ public struct TravelCourseFilter: Sendable {
     let sample = CompassSample(
       degrees: reading.courseDegrees, source: .vehicleCourse, reference: .trueNorth,
       accuracyDegrees: reading.courseAccuracyDegrees, timestamp: reading.timestamp)
-    let smoothed = smoother.update(sample, now: now, maximumAge: 5)
+    let smoothed = smoother.update(sample, now: now, maximumAge: CompassSample.travelLifetime)
     previousTimestamp = reading.timestamp
     return TravelPresentation(sample: smoothed, status: .usable)
   }

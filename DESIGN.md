@@ -84,10 +84,14 @@ These system-hosted surfaces have constraints beyond an ordinary iPhone screen.
   large text sizes, it shows the reading alone, and a status shrinks to fit rather than grow
   past the card.
 - CarPlay and the Apple Watch Smart Stack share the small card. At the largest text sizes its
-  reading may have room for only direction or degrees; the If Both Don’t Fit setting picks
-  which, and defaults to degrees. The Lock Screen and expanded Dynamic Island always fit both,
-  and the compact Dynamic Island shrinks its reading instead. The setting shows on the Global
-  and Live Activity appearance pages when the readout shows both.
+  reading may have room for only direction or degrees; the When Only One Fits setting picks
+  which, and defaults to degrees. The compact Dynamic Island always shows one field: the only
+  one shown, or the one this setting picks. The Lock Screen and expanded Dynamic Island always
+  fit both. The setting shows on the Global and Live Activity appearance pages when the readout
+  shows both.
+- Live Activity statuses stay about as short as "Start moving", so they fit every presentation
+  at the largest text sizes with Bold Text. A test checks each one on the Lock Screen and in
+  CarPlay at its smallest size. VoiceOver speaks a shortened status in full.
 
 ## Docs site
 
