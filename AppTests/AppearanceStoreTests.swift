@@ -513,40 +513,36 @@ struct AppearanceStoreTests {
   }
 
   @Test func phonePreviewRendersDialChoicesAndReducedMotionFallback() throws {
-    func render(_ value: AppearanceValues, reduceMotion: Bool = false) throws -> UIImage {
+    func render(_ value: AppearanceValues, reduceMotion: Bool = false) throws -> RenderedPixels {
       let renderer = ImageRenderer(
         content: AppearancePreview(surface: .phone, appearance: value, reduceMotion: reduceMotion)
           .frame(width: 280)
           .environment(\.dynamicTypeSize, .large)
           .environment(\.colorScheme, .light))
       renderer.scale = 1
-      return try #require(renderer.uiImage)
+      return try #require(renderer.renderedPixels)
     }
     let initial = AppearanceValues()
-    let original = try #require(render(initial).renderedPixels)
+    let original = try render(initial)
     var changed = initial
     changed.minorTicks = .none
-    #expect(try #require(render(changed).renderedPixels) != original)
+    #expect(try render(changed) != original)
     changed = initial
     changed.cardinalLabels = .hidden
-    #expect(try #require(render(changed).renderedPixels) != original)
+    #expect(try render(changed) != original)
     changed = initial
     changed.rotation = .arrow
-    #expect(try #require(render(changed).renderedPixels) != original)
+    #expect(try render(changed) != original)
     changed.showDirection = false
     changed.showDegrees = false
     let steady = try render(changed, reduceMotion: true)
     let restored = try render(changed.requiringReadout(), reduceMotion: true)
-    let steadyPixels = try #require(steady.renderedPixels)
-    let restoredPixels = try #require(restored.renderedPixels)
-    #expect(steadyPixels == restoredPixels)
+    #expect(steady == restored)
     changed.reducedMotionDial = .rotatingDial
     let dial = try render(changed, reduceMotion: true)
-    #expect(dial.size.height > steady.size.height)
+    #expect(dial.height > steady.height)
     // Keep the Dial is a static example, identical to the ordinary dial preview.
-    let staticPixels = try #require(render(changed).renderedPixels)
-    let dialPixels = try #require(dial.renderedPixels)
-    #expect(staticPixels == dialPixels)
+    #expect(try render(changed) == dial)
   }
 
   @Test func readoutSelectionPreservesHiddenLegacyValuesUntilExplicitChoice() throws {

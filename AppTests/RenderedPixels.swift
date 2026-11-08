@@ -1,32 +1,39 @@
 import SwiftUI
 import UIKit
 
-/// An image's pixels as 8-bit sRGB with premultiplied alpha, for tests that compare what two
-/// renders drew. Encoding an image as PNG can fail on a busy simulator and give nil, so tests
-/// compare these instead.
+/// Pixels as 8-bit sRGB with premultiplied alpha, for tests that compare what two renders drew.
 struct RenderedPixels: Equatable, CustomStringConvertible {
   let width: Int
   let height: Int
   let bytes: [UInt8]
 
-  init?(_ image: CGImage) {
-    guard let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
-    let bytesPerRow = image.width * 4
-    var bytes = [UInt8](repeating: 0, count: bytesPerRow * image.height)
+  /// Draws into a bitmap of the given size, or gives nil when the bitmap can't be made.
+  init?(width: Int, height: Int, draw: (CGContext) -> Void) {
+    guard width > 0, height > 0, let space = CGColorSpace(name: CGColorSpace.sRGB) else {
+      return nil
+    }
+    let bytesPerRow = width * 4
+    var bytes = [UInt8](repeating: 0, count: bytesPerRow * height)
     let drawn = bytes.withUnsafeMutableBytes { buffer -> Bool in
       guard
         let context = CGContext(
-          data: buffer.baseAddress, width: image.width, height: image.height,
-          bitsPerComponent: 8, bytesPerRow: bytesPerRow, space: space,
+          data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8,
+          bytesPerRow: bytesPerRow, space: space,
           bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
       else { return false }
-      context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+      draw(context)
       return true
     }
     guard drawn else { return nil }
-    width = image.width
-    height = image.height
+    self.width = width
+    self.height = height
     self.bytes = bytes
+  }
+
+  init?(_ image: CGImage) {
+    self.init(width: image.width, height: image.height) { context in
+      context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+    }
   }
 
   // A failed comparison shows the sizes, not every byte.
@@ -59,6 +66,21 @@ extension UIImage {
 
 @MainActor
 extension ImageRenderer {
-  /// The rendered pixels, or nil when the content could not be rendered.
-  var renderedPixels: RenderedPixels? { uiImage?.renderedPixels }
+  /// The content drawn straight into a bitmap at the renderer's scale, or nil when it has no size.
+  /// This doesn't read `cgImage` or `uiImage`: on a busy simulator their image provider can time
+  /// out and hand back an unfinished image, which fails to encode or compares as the wrong pixels.
+  var renderedPixels: RenderedPixels? {
+    var pixels: RenderedPixels?
+    let scale = self.scale
+    render(rasterizationScale: scale) { size, draw in
+      pixels = RenderedPixels(
+        width: Int((size.width * scale).rounded(.up)),
+        height: Int((size.height * scale).rounded(.up))
+      ) { context in
+        context.scaleBy(x: scale, y: scale)
+        draw(context)
+      }
+    }
+    return pixels
+  }
 }
