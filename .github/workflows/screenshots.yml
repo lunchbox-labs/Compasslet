@@ -44,9 +44,10 @@ jobs:
        contains(github.event.pull_request.labels.*.name, 'screenshots') &&
        (github.event.action != 'labeled' || github.event.label.name == 'screenshots'))
     runs-on: xcode-27
-    # A full run takes about 30 minutes on hosted runners, mostly simulator boots and captures;
-    # parts of screens that scroll add a few seconds each.
-    timeout-minutes: 75
+    # The accessibility set took about 42 minutes on hosted runners before screens were captured
+    # in parts, mostly simulator boots and captures. Up to nine parts per screen hasn't been timed
+    # yet, so this leaves room for those parts and for a slow runner.
+    timeout-minutes: 120
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
     steps:
