@@ -19,3 +19,16 @@ test('the run stops at the first failing iteration', () => {
   assert.match(run, /-test-iterations /);
   assert.match(run, /-run-tests-until-failure/);
 });
+
+test('each iteration relaunches the app, so no state carries over between them', () => {
+  const run = workflow.jobs.repeat.steps.find(step => step.run?.includes('scripts/test-ios')).run;
+  assert.match(run, /-test-repetition-relaunch-enabled YES/);
+});
+
+test('a failed run uploads its result bundle from the hidden .build folder', () => {
+  const upload = workflow.jobs.repeat.steps.find(step => step.uses?.startsWith('actions/upload-artifact@'));
+  assert.equal(upload.if, "failure() && steps.repeat.outcome == 'failure'");
+  assert.match(upload.with.path, /^\.build\//);
+  assert.equal(upload.with['include-hidden-files'], true);
+  assert.equal(upload.with['if-no-files-found'], 'error');
+});
