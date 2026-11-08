@@ -72,3 +72,50 @@ for (const eventName of ['push', 'pull_request_target']) {
     assert.equal(requestsCapture(eventName, pullRequest('synchronize', ['screenshots'])), false);
   });
 }
+
+// Fills in each ${{ }} of a workflow value, as Actions does for a concurrency setting.
+function render(value, github) {
+  return String(value).replace(/\$\{\{([\s\S]*?)\}\}/g, (_, expression) => {
+    const tree = new Parser(new Lexer(expression).lex().tokens, ['github'], []).parse();
+    const context = JSON.parse(JSON.stringify({ github }), data.reviver);
+    return String(new Evaluator(tree, context).evaluate().value);
+  });
+}
+
+let runs = 0;
+function capture(eventName, number) {
+  const github = {
+    event_name: eventName,
+    run_id: String(++runs),
+    event: eventName === 'pull_request' ? { pull_request: { number } } : {},
+  };
+  const { concurrency } = workflow.jobs.capture;
+  return {
+    group: render(concurrency.group, github),
+    cancels: render(concurrency['cancel-in-progress'], github) === 'true',
+  };
+}
+
+test('a newer capture for a pull request cancels its capture in progress', () => {
+  const older = capture('pull_request', 7);
+  const newer = capture('pull_request', 7);
+  assert.equal(newer.group, older.group);
+  assert.equal(newer.cancels, true);
+});
+
+test('captures for different pull requests never cancel each other', () => {
+  assert.notEqual(capture('pull_request', 7).group, capture('pull_request', 8).group);
+});
+
+test('manual captures never cancel or replace another run', () => {
+  const first = capture('workflow_dispatch');
+  assert.equal(first.cancels, false);
+  for (const other of [capture('workflow_dispatch'), capture('pull_request', 7), capture('pull_request', 1)]) {
+    assert.notEqual(first.group, other.group);
+  }
+});
+
+test('only a capture that runs can cancel one, so skipped runs leave captures alone', () => {
+  assert.equal(workflow.concurrency, undefined);
+  assert.ok(workflow.jobs.capture.concurrency);
+});
