@@ -4,8 +4,8 @@ See your direction on iPhone and while driving with CarPlay.
 
 - A phone compass that works while stationary, with dial and text displays.
 - A CarPlay app showing sampled travel direction.
-- A compact Live Activity that keeps your last travel direction and sample time
-  visible through stops, updating when a new valid reading arrives.
+- A compact Live Activity that shows your travel direction, and when it was recorded,
+  during a drive, keeping it visible through stops.
 - Support for VoiceOver, larger text and Reduce Motion.
 
 Requires iOS 27 or later. The phone compass points relative to magnetic north;
@@ -22,8 +22,8 @@ not required. Open Compasslet from the CarPlay launcher to start automatically.
 Connecting a cable alone may not launch the app.
 
 Switching to Maps keeps the drive running with the background location indicator.
-Disconnecting the CarPlay app scene, losing location access, or reaching the
-eight-hour limit ends collection. Dismissing the Live Activity removes the compact
-display without stopping the drive. Reopen the CarPlay app after leaving it to
-start a new drive.
+The drive ends a minute after CarPlay disconnects, when you end the Live Activity,
+when location access or Precise Location is turned off, or after eight hours.
+Dismissing the Live Activity ends the drive unless Compasslet is connected on CarPlay.
+Open Compasslet on CarPlay again to start a new drive.
 
