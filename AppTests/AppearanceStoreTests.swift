@@ -225,7 +225,7 @@ struct AppearanceStoreTests {
       appearance.lockScreenTimestamp = mode
       let state = CompassActivityAttributes.ContentState(
         bearing: 315, status: .usable, sampleTime: sample, expiry: nil, appearance: appearance)
-      // At its own height, as the system shows it.
+      // At its own height.
       let renderer = ImageRenderer(
         content: CompassActivityCard(state: state)
           .frame(width: width)
