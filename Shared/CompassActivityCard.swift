@@ -1,5 +1,6 @@
 import CompassCore
 import SwiftUI
+import UIKit
 
 /// The Live Activity on the Lock Screen and in CarPlay: the reading on one line, with Last Updated
 /// beneath it. The Lock Screen card shows the reading as large as fits and stays within the 84 to
@@ -9,9 +10,6 @@ struct CompassActivityCard: View {
   var isStale = false
   var isSmall = false
   @Environment(\.dynamicTypeSize) private var systemTextSize
-  /// The height of one caption line at the system text size, which the Lock Screen reading leaves
-  /// room for beneath it.
-  @ScaledMetric(relativeTo: .caption2) private var captionLineHeight: CGFloat = 13.5
 
   /// The Lock Screen card's space between its edges and its text.
   static let lockScreenInsets = EdgeInsets(top: 8, leading: 14, bottom: 8, trailing: 14)
@@ -155,6 +153,8 @@ struct CompassActivityCard: View {
     var lines = timestampMode == .hidden ? 0 : 1
     if state.debugUpdateTime != nil { lines += state.sampleTime == nil ? 1 : 2 }
     let insets = Self.lockScreenInsets.top + Self.lockScreenInsets.bottom
+    // One caption line at the system text size, which the reading leaves room for beneath it.
+    let captionLineHeight = systemTextSize.font(for: .caption2).lineHeight
     let captions = CGFloat(lines) * (captionLineHeight + 2)
     let height = LockScreenHeight.heights.upperBound - insets - captions
     return height / ActivityReading.lineHeight
@@ -204,7 +204,7 @@ struct ActivityReading: View {
   let presentation: CompassActivityReading
   let maximumSize: CGFloat
   var minimumSize: CGFloat = 34
-  @ScaledMetric(relativeTo: .largeTitle) private var textScale: CGFloat = 1
+  @Environment(\.dynamicTypeSize) private var textSize
 
   /// A line's height as a multiple of its font size, with a little margin over the system font's.
   static let lineHeight: CGFloat = 1.22
@@ -218,7 +218,8 @@ struct ActivityReading: View {
   }
 
   var body: some View {
-    let scale = min(textScale, 1)
+    let standard = DynamicTypeSize.large.font(for: .largeTitle).pointSize
+    let scale = min(textSize.font(for: .largeTitle).pointSize / standard, 1)
     ViewThatFits(in: .horizontal) {
       ForEach(Self.sizes(minimum: minimumSize, maximum: maximumSize), id: \.self) { size in
         // The widest reading, hidden and flat, sets the line's width at this size, so the size
@@ -253,6 +254,15 @@ extension CompassActivityReading {
   }
 
   static let widestPoint = CompassPoint.northwest
+}
+
+extension DynamicTypeSize {
+  /// The system font for a text style at this text size.
+  func font(for style: UIFont.TextStyle) -> UIFont {
+    UIFont.preferredFont(
+      forTextStyle: style,
+      compatibleWith: UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(self)))
+  }
 }
 
 extension View {
