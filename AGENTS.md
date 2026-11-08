@@ -101,6 +101,7 @@ Contrast and Reduce Transparency in the simulator, which the test confirms befor
 `ACCESSIBILITY_SET` in `scripts/screenshots` lists it. A named iPhone that iOS 27 supports but the
 Mac hasn't set up is created for the run and deleted afterwards. A simulator with more than one
 display, such as iPhone Duo, gets one image per display, ending in `-inner` for the largest and
-`-outer` for the smallest. Use these captures for mock-ups;
+`-outer` for the smallest. iPhone Duo boots folded and `simctl` can't open it, so the app shows
+on the outer display and the inner images are black. Use these captures for mock-ups;
 don't push other branches to produce them. Clients that can't download artifacts can set
 `log-images` and read the images from the job log.

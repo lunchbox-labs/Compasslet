@@ -5,7 +5,8 @@ capture     Build the app once, then run ScreenshotTests on each device and appe
             test shows one screen at a time and asks for a screenshot by writing a request
             file; this script answers with a full simulator screenshot and a done file. A
             simulator with more than one display, such as iPhone Duo, gets one image per
-            display, named inner for the largest and outer for the smallest.
+            display, named inner for the largest and outer for the smallest. iPhone Duo boots
+            folded, so its inner display shows nothing.
             --set accessibility captures the simulator part of the App Store accessibility
             evidence instead: fixed devices, text sizes, Bold Text, Increase Contrast,
             Reduce Transparency and Dark Mode, as listed in ACCESSIBILITY_SET.
