@@ -460,6 +460,38 @@ struct CompassActivityControllerTests {
     await controller.end().value
   }
 
+  /// ActivityKit keeps an activity's content as JSON, so an activity started before an update
+  /// must still decode after it. These literals are the encoding before the status moved to
+  /// CompassCore's `TravelStatus`.
+  @Test func contentStateJSONStaysTheSame() throws {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = .sortedKeys
+    func json(_ state: CompassActivityAttributes.ContentState) throws -> String {
+      String(decoding: try encoder.encode(state), as: UTF8.self)
+    }
+    func decoded(_ json: String) throws -> CompassActivityAttributes.ContentState {
+      try JSONDecoder().decode(CompassActivityAttributes.ContentState.self, from: Data(json.utf8))
+    }
+    let full = CompassActivityAttributes.ContentState(
+      bearing: 42.5, status: .usable, sampleTime: Date(timeIntervalSinceReferenceDate: 100),
+      expiry: Date(timeIntervalSinceReferenceDate: 400),
+      debugUpdateTime: Date(timeIntervalSinceReferenceDate: 300))
+    let fullJSON =
+      #"{"bearing":42.5,"debugUpdateTime":300,"expiry":400,"sampleTime":100,"status":"usable"}"#
+    #expect(try json(full) == fullJSON)
+    #expect(try decoded(fullJSON) == full)
+    let statuses: [(CompassActivityAttributes.Status, String)] = [
+      (.waiting, #"{"status":"waiting"}"#), (.usable, #"{"status":"usable"}"#),
+      (.slow, #"{"status":"slow"}"#), (.unreliable, #"{"status":"unreliable"}"#),
+      (.unavailable, #"{"status":"unavailable"}"#),
+    ]
+    for (status, expected) in statuses {
+      let state = CompassActivityAttributes.ContentState(bearing: nil, status: status)
+      #expect(try json(state) == expected)
+      #expect(try decoded(expected) == state)
+    }
+  }
+
   @Test func activityReadingsSpeakOnlyShownReadingsAsRecordedTravel() {
     func presentation(
       _ status: CompassActivityAttributes.Status, bearing: Double? = nil, isStale: Bool = false,
