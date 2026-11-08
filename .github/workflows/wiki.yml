@@ -4,12 +4,11 @@ on:
     branches: [main]
     paths:
       - "wiki/**"
-      - "scripts/sync-wiki"
       - ".github/workflows/wiki.yml"
   workflow_dispatch:
-permissions:
-  contents: read
+permissions: {}
 concurrency:
+  # Queued syncs collapse into the newest one; a running sync is never cancelled.
   group: wiki
   cancel-in-progress: false
 jobs:
@@ -19,22 +18,30 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      # The repository's own token can push to its wiki with contents write access.
+      # Lets the job token push to the wiki, which is its own Git repository.
       contents: write
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           # Always publish the newest main, so re-running an older run can't roll pages back.
           ref: main
+          sparse-checkout: wiki
           persist-credentials: false
-      - name: Make the wiki match the wiki folder
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: ${{ github.repository }}.wiki
+          path: .wiki
+      - name: Make the wiki match wiki/
         run: |
-          basic=$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)
-          echo "::add-mask::$basic"
-          export GIT_CONFIG_COUNT=1
-          export GIT_CONFIG_KEY_0="http.$GITHUB_SERVER_URL/.extraheader"
-          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $basic"
-          bash scripts/sync-wiki wiki "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.wiki.git" \
-            "$GITHUB_REPOSITORY@$(git rev-parse --short HEAD)"
+          rsync --archive --delete --exclude .git wiki/ .wiki/
+          sha=$(git rev-parse --short HEAD)
+          cd .wiki
+          git add --all
+          if git diff --cached --quiet; then
+            echo "The wiki already matches wiki/."
+            exit 0
+          fi
+          git -c user.name="github-actions[bot]" \
+            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit --quiet --message "Sync from $GITHUB_REPOSITORY@$sha"
+          git push --quiet origin HEAD
