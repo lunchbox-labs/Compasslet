@@ -25,16 +25,24 @@ final class DriveSessionController: ObservableObject {
 
   /// How long a drive keeps running without CarPlay before it ends.
   static let carPlayAbsenceLimit: TimeInterval = 60
+  /// How long a drive waits for a reading after location reports that the app isn't in use
+  /// before it ends, since the report can arrive while readings still flow.
+  static let notInUseLimit: TimeInterval = 5
 
   private let sensor: any TravelLocationSensor
   private let activity: any CompassActivityPresenting
   private let now: () -> Date
   private let automaticTick: Bool
   private let readCarAudioRoute: @MainActor () -> Bool
+  private let holdBackgroundTime: @MainActor () -> @MainActor () -> Void
   private var filter = TravelCourseFilter()
   private var lastReading: TravelReading?
   private var startedAt: Date?
   private var carPlayAbsentSince: Date?
+  /// When location reported that the app isn't in use with no reading since.
+  private var notInUseSince: Date?
+  /// Releases the background time held while waiting for a reading after that report.
+  private var releaseBackgroundTime: (@MainActor () -> Void)?
   private var generation = UUID()
   private var active = false
   private var suppressed = false
@@ -49,13 +57,15 @@ final class DriveSessionController: ObservableObject {
   init(
     sensor: any TravelLocationSensor, activity: any CompassActivityPresenting,
     now: @escaping () -> Date = Date.init, automaticTick: Bool = true,
-    carAudioRoute: @escaping @MainActor () -> Bool = { false }
+    carAudioRoute: @escaping @MainActor () -> Bool = { false },
+    backgroundTime: @escaping @MainActor () -> @MainActor () -> Void = { {} }
   ) {
     self.sensor = sensor
     self.activity = activity
     self.now = now
     self.automaticTick = automaticTick
     self.readCarAudioRoute = carAudioRoute
+    self.holdBackgroundTime = backgroundTime
     refreshSetupStatus()
     observeAuthorization()
   }
@@ -114,6 +124,8 @@ final class DriveSessionController: ObservableObject {
   func carPlayActivated() async {
     active = true
     carPlayConnected()
+    // In use on CarPlay, location runs again.
+    clearNotInUse()
     await prepare()
     refreshSetupStatus()
     guard active, !suppressed, !isDriving else { return }
@@ -257,6 +269,13 @@ final class DriveSessionController: ObservableObject {
       _ = stopDrive()
       return
     }
+    // Location stopped because the app isn't in use, so the drive can't show travel.
+    if !active, let notInUseSince,
+      !(0...Self.notInUseLimit).contains(now().timeIntervalSince(notInUseSince))
+    {
+      _ = stopDrive()
+      return
+    }
     try? CompassDiagnostics.shared?.observe(.activity, active: compactStatus == .active)
     if let lastReading,
       !(0...5).contains(now().timeIntervalSince(lastReading.timestamp))
@@ -324,11 +343,19 @@ final class DriveSessionController: ObservableObject {
       _ = stopDrive()
     case .notInUse:
       locationNeedsForeground = true
+      // Compasslet in use on CarPlay keeps location running.
+      if !active, notInUseSince == nil {
+        notInUseSince = now()
+        // A drive that lost location in the background could otherwise be suspended before
+        // it ends.
+        releaseBackgroundTime = holdBackgroundTime()
+      }
     case .interrupted:
       pendingActivityInvalidation = true
       lastReading = nil
       publish(filter.update(nil, now: now()))
     case .reading(let reading):
+      clearNotInUse()
       lastReading = reading
       hasReceivedReading = true
       publish(filter.update(reading, now: now()))
@@ -374,6 +401,7 @@ final class DriveSessionController: ObservableObject {
     drainGeneration = nil
     isDriving = false
     carPlayAbsentSince = nil
+    clearNotInUse()
     try? CompassDiagnostics.shared?.observe(.activity, active: false)
     ticker?.cancel()
     ticker = nil
@@ -390,6 +418,12 @@ final class DriveSessionController: ObservableObject {
       activity.onDismiss = nil
       await activity.end()
     }
+  }
+
+  private func clearNotInUse() {
+    notInUseSince = nil
+    releaseBackgroundTime?()
+    releaseBackgroundTime = nil
   }
 
   private func enqueue(_ operation: @escaping @MainActor () async -> Void) -> Task<Void, Never> {

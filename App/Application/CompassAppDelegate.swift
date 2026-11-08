@@ -12,13 +12,32 @@ final class CompassAppDelegate: NSObject, UIApplicationDelegate {
     }
     let drive = DriveSessionController(
       sensor: DeviceTravelLocationSensor(), activity: CompassActivityController(),
-      carAudioRoute: { CarAudioRouteMonitor.isConnected })
+      carAudioRoute: { CarAudioRouteMonitor.isConnected },
+      backgroundTime: { holdBackgroundTime() })
     carAudio = CarAudioRouteMonitor { [weak drive] connected in
       drive?.carAudioChanged(connected: connected)
     }
     return drive
   }()
   private static var carAudio: CarAudioRouteMonitor?
+
+  /// Asks iOS for time to finish work in the background, and returns what gives it back.
+  private static func holdBackgroundTime() -> @MainActor () -> Void {
+    let time = BackgroundTime()
+    time.identifier = UIApplication.shared.beginBackgroundTask(withName: "Drive") {
+      MainActor.assumeIsolated { time.end() }
+    }
+    return { time.end() }
+  }
+
+  @MainActor private final class BackgroundTime {
+    var identifier = UIBackgroundTaskIdentifier.invalid
+    func end() {
+      guard identifier != .invalid else { return }
+      UIApplication.shared.endBackgroundTask(identifier)
+      identifier = .invalid
+    }
+  }
 
   var drive: DriveSessionController { Self.sharedDrive }
 
