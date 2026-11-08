@@ -104,11 +104,6 @@ final class CompassDiagnostics: @unchecked Sendable {
           wall REAL NOT NULL, uptime REAL NOT NULL, elapsed REAL NOT NULL, session TEXT NOT NULL)
         """)
       try execute("CREATE INDEX IF NOT EXISTS events_surface ON events(surface, elapsed)")
-      try transaction {
-        try execute("DELETE FROM events WHERE surface='widget'")
-        try execute("DELETE FROM clocks WHERE surface='widget'")
-        try execute("DROP TABLE IF EXISTS widget_events")
-      }
     } catch {
       sqlite3_close(handle)
       throw error

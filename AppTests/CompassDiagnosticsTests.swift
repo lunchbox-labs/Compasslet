@@ -14,69 +14,6 @@ final class CompassDiagnosticsTests: XCTestCase {
     return try CompassDiagnostics(url: url)
   }
 
-  func testUpgradeDropsWidgetRecordsAndKeepsActivityDiagnostics() throws {
-    let store = try makeStore()
-    try store.setEnabled(true)
-    try store.observe(.activity, active: true, wall: 100, uptime: 100)
-    try store.record(.activity, kind: .updateCompleted, wall: 100, uptime: 100)
-    let retained = try store.snapshot().events
-    var database: OpaquePointer?
-    XCTAssertEqual(sqlite3_open(store.url.path, &database), SQLITE_OK)
-    defer { sqlite3_close(database) }
-    let legacy = """
-      CREATE TABLE widget_events (sequence INTEGER PRIMARY KEY, wall REAL, payload TEXT);
-      INSERT INTO widget_events VALUES (1, 100, '{}');
-      INSERT INTO events(surface,kind,wall,uptime,elapsed,session)
-        VALUES ('widget','reloadRequested',100,100,0,'legacy');
-      INSERT INTO clocks VALUES ('widget',0,100,100,'old','legacy',1);
-      """
-    XCTAssertEqual(sqlite3_exec(database, legacy, nil, nil, nil), SQLITE_OK)
-    let upgraded = try CompassDiagnostics(url: store.url)
-    XCTAssertTrue(try upgraded.isEnabled())
-    let snapshot = try upgraded.snapshot()
-    XCTAssertEqual(snapshot.events, retained)
-    XCTAssertTrue(snapshot.events.allSatisfy { $0.surface == .activity })
-    XCTAssertTrue(snapshot.events.contains { $0.kind == .updateCompleted })
-    let exported = try JSONDecoder().decode(
-      CompassDiagnostics.Snapshot.self, from: upgraded.exportJSON())
-    XCTAssertEqual(exported.events, retained)
-    XCTAssertEqual(Set(exported.surfaces.map(\.surface)), [.activity, .fullscreen])
-    // Export filtering is not enough: upgrading must delete the retired stored data too.
-    var query: OpaquePointer?
-    XCTAssertEqual(
-      sqlite3_prepare_v2(
-        database,
-        "SELECT COUNT(*) FROM sqlite_master WHERE name='widget_events'", -1, &query, nil), SQLITE_OK
-    )
-    defer { sqlite3_finalize(query) }
-    XCTAssertEqual(sqlite3_step(query), SQLITE_ROW)
-    XCTAssertEqual(sqlite3_column_int(query, 0), 0)
-    var legacyRows: OpaquePointer?
-    XCTAssertEqual(
-      sqlite3_prepare_v2(
-        database,
-        "SELECT (SELECT COUNT(*) FROM events WHERE surface='widget') + (SELECT COUNT(*) FROM clocks WHERE surface='widget')",
-        -1, &legacyRows, nil), SQLITE_OK)
-    defer { sqlite3_finalize(legacyRows) }
-    XCTAssertEqual(sqlite3_step(legacyRows), SQLITE_ROW)
-    XCTAssertEqual(sqlite3_column_int(legacyRows, 0), 0)
-    XCTAssertNoThrow(try CompassDiagnostics(url: store.url).exportJSON())
-  }
-
-  func testRetiredSampleCleanupPreservesOtherSharedDataAndIsRepeatable() throws {
-    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: root) }
-    let retired = root.appendingPathComponent("LatestCourse", isDirectory: true)
-    try FileManager.default.createDirectory(at: retired, withIntermediateDirectories: true)
-    try Data("old reading".utf8).write(to: retired.appendingPathComponent("latest.json"))
-    let retained = root.appendingPathComponent("preferences")
-    try Data("retained".utf8).write(to: retained)
-    try RetiredWidgetData.remove(from: root)
-    XCTAssertFalse(FileManager.default.fileExists(atPath: retired.path))
-    XCTAssertEqual(try String(contentsOf: retained, encoding: .utf8), "retained")
-    XCTAssertNoThrow(try RetiredWidgetData.remove(from: root))
-  }
-
   func testRetentionUsesSeparateActiveClocksAndDoesNotCountIdleGaps() throws {
     let store = try makeStore()
     try store.setEnabled(true)

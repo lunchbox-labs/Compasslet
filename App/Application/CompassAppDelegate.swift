@@ -5,11 +5,6 @@ import UIKit
 final class CompassAppDelegate: NSObject, UIApplicationDelegate {
   // One process-lifetime owner shared by the phone and all CarPlay callbacks.
   static let sharedDrive: DriveSessionController = {
-    if let directory = FileManager.default.containerURL(
-      forSecurityApplicationGroupIdentifier: AppearanceStore.suiteName)
-    {
-      try? RetiredWidgetData.remove(from: directory)
-    }
     let drive = DriveSessionController(
       sensor: DeviceTravelLocationSensor(), activity: CompassActivityController(),
       carAudioRoute: { CarAudioRouteMonitor.isConnected },
