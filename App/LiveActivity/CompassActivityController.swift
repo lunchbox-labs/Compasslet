@@ -202,11 +202,9 @@ final class CompassActivityController: CompassActivityPresenting {
   ) async {
     let date = now()
     var content = Self.content(presentation, now: date)
-    let expiredTravelSample =
-      presentation.sample.map {
-        $0.source == .vehicleCourse && $0.reference == .trueNorth
-          && date.timeIntervalSince1970.isFinite && date.timeIntervalSince($0.timestamp) > 5
-      } ?? false
+    // A bearing that aged out in the queue is passed over; any other sample that isn't current,
+    // such as one dated ahead of the clock, clears the reading.
+    let expiredTravelSample = presentation.sample?.hasExpired(at: date) ?? false
     if content.bearing == nil, retainingReading, retainedBearing != nil,
       (presentation.status != .usable || expiredTravelSample), presentation.status != .waiting
     {
@@ -331,20 +329,10 @@ final class CompassActivityController: CompassActivityPresenting {
   static func content(_ presentation: TravelPresentation, now: Date)
     -> CompassActivityAttributes.ContentState
   {
-    let status: CompassActivityAttributes.Status
-    switch presentation.status {
-    case .waiting: status = .waiting
-    case .usable: status = .usable
-    case .slow: status = .slow
-    case .unreliable: status = .unreliable
-    case .unavailable: status = .unavailable
+    let status = presentation.status
+    guard status == .usable, let sample = presentation.sample, sample.isCurrent(at: now) else {
+      return .init(bearing: nil, status: status == .usable ? .unavailable : status)
     }
-    guard status == .usable, let sample = presentation.sample,
-      sample.source == .vehicleCourse, sample.reference == .trueNorth,
-      sample.angle.degrees.isFinite, (0..<360).contains(sample.angle.degrees),
-      now.timeIntervalSince1970.isFinite, sample.timestamp.timeIntervalSince1970.isFinite,
-      (0...5).contains(now.timeIntervalSince(sample.timestamp))
-    else { return .init(bearing: nil, status: status == .usable ? .unavailable : status) }
     return .init(
       bearing: sample.angle.degrees, status: .usable, sampleTime: sample.timestamp,
       expiry: nil)

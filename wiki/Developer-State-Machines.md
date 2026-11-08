@@ -262,11 +262,15 @@ whenever more arrives during a write, and only while an activity shows. A succes
 drains what was handed over during the request. `CompassActivityController.write` decides what
 reaches the card:
 
-- a usable reading is written only when its rounded degrees or cardinal point change, and at
-  most once a second (`changedReadingInterval`);
-- while a reading is retained (`scheduledReading`), slow, unreliable, unavailable or expired
-  input leaves the card unchanged, so the last direction and its sample time stay visible
-  through stops;
+- a usable reading is written only when it is a current travel bearing
+  (`CompassSample.isCurrent(at:)` in `Sources/CompassCore/TravelCourse.swift`: the vehicle's
+  course against true north, a heading in 0..<360, and 0 to 5 s old), and only when its rounded
+  degrees or cardinal point change, at most once a second (`changedReadingInterval`). The
+  CarPlay screen (`CarPlayPresentation.init`) shows a bearing by the same rule;
+- while a reading is retained (`retainedBearing`), slow, unreliable or unavailable input, or a
+  bearing that aged past 5 s in the queue (`CompassSample.hasExpired(at:)`), leaves the card
+  unchanged, so the last direction and its sample time stay visible through stops. A usable
+  sample that was never current, such as one dated after the clock, clears it;
 - `invalidateReading()` after a location interruption clears the retained reading and shows
   unavailable;
 - `waiting` is always written.
