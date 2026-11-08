@@ -173,7 +173,7 @@ struct AppearanceStoreTests {
     struct Case {
       var textSize: DynamicTypeSize
       var appearance = AppearanceValues()
-      var status = CompassActivityAttributes.Status.usable
+      var status = TravelStatus.usable
       var stale = false
       var diagnostics = false
     }
@@ -181,7 +181,7 @@ struct AppearanceStoreTests {
     for textSize in [DynamicTypeSize.xSmall, .large, .accessibility5] {
       for mode in [ActivityTimestampMode.time, .elapsed, .hidden] {
         // "Move steadily to show travel" is the longest status.
-        for status in [CompassActivityAttributes.Status.usable, .slow] {
+        for status in [TravelStatus.usable, .slow] {
           for diagnostics in [false, true] {
             var appearance = AppearanceValues()
             appearance.lockScreenTimestamp = mode
@@ -197,14 +197,14 @@ struct AppearanceStoreTests {
     for (system, readout) in [
       (DynamicTypeSize.xSmall, ReadoutTextSize.accessibility5), (.accessibility5, .xSmall),
     ] {
-      for status in [CompassActivityAttributes.Status.usable, .slow] {
+      for status in [TravelStatus.usable, .slow] {
         var appearance = AppearanceValues()
         appearance.useSystemTextSize = false
         appearance.customTextSize = readout
         cases.append(Case(textSize: system, appearance: appearance, status: status))
       }
     }
-    for status in [CompassActivityAttributes.Status.waiting, .unreliable, .unavailable] {
+    for status in [TravelStatus.waiting, .unreliable, .unavailable] {
       cases.append(Case(textSize: .accessibility5, status: status))
     }
     cases.append(Case(textSize: .accessibility5, stale: true))
@@ -265,7 +265,7 @@ struct AppearanceStoreTests {
     for weight in [LegibilityWeight.regular, .bold] {
       for mode in [ActivityTimestampMode.time, .elapsed, .hidden] {
         for status in [
-          CompassActivityAttributes.Status.usable, .slow, .waiting, .unreliable, .unavailable,
+          TravelStatus.usable, .slow, .waiting, .unreliable, .unavailable,
         ] {
           var appearance = AppearanceValues()
           appearance.carPlayActivityTimestamp = mode

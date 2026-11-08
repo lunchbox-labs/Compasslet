@@ -159,4 +159,64 @@ struct TravelCourseTests {
       #expect(result.sample?.angle.degrees == 180)
     }
   }
+
+  private func travelSample(
+    degrees: Double = 90, source: CompassSource = .vehicleCourse,
+    reference: NorthReference = .trueNorth
+  ) -> CompassSample? {
+    CompassSample(
+      degrees: degrees, source: source, reference: reference, accuracyDegrees: 1, timestamp: time)
+  }
+
+  @Test func aTravelSampleIsCurrentForFiveSecondsFromItsTime() throws {
+    let sample = try #require(travelSample())
+    #expect(CompassSample.travelLifetime == 5)
+    #expect(sample.isCurrent(at: time))
+    #expect(sample.isCurrent(at: time.addingTimeInterval(5)))
+    #expect(!sample.isCurrent(at: time.addingTimeInterval(5.001)))
+    // A sample dated after the clock isn't current, as the drive's expiry treats it.
+    #expect(!sample.isCurrent(at: time.addingTimeInterval(-0.001)))
+  }
+
+  @Test func onlyACurrentBearingThatAgedPastFiveSecondsHasExpired() throws {
+    let sample = try #require(travelSample())
+    #expect(!sample.hasExpired(at: time))
+    #expect(!sample.hasExpired(at: time.addingTimeInterval(5)))
+    #expect(sample.hasExpired(at: time.addingTimeInterval(5.001)))
+    // Dated after the clock, it isn't current, but it hasn't aged either.
+    #expect(!sample.hasExpired(at: time.addingTimeInterval(-1)))
+    for now in [Double.nan, .infinity, -.infinity] {
+      #expect(!sample.hasExpired(at: Date(timeIntervalSince1970: now)))
+    }
+    let later = time.addingTimeInterval(10)
+    #expect(try !#require(travelSample(reference: .magnetic)).hasExpired(at: later))
+    #expect(try !#require(travelSample(source: .deviceHeading)).hasExpired(at: later))
+  }
+
+  @Test func onlyAFiniteClockMakesATravelSampleCurrent() throws {
+    let sample = try #require(travelSample())
+    for now in [Double.nan, .infinity, -.infinity] {
+      #expect(!sample.isCurrent(at: Date(timeIntervalSince1970: now)))
+    }
+  }
+
+  @Test func onlyTheVehicleCourseAgainstTrueNorthIsACurrentTravelBearing() throws {
+    #expect(try #require(travelSample()).isCurrent(at: time))
+    #expect(try !#require(travelSample(reference: .magnetic)).isCurrent(at: time))
+    #expect(try !#require(travelSample(source: .deviceHeading)).isCurrent(at: time))
+    #expect(
+      try !#require(travelSample(source: .deviceHeading, reference: .magnetic)).isCurrent(at: time))
+  }
+
+  @Test func headingsOutside0To360NeverReachTheRule() throws {
+    // A sample can't hold a heading outside 0..<360: 360 becomes north, and negative or
+    // nonfinite headings make no sample, so the rule's range check never rejects a real one.
+    let north = try #require(travelSample(degrees: 360))
+    #expect(north.angle.degrees == 0)
+    #expect(north.isCurrent(at: time))
+    #expect(try #require(travelSample(degrees: 359.999)).isCurrent(at: time))
+    for degrees in [-0.001, -90, .nan, .infinity, -.infinity, 360.001] {
+      #expect(travelSample(degrees: degrees) == nil)
+    }
+  }
 }

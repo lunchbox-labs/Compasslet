@@ -802,7 +802,7 @@ private struct LiveActivityScreen: View {
   var bearing: Double = 47
   var shortReadout = ShortReadout.degrees
   /// Anything but `.usable` shows that status instead of a reading.
-  var status: CompassActivityAttributes.Status = .usable
+  var status: TravelStatus = .usable
 
   private var state: CompassActivityAttributes.ContentState {
     var appearance = AppearanceValues()

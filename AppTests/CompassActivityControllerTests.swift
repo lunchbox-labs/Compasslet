@@ -480,7 +480,7 @@ struct CompassActivityControllerTests {
       #"{"bearing":42.5,"debugUpdateTime":300,"expiry":400,"sampleTime":100,"status":"usable"}"#
     #expect(try json(full) == fullJSON)
     #expect(try decoded(fullJSON) == full)
-    let statuses: [(CompassActivityAttributes.Status, String)] = [
+    let statuses: [(TravelStatus, String)] = [
       (.waiting, #"{"status":"waiting"}"#), (.usable, #"{"status":"usable"}"#),
       (.slow, #"{"status":"slow"}"#), (.unreliable, #"{"status":"unreliable"}"#),
       (.unavailable, #"{"status":"unavailable"}"#),
@@ -494,7 +494,7 @@ struct CompassActivityControllerTests {
 
   @Test func activityReadingsSpeakOnlyShownReadingsAsRecordedTravel() {
     func presentation(
-      _ status: CompassActivityAttributes.Status, bearing: Double? = nil, isStale: Bool = false,
+      _ status: TravelStatus, bearing: Double? = nil, isStale: Bool = false,
       appearance: AppearanceValues? = nil
     ) -> CompassActivityReading {
       CompassActivityReading(
@@ -513,7 +513,7 @@ struct CompassActivityControllerTests {
     // recorded travel direction; each falls back to its visible status line.
     let withoutReading =
       [presentation(.usable, bearing: 45, isStale: true)]
-      + [CompassActivityAttributes.Status.waiting, .slow, .unreliable, .unavailable].map {
+      + [TravelStatus.waiting, .slow, .unreliable, .unavailable].map {
         presentation($0, bearing: 45)
       } + [Double.nan, .infinity, -1, 360].map { presentation(.usable, bearing: $0) }
     for value in withoutReading {
@@ -524,7 +524,7 @@ struct CompassActivityControllerTests {
     }
     #expect(
       presentation(.usable, bearing: 45, isStale: true).status == presentation(.unavailable).status)
-    let statuses = [CompassActivityAttributes.Status.waiting, .slow, .unreliable, .unavailable]
+    let statuses = [TravelStatus.waiting, .slow, .unreliable, .unavailable]
       .map { presentation($0).status }
     #expect(Set(statuses).count == statuses.count)
     // Shorter forms are offered only when both fields are shown, and never without a reading.
