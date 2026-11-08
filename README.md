@@ -4,8 +4,8 @@ See your direction on iPhone and while driving with CarPlay.
 
 - A phone compass that works while stationary, with dial and text displays.
 - A CarPlay app showing sampled travel direction.
-- A compact Live Activity that shows your travel direction and sample time during a
-  drive, keeping it visible through stops until a new valid reading arrives.
+- A compact Live Activity that shows your travel direction, and when it was recorded,
+  during a drive, keeping it visible through stops.
 - Support for VoiceOver, larger text and Reduce Motion.
 
 Requires iOS 27 or later. The phone compass points relative to magnetic north;
