@@ -301,7 +301,10 @@ struct AppearanceStoreTests {
     var directionFirst = AppearanceValues()
     directionFirst.shortReadout = .direction
     for appearance in [AppearanceValues(), custom, directionFirst] {
-      for textSize in [DynamicTypeSize.xSmall, .large, .xxxLarge, .accessibility3, .accessibility5] {
+      let textSizes: [DynamicTypeSize] = [
+        .xSmall, .large, .xxxLarge, .accessibility3, .accessibility5,
+      ]
+      for textSize in textSizes {
         for weight in [LegibilityWeight.regular, .bold] {
           for showsTimestamp in [true, false] {
             let size = carPlayReadingHeight(
@@ -323,7 +326,8 @@ struct AppearanceStoreTests {
   @Test func carPlayReadingKeepsOneSizeForEveryDirection() {
     let bearings = Array(stride(from: 0.0, to: 360, by: 22.5)) + [7, 359]
     for textSize in [DynamicTypeSize.large, .accessibility5] {
-      let heights = Set(bearings.map { carPlayReadingHeight(bearing: $0, textSize: textSize).height })
+      let sizes = bearings.map { carPlayReadingHeight(bearing: $0, textSize: textSize) }
+      let heights = Set(sizes.map(\.height))
       #expect(heights.count == 1, "\(textSize): \(heights)")
     }
   }
