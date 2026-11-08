@@ -368,6 +368,7 @@ struct CompassActivityControllerTests {
     await controller.showAndWait(reading(300))
     #expect(system.handle.updates.map(\.bearing) == [300, 270, 300])
     // Readings handed over during one write leave only the newest.
+    system.handle.resumeUpdate = nil
     system.handle.suspendNextUpdate = true
     time = time.addingTimeInterval(1)
     controller.show(reading(10))
