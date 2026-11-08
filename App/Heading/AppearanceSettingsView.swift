@@ -86,9 +86,9 @@ struct AppearanceDetailView: View {
         Section {
           AppearanceReadoutControl(surface: surface, store: store)
           if surface != .phone, value.readoutMode == .both {
-            Picker("Shorter Readout", selection: binding(\.shortReadout)) {
-              Text("Degrees").tag(ShortReadout.degrees)
+            Picker("If Both Don’t Fit", selection: binding(\.shortReadout)) {
               Text("Direction").tag(ShortReadout.direction)
+              Text("Degrees").tag(ShortReadout.degrees)
             }
           }
         } header: {
@@ -98,7 +98,7 @@ struct AppearanceDetailView: View {
             Text("This saved appearance hides the readout. Choose a mode to show it.")
           } else if surface != .phone, value.readoutMode == .both {
             Text(
-              "Live Activities show only the shorter readout when direction and degrees don’t fit together."
+              "At the largest text sizes, CarPlay and Apple Watch may have room for only direction or degrees. If Both Don’t Fit picks which one shows."
             )
           }
         }
@@ -464,9 +464,9 @@ struct AppearancePreview: View {
         .accessibilityLabel(phoneAccessibilityDescription)
       }
       if surface == nil || surface == .activity {
-        // Only the Lock Screen card is shown. CarPlay's card has the same layout at a smaller
-        // size and follows the CarPlay Last Updated setting; the live-activity screenshot shows
-        // both.
+        // Only the Lock Screen card is shown. CarPlay's card fills its height with a larger
+        // reading and follows the CarPlay Last Updated setting; the live-activity screenshot
+        // shows both.
         LiveActivityExample(
           presentation: .lockScreen, state: activityState,
           title: surface == nil ? "Live Activity" : nil)
@@ -486,7 +486,7 @@ struct AppearancePreview: View {
 /// A Live Activity card in the shape the system gives it, following Apple's Live Activity
 /// specifications: the Lock Screen card fills the width it is given (on the Lock Screen, the
 /// screen less 22 points) and stays between 84 and 160 points tall, and the CarPlay card is 240 by
-/// 78 points, one of CarPlay Dashboard's sizes, growing taller rather than clip when the readout
+/// 78 points, one of CarPlay Dashboard's sizes, growing taller rather than clip when a status
 /// uses a larger text size.
 struct LiveActivityExample: View {
   enum Presentation {

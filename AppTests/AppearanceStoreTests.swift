@@ -273,8 +273,8 @@ struct AppearanceStoreTests {
   /// CarPlay Dashboard's Live Activity card inside its insets.
   private static let carPlayContent = CGSize(width: 224, height: 70)
 
-  /// The height of a CarPlay reading laid out for the card's content size.
-  private func carPlayReadingHeight(
+  /// The size of a CarPlay reading laid out for the card's content size.
+  private func carPlayReadingSize(
     bearing: Double = 315, appearance: AppearanceValues = AppearanceValues(),
     textSize: DynamicTypeSize = .large, weight: LegibilityWeight = .regular,
     showsTimestamp: Bool = true
@@ -307,7 +307,7 @@ struct AppearanceStoreTests {
       for textSize in textSizes {
         for weight in [LegibilityWeight.regular, .bold] {
           for showsTimestamp in [true, false] {
-            let size = carPlayReadingHeight(
+            let size = carPlayReadingSize(
               appearance: appearance, textSize: textSize, weight: weight,
               showsTimestamp: showsTimestamp)
             #expect(
@@ -320,13 +320,51 @@ struct AppearanceStoreTests {
     }
     // Most of the card's height goes to the reading: well over the title size it used to use,
     // which with its line came to about 40 points.
-    #expect(carPlayReadingHeight().height > 60)
+    #expect(carPlayReadingSize().height > 60)
+  }
+
+  @Test func carPlayReadingShowsItsLineOnlyWhenItFits() {
+    let height = Self.carPlayContent.height
+    let title2 = DynamicTypeSize.large.font(for: .title2).pointSize
+    let standard = CarPlayReading<EmptyView>.sizing(
+      height: height, readoutSize: .large, systemTextSize: .large, showsTimestamp: true)
+    #expect(standard.showsLine)
+    #expect(standard.maximum > title2 * 1.5, "\(standard)")
+    #expect(standard.minimum == title2)
+
+    let largest = CarPlayReading<EmptyView>.sizing(
+      height: height, readoutSize: .accessibility5, systemTextSize: .accessibility5,
+      showsTimestamp: true)
+    #expect(!largest.showsLine)
+    #expect(largest.minimum == DynamicTypeSize.accessibility5.font(for: .title2).pointSize)
+    #expect(largest.maximum == height / ActivityReading.lineHeight)
+
+    let hidden = CarPlayReading<EmptyView>.sizing(
+      height: height, readoutSize: .large, systemTextSize: .large, showsTimestamp: false)
+    #expect(!hidden.showsLine)
+    #expect(hidden.maximum == height / ActivityReading.lineHeight)
+
+    // A large custom readout size leaves no room for the line, whatever the system's size.
+    let custom = CarPlayReading<EmptyView>.sizing(
+      height: height, readoutSize: .accessibility5, systemTextSize: .xSmall,
+      showsTimestamp: true)
+    #expect(!custom.showsLine)
+  }
+
+  @Test func activityReadingAlwaysTriesItsMinimumSize() {
+    for minimum: CGFloat in [28, 34, 50, 51, 56] {
+      for maximum: CGFloat in [40, 57, 58, 96] {
+        let sizes = ActivityReading.sizes(minimum: minimum, maximum: maximum)
+        #expect(sizes.last == minimum, "\(minimum) \(maximum): \(sizes)")
+        #expect(sizes == sizes.sorted(by: >))
+      }
+    }
   }
 
   @Test func carPlayReadingKeepsOneSizeForEveryDirection() {
     let bearings = Array(stride(from: 0.0, to: 360, by: 22.5)) + [7, 359]
     for textSize in [DynamicTypeSize.large, .accessibility5] {
-      let sizes = bearings.map { carPlayReadingHeight(bearing: $0, textSize: textSize) }
+      let sizes = bearings.map { carPlayReadingSize(bearing: $0, textSize: textSize) }
       let heights = Set(sizes.map(\.height))
       #expect(heights.count == 1, "\(textSize): \(heights)")
     }

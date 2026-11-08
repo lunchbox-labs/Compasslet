@@ -215,8 +215,8 @@ struct CompassActivityCard: View {
 /// shrinks as the travel direction changes: the largest size, up to `maximumSize`, at which the
 /// widest reading the appearance's fields can show fits the line. A text size below the default
 /// makes it proportionally smaller; a larger one can't widen the line, so it keeps that size.
-/// On a line too narrow even for `minimumSize`, the reading drops to a shorter form (degrees,
-/// then direction) as before.
+/// On a line too narrow even for `minimumSize`, the reading drops to a shorter form, the field
+/// the appearance's If Both Don’t Fit setting keeps first.
 struct ActivityReading: View {
   let presentation: CompassActivityReading
   let maximumSize: CGFloat
@@ -233,7 +233,10 @@ struct ActivityReading: View {
   /// The sizes tried, largest first.
   static func sizes(minimum: CGFloat, maximum: CGFloat) -> [CGFloat] {
     let largest = max(minimum, min(maximum, largestSize).rounded(.down))
-    return Array(stride(from: largest, through: minimum, by: -sizeStep))
+    var sizes = Array(stride(from: largest, through: minimum, by: -sizeStep))
+    // The step can pass over the minimum; it's always tried before the shorter form.
+    if sizes.last != minimum { sizes.append(minimum) }
+    return sizes
   }
 
   var body: some View {
@@ -275,22 +278,41 @@ struct CarPlayReading<Line: View>: View {
   @ViewBuilder let line: Line
   @Environment(\.dynamicTypeSize) private var systemTextSize
 
-  var body: some View {
-    let readoutSize = presentation.appearance.readoutTextSize(system: systemTextSize)
+  /// The reading's size range, and whether its line fits beneath it.
+  struct Sizing: Equatable {
+    var maximum: CGFloat
+    var minimum: CGFloat
+    var showsLine: Bool
+  }
+
+  static func sizing(
+    height: CGFloat, readoutSize: DynamicTypeSize, systemTextSize: DynamicTypeSize,
+    showsTimestamp: Bool
+  ) -> Sizing {
     let minimum = max(
       DynamicTypeSize.large.font(for: .title2).pointSize,
       readoutSize.font(for: .title2).pointSize)
     let lineHeight = showsTimestamp ? systemTextSize.font(for: .caption2).lineHeight + 2 : 0
-    let withLine = (size.height - lineHeight) / ActivityReading.lineHeight
+    let withLine = (height - lineHeight) / ActivityReading.lineHeight
     let showsLine = showsTimestamp && withLine >= minimum
+    return Sizing(
+      maximum: showsLine ? withLine : height / ActivityReading.lineHeight, minimum: minimum,
+      showsLine: showsLine)
+  }
+
+  var body: some View {
+    let readoutSize = presentation.appearance.readoutTextSize(system: systemTextSize)
+    let sizing = Self.sizing(
+      height: size.height, readoutSize: readoutSize, systemTextSize: systemTextSize,
+      showsTimestamp: showsTimestamp)
     VStack(spacing: 2) {
       ActivityReading(
         presentation: presentation,
-        maximumSize: showsLine ? withLine : size.height / ActivityReading.lineHeight,
-        minimumSize: minimum
+        maximumSize: sizing.maximum,
+        minimumSize: sizing.minimum
       )
       .dynamicTypeSize(readoutSize)
-      if showsLine {
+      if sizing.showsLine {
         line
       }
     }
