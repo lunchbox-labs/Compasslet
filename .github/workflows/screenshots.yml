@@ -43,8 +43,8 @@ jobs:
       (github.event_name == 'pull_request' &&
        contains(github.event.pull_request.labels.*.name, 'screenshots') &&
        (github.event.action != 'labeled' || github.event.label.name == 'screenshots'))
-    # A newer push to a labeled pull request cancels that pull request's older capture, since only
-    # its newest head needs screenshots. Manual runs each get a group of their own and never cancel
+    # A newer capture request for a labeled pull request (a push, a reopen or re-adding the label)
+    # cancels that pull request's older capture, since only its newest head needs screenshots. Manual runs each get a group of their own and never cancel
     # or replace another run. This is on the job, not the workflow, so a run whose capture is
     # skipped, such as one for an unrelated label, can't cancel a capture in progress.
     concurrency:

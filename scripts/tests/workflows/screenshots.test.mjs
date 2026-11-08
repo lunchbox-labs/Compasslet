@@ -115,7 +115,7 @@ test('manual captures never cancel or replace another run', () => {
   }
 });
 
-test('only a capture that runs can cancel one, so skipped runs leave captures alone', () => {
+test('concurrency is on the capture job, not the workflow, so skipped runs never enter the group', () => {
   assert.equal(workflow.concurrency, undefined);
   assert.ok(workflow.jobs.capture.concurrency);
 });
