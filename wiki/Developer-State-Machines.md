@@ -346,7 +346,7 @@ Connection alone doesn't start one. Disconnect is reached from either
 seconds. Changes without a bearing (status text, drive ended) pass at the next render, so a
 status can replace a bearing within the slot, and the next bearing then waits for the slot to
 end. `CarPlaySceneDelegate.render` runs every 250 ms while the scene is connected, which is
-the only way drive changes reach the template, so one shows at most 250 ms after it happens.
+the only way drive changes reach the template, so one shows about 250 ms after it happens.
 
 ## Travel course filter
 
@@ -386,6 +386,11 @@ status while stopped, and the next start resets to `waiting`.
 
 Under Reduce Motion with the dial kept, readings within 4 degrees of the shown one keep the
 shown angle.
+
+`HeadingController.hasSample` (`Shared/HeadingController.swift`) is derived from `sample` and
+changes only when a reading appears or clears, and `status` is set only when it changes. The
+phone screen's layout reads those two, so only the dial, readout and accuracy views in
+`App/Heading/CompassView.swift`, which read `sample`, redraw at the heading rate.
 
 ## Phone location and city
 

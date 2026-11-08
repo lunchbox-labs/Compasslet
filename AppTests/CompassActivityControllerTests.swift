@@ -110,6 +110,28 @@ struct CompassActivityControllerTests {
     await controller.end().value
   }
 
+  @Test func aDroppedControllerStopsFollowingTheAppearance() async throws {
+    let name = "activity-appearance-lifetime-tests-\(UUID())"
+    let defaults = try #require(UserDefaults(suiteName: name))
+    defer { defaults.removePersistentDomain(forName: name) }
+    let store = AppearanceStore(defaults: defaults)
+    let system = TestActivitySystem()
+    weak var dropped: CompassActivityController?
+    do {
+      let controller = CompassActivityController(system: system, appearanceStore: store)
+      dropped = controller
+      try await controller.start()
+    }
+    // The observation holds the controller weakly, so it goes once nothing else holds it.
+    try await Task.sleep(for: .milliseconds(50))
+    #expect(dropped == nil)
+    var values = AppearanceValues()
+    values.showDegrees = false
+    store.update { $0.setOverride(values, for: .activity) }
+    try await Task.sleep(for: .milliseconds(200))
+    #expect(system.handle.updates.isEmpty)
+  }
+
   @Test func queuedAppearanceCannotRepublishAfterSensorInvalidation() async throws {
     let system = TestActivitySystem()
     let time = Date(timeIntervalSince1970: 100)

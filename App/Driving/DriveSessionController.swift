@@ -74,6 +74,7 @@ final class DriveSessionController {
     var liveActivity = LiveActivityStatus.starting
     var filter = TravelCourseFilter()
     var lastReading: TravelReading?
+    // Views don't observe these two, which only the intents read; a view needs a tracked one.
     /// Whether this drive has had a location reading, which shows location started.
     var hasReceivedReading = false
     /// Whether location reported that it can't run until the app is in use.

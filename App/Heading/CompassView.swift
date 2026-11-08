@@ -43,12 +43,12 @@ struct CompassView: View {
 
   init(
     drive: DriveSessionController,
-    onboarding: @autoclosure @escaping () -> OnboardingState = OnboardingState(),
+    onboarding: OnboardingState = OnboardingState(),
     // Only the screenshots open the screen with Settings already presented.
     showingSettings: Bool = false
   ) {
     self.drive = drive
-    _onboarding = State(initialValue: onboarding())
+    _onboarding = State(initialValue: onboarding)
     _showingSettings = State(initialValue: showingSettings)
     _settingsOnScreen = State(initialValue: showingSettings)
   }

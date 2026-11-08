@@ -22,14 +22,15 @@ protocol PhoneLocationSensor: AnyObject {
 final class DevicePhoneLocationSensor: NSObject, PhoneLocationSensor,
   @preconcurrency CLLocationManagerDelegate
 {
-  private let authorizationManager = CLLocationManager()
+  /// Made on first use, when the controller starts and reads authorization, so a sensor that
+  /// never starts, such as one a view builds and discards, allocates no manager.
+  private lazy var authorizationManager: CLLocationManager = {
+    let manager = CLLocationManager()
+    manager.delegate = self
+    return manager
+  }()
   private var manager: CLLocationManager?
   var receive: ((PhoneLocationEvent) -> Void)?
-
-  override init() {
-    super.init()
-    authorizationManager.delegate = self
-  }
 
   var authorized: Bool {
     [.authorizedWhenInUse, .authorizedAlways].contains(authorizationManager.authorizationStatus)

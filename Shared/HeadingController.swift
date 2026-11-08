@@ -23,18 +23,22 @@ protocol HeadingSensor: AnyObject {
 @MainActor
 final class DeviceHeadingSensor: NSObject, HeadingSensor, @preconcurrency CLLocationManagerDelegate
 {
-  private let manager = CLLocationManager()
+  /// Made on the first start, so a sensor that never starts, such as one a view builds and
+  /// discards, allocates no manager.
+  private var manager: CLLocationManager?
   var receive: ((HeadingEvent) -> Void)?
   var available: Bool { CLLocationManager.headingAvailable() }
 
-  override init() {
-    super.init()
-    manager.delegate = self
-    manager.headingFilter = 1
+  func start() {
+    if manager == nil {
+      let manager = CLLocationManager()
+      manager.delegate = self
+      manager.headingFilter = 1
+      self.manager = manager
+    }
+    manager?.startUpdatingHeading()
   }
-
-  func start() { manager.startUpdatingHeading() }
-  func stop() { manager.stopUpdatingHeading() }
+  func stop() { manager?.stopUpdatingHeading() }
 
   func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
     receive?(
