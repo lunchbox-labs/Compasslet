@@ -4,18 +4,22 @@ Compasslet has no explicit state machine type. Its behaviour comes from flags, e
 optionals, tasks and timers spread across a few controllers. This page maps each of those
 implicit machines from the code on `main`, so changes can be checked against every state and
 transition they touch. File and line references are to commit
-[`fdaa22e`](https://github.com/lunchbox-labs/compasslet/tree/fdaa22e); search for the named
+[`e9cc6ee`](https://github.com/lunchbox-labs/compasslet/tree/e9cc6ee); search for the named
 symbol if lines have moved. [Development](Developer-Development#reading-policies) gives the
 reading policies these machines enforce.
 
-Known failure states are listed under each machine and tracked as issues:
+Open failure states are listed here and under their machine, each tracked as an issue. None
+are open; the three found while mapping these machines are fixed:
 
-- [#247](https://github.com/lunchbox-labs/compasslet/issues/247):
-  the location prompt is never shown again in the same process.
-- [#248](https://github.com/lunchbox-labs/compasslet/issues/248):
-  a Live Activity outlives a terminated process.
-- [#249](https://github.com/lunchbox-labs/compasslet/issues/249):
-  a background start that loses location after its start window may keep running.
+- [#247](https://github.com/lunchbox-labs/compasslet/issues/247), fixed by
+  [#250](https://github.com/lunchbox-labs/compasslet/pull/250):
+  the location prompt was never shown again in the same process.
+- [#248](https://github.com/lunchbox-labs/compasslet/issues/248), fixed by
+  [#251](https://github.com/lunchbox-labs/compasslet/pull/251):
+  a Live Activity outlived a terminated process.
+- [#249](https://github.com/lunchbox-labs/compasslet/issues/249), fixed by
+  [#252](https://github.com/lunchbox-labs/compasslet/pull/252):
+  a background start that lost location after its start window could keep running.
 
 ## Overview
 
@@ -44,7 +48,7 @@ active.
 
 ## Location eligibility
 
-`DriveSessionController.refreshSetupStatus()` (`App/Driving/DriveSessionController.swift:298`)
+`DriveSessionController.refreshSetupStatus()` (`App/Driving/DriveSessionController.swift:336`)
 derives `setupStatus` from Core Location on every call, checked in this order:
 
 ```mermaid
@@ -61,33 +65,36 @@ stateDiagram-v2
 
 It is refreshed at creation, on phone activation, after the permission request, on CarPlay
 activation, on a manual start, on each drive tick, on each sensor event, and on
-`authorizationChanged` while no drive runs (`observeAuthorization`, line 292). Any state other than `ready` ends a running drive (lines 81, 250 and 319).
-`beginDrive` sets `unavailable` directly when the sensor refuses to start (line 160) and clears
+`authorizationChanged` while no drive runs (`observeAuthorization`, line 330). Any state other
+than `ready` ends a running drive (lines 94, 275 and 358).
+`beginDrive` sets `unavailable` directly when the sensor refuses to start (line 185) and clears
 the sensor callback without restoring the authorization observer. The next refresh replaces
 the status. This can't happen in practice, because the sensor checks the same conditions the
 refresh checked just before.
 
 ## Location permission request
 
-The When In Use prompt is requested at most once per process (`requestPhoneAuthorization`,
-line 89): only in the foreground, only while `setupStatus == .permissionRequired` and the
-status is `notDetermined`, and never while the welcome tour is showing (`CompassView.swift:163`
-and `:186`).
+The When In Use prompt is asked for only while `setupStatus == .permissionRequired` and the
+status is `notDetermined` (`askForLocationPermission`, line 111). `requestedPermission` records
+that it was asked for in the current undecided period, and every refresh clears it once the
+status is decided (line 337), so a later return to `notDetermined` (an Allow Once grant ending,
+or the user choosing Ask Next Time in Settings) can ask again.
+
+Phone activation asks through `requestPhoneAuthorization` (line 104): only in the foreground,
+never while the welcome tour is showing (`CompassView.swift:164` and `:186`), and not when it
+already asked in this period, so the inactive and active phases the prompt itself causes don't
+ask twice. Enable Location, on the main screen's location notice or in the Settings sheet, asks
+directly, even after a prompt that closed without an answer.
 
 ```mermaid
 stateDiagram-v2
     direction LR
     [*] --> NotAsked
-    NotAsked --> Asked: foreground, not touring, notDetermined
-    Asked --> Asked: every later activation (guard fails)
+    NotAsked --> Asked: foreground activation or tour ends, notDetermined
+    NotAsked --> Asked: Enable Location
+    Asked --> Asked: Enable Location (activations don't ask again)
+    Asked --> NotAsked: permission decided
 ```
-
-**Failure state:**
-[#247](https://github.com/lunchbox-labs/compasslet/issues/247).
-`Asked` has no way back. When the status returns to `notDetermined` in the same process (an
-Allow Once grant expiring, or the user choosing Ask Next Time in Settings), the prompt is never
-shown again, and the in-app Settings sheet offers no action for `permissionRequired`
-(`CompassSettingsView.swift:65`). Only a relaunch recovers.
 
 ## Drive session
 
@@ -113,40 +120,46 @@ statuses in any order:
 | `usable` | Valid course, speed and accuracy |
 | `slow` | Speed under 2 m/s, invalid speed accuracy, or speed minus its accuracy under 1 m/s |
 | `unreliable` | Invalid course, course accuracy over 30°, or horizontal accuracy over 50 m |
-| `unavailable` | Missing, old or future reading; the last reading over 5 s old (tick, line 261); or a location interruption |
+| `unavailable` | Missing, old or future reading; the last reading over 5 s old (tick, line 296); or a location interruption |
 
-Entry (`beginDrive`, line 153) starts a new location manager and background activity session,
+Entry (`beginDrive`, line 178) starts a new location manager and background activity session,
 reads the car audio route, resets the filter, sets the presentation to `waiting`, starts the
 250 ms ticker and starts the Live Activity.
 
-`stopDrive` (line 367) runs on any of:
+`stopDrive` (line 415) runs on any of:
 
 - setup leaving `ready`, from a refresh, a sensor event or `authorizationLost`;
-- eight hours since `startedAt`, or a clock that moved backwards (line 250);
-- the car absence limit (line 254, see below);
+- eight hours since `startedAt`, or a clock that moved backwards (line 275);
+- the car absence limit (line 279, see below);
+- location reporting `notInUse` while Compasslet isn't active on CarPlay, with no newer
+  reading within 15 s (`notInUseLimit`, line 286; see
+  [Background start intent](#background-start-intent));
 - an explicit end from the phone button, the End intent or the Start intent's foreground
-  retry (`endDrive`, line 232);
+  retry (`endDrive`, line 257);
 - a Live Activity dismissal or failed start while Compasslet's CarPlay scene isn't connected
-  (lines 186 and 208).
+  (lines 212 and 234).
 
 It bumps `generation`, cancels the ticker, stops the sensor, restores the authorization
-observer, clears every reading and queues `activity.end()`.
+observer, clears every reading and the not-in-use wait, and queues `activity.end()`. Background
+time held for that wait is released only after the activity has ended.
 
-`suppressed` (line 40) is set when a drive is ended while the CarPlay scene is active, so the
+`suppressed` (line 49) is set when a drive is ended while the CarPlay scene is active, so the
 same activation doesn't restart it. It clears when the scene resigns or disconnects. Whenever
 setup is `ready` and no drive runs, CarPlay shows "Drive ended. Reopen Compasslet on CarPlay to
 start." (`CarPlayPresentation.swift:27`), whether the drive was ended, suppressed or never
 started. A new drive starts on the next scene activation, the phone's Live Activity button or
 the Start intent; permission returning alone never starts one.
 
-The ticker is an in-process `Task.sleep` loop, so the eight-hour limit, the absence limit and
-the five-second reading expiry only advance while the process is running.
+The ticker is an in-process `Task.sleep` loop, so the eight-hour limit, the absence limit, the
+not-in-use limit and the five-second reading expiry only advance while the process is running.
+Each tick also lets an active Live Activity renew its stale date once it has gone 60 s without
+a write (line 295).
 
 ## Car presence and the absence limit
 
 Two signals show the car: Compasslet's CarPlay scene (`isCarPlayConnected`) and the iPhone
 audio route going to CarPlay (`isCarAudioConnected`, from `CarAudioRouteMonitor` and polled on
-every tick at line 246). A drive started from a CarPlay automation may only ever see the audio
+every tick at line 271). A drive started from a CarPlay automation may only ever see the audio
 route.
 
 ```mermaid
@@ -165,7 +178,7 @@ stateDiagram-v2
 
 The drive's view of its Live Activity is `compactStatus` (line 15). `CompassActivityController`
 holds the system activity's `handle`, a `starting` flag and its own `generation`. All activity
-operations run in order on one queue (`enqueue`, line 395), so a start always follows the
+operations run in order on one queue (`enqueue`, line 454), so a start always follows the
 survivor cleanup and an end always follows queued updates.
 
 ```mermaid
@@ -184,20 +197,23 @@ stateDiagram-v2
     unavailable --> inactive: next phone activation while idle, if Live Activities are allowed
 ```
 
-Activities left from an earlier process are ended by `prepare()` (line 69), once per process,
+Activities left from an earlier process are ended by `prepare()` (line 82), once per process,
 before the first drive, phone activation or intent. `end()` also ends every surviving activity
-(`CompassActivityController.swift:200`).
+(`CompassActivityController.swift:239`). The End intent reports a surviving activity as ended,
+not as not running (`hasLiveActivity`, line 307).
 
-**Failure state:**
-[#248](https://github.com/lunchbox-labs/compasslet/issues/248). When the
-process is terminated during a drive (force quit, crash or memory pressure), the activity stays
-in `active` on the system side with nothing to end it. No stale date is set (`expiry` is always
-`nil`, line 231), so the Lock Screen and Dynamic Island keep showing the last reading until the
-app next launches, the End shortcut runs, or ActivityKit's own limit ends it.
+Every write sets a stale date 5 minutes ahead (`staleInterval`, `stamped`,
+`CompassActivityController.swift:246`). While `compactStatus` is `active`, each drive tick
+calls `renew()` (`CompassActivityController.swift:187`), which rewrites the last content once
+nothing has been written for 60 seconds. When the process is terminated during a drive (force
+quit, crash or memory pressure), nothing renews the activity, so the system marks it stale
+within 5 minutes and the card shows travel as unavailable instead of the last direction. It
+stays until the app next launches, the End shortcut runs, or ActivityKit's own limit ends it.
 
 ## Live Activity content
 
-`CompassActivityController.publish` (line 108) decides what reaches the card:
+`CompassActivityController.publish` (`CompassActivityController.swift:123`) decides what
+reaches the card:
 
 - a usable reading is written only when its rounded degrees or cardinal point change, and at
   most once a second (`changedReadingInterval`);
@@ -209,7 +225,8 @@ app next launches, the End shortcut runs, or ActivityKit's own limit ends it.
 - `waiting` is always written.
 
 `validity` and the queue's `generation` drop queued writes that a later clear or end has
-overtaken. Appearance changes rewrite the last content without changing its sample time.
+overtaken. Appearance changes and stale-date renewals rewrite the last content with a new
+stale date without changing its sample time.
 
 ## Background start intent
 
@@ -228,15 +245,24 @@ stateDiagram-v2
     Foreground --> Done: user doesn't continue (drive stays ended)
 ```
 
-`needsForegroundStart` (`DriveSessionController.swift:274`) is the `Waiting` state. Its result
+`needsForegroundStart` (`DriveSessionController.swift:312`) is the `Waiting` state. Its result
 is the only consumer of `locationNeedsForeground`.
 
-**Failure state:**
-[#249](https://github.com/lunchbox-labs/compasslet/issues/249).
-`notInUse` reported after `Waiting` has settled, or when `Waiting` was skipped, sets
-`locationNeedsForeground` (line 326) and nothing else, so the drive may keep running without
-location. If the process is then suspended, the ticker stops and the absence limit can't end
-the drive.
+Any `notInUse` report while Compasslet isn't active on CarPlay starts a wait (`notInUseSince`,
+line 368). During `Waiting` the intent ends the drive first; after `Waiting` has settled, or
+when it was skipped, the wait is what ends it. A reading taken after the report (line 379) or
+CarPlay activation (line 141) clears it; otherwise the tick ends the drive 15 seconds after the
+report. The drive holds background time from the report until the wait clears or the drive's
+Live Activity has ended, so suspension can't stop the tick first.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> Running
+    Running --> NotInUse: notInUse, not active on CarPlay
+    NotInUse --> Running: newer reading, or CarPlay activation
+    NotInUse --> Ended: 15 s without a newer reading, or any other stopDrive
+```
 
 ## CarPlay scene
 
@@ -306,9 +332,10 @@ shown angle.
 
 `PhoneLocationController` (`App/Heading/PhoneLocationController.swift`) acquires while active,
 authorized and services are on. With approximate access it still acquires but discards every
-fix and shows the approximate state. Fixes older than 30 seconds or less accurate than 100 m are cleared. The city lookup runs
-at most once a minute: after 500 m of movement, while there is no city yet, or every 10
-minutes. A result is dropped if the fix has since moved 500 m or been cleared.
+fix and shows the approximate state. Fixes older than 30 seconds or less accurate than 100 m
+are cleared. The city lookup runs at most once a minute: after 500 m of movement, while there
+is no city yet, or every 10 minutes. A result is dropped if the fix has since moved 500 m or
+been cleared.
 
 ## Welcome tour and tip
 
