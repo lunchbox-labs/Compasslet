@@ -83,6 +83,7 @@ protocol ShortcutDrive: AnyObject {
 extension DriveSessionController: ShortcutDrive {}
 
 /// The Start and End Live Activity shortcuts' decisions, apart from the intents that run them.
+@MainActor
 enum LiveActivityShortcut {
   enum StartOutcome: Equatable {
     case alreadyRunning, openWhenParked, unavailable, needsPreciseLocation, couldNotStart
@@ -93,7 +94,6 @@ enum LiveActivityShortcut {
 
   /// Starts the drive, and when location can't start from here, ends it and asks to continue
   /// in the foreground, where it starts again.
-  @MainActor
   static func start(
     _ drive: some ShortcutDrive, canContinueInForeground: Bool, waitingUpTo timeout: Duration,
     continueInForeground: @MainActor () async throws -> Void
@@ -118,15 +118,13 @@ enum LiveActivityShortcut {
 
   /// Ends the drive. A Live Activity left from an earlier launch has no drive in this one, but
   /// ending it still ends the Live Activity the user sees.
-  @MainActor
   static func end(_ drive: some ShortcutDrive) async -> EndOutcome {
     let wasRunning = drive.isDriving || drive.hasLiveActivity
     await drive.endLiveActivity()
     return wasRunning ? .ended : .notRunning
   }
 
-  @MainActor
-  static func outcome(of drive: some ShortcutDrive) -> StartOutcome {
+  private static func outcome(of drive: some ShortcutDrive) -> StartOutcome {
     switch drive.setupStatus {
     case .ready: break
     case .unavailable: return .unavailable

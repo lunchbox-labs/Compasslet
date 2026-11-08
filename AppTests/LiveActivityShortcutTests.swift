@@ -13,11 +13,18 @@ private final class FakeDrive: ShortcutDrive {
   var hasLiveActivity = false
   /// What a start leaves the Live Activity as; nil leaves no drive running.
   var startResult: DriveSessionController.CompactStatus? = .active
+  /// Whether a start finds the drive ended under it, as when a limit ends it meanwhile.
+  var startEndsDrive = false
   var needsForeground = false
   private(set) var calls: [Call] = []
 
   func startLiveActivity() async {
     calls.append(.start)
+    if startEndsDrive {
+      isDriving = false
+      compactStatus = .inactive
+      return
+    }
     guard let startResult else { return }
     isDriving = true
     compactStatus = startResult
@@ -65,6 +72,15 @@ struct LiveActivityShortcutTests {
     #expect(drive.calls == [.start])
   }
 
+  @Test func driveThatEndsDuringTheStartIsNotReportedAsRunning() async {
+    let drive = FakeDrive()
+    drive.isDriving = true
+    drive.compactStatus = .active
+    drive.startEndsDrive = true
+    #expect(await start(drive) == .couldNotStart)
+    #expect(drive.calls == [.start, .wait(.seconds(5))])
+  }
+
   @Test func driveWhoseLiveActivityWasDismissedStartsAgain() async {
     let drive = FakeDrive()
     drive.isDriving = true
@@ -98,6 +114,20 @@ struct LiveActivityShortcutTests {
     drive.isCarAudioConnected = true
     #expect(await start(drive) == .started)
     #expect(drive.calls == [.start, .wait(.seconds(5)), .end, .continueInForeground, .start])
+    #expect(drive.isDriving)
+  }
+
+  @Test func cancelledStartDoesNotMoveToTheForeground() async {
+    let drive = FakeDrive()
+    drive.needsForeground = true
+    let task = Task {
+      await LiveActivityShortcut.start(
+        drive, canContinueInForeground: true, waitingUpTo: .seconds(5)
+      ) { drive.continueInForeground() }
+    }
+    task.cancel()
+    #expect(await task.value == .startedWithoutCarPlay)
+    #expect(drive.calls == [.start, .wait(.seconds(5))])
     #expect(drive.isDriving)
   }
 
