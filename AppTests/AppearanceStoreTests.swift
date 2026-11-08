@@ -186,8 +186,8 @@ struct AppearanceStoreTests {
     var cases: [Case] = []
     for textSize in [DynamicTypeSize.xSmall, .large, .accessibility5] {
       for mode in [ActivityTimestampMode.time, .elapsed, .hidden] {
-        // "Move steadily to show travel" is the longest status.
-        for status in [TravelStatus.usable, .slow] {
+        // "Travel unavailable" is the longest status.
+        for status in [TravelStatus.usable, .unavailable] {
           for diagnostics in [false, true] {
             var appearance = AppearanceValues()
             appearance.lockScreenTimestamp = mode

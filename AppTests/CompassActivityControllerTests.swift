@@ -520,7 +520,7 @@ struct CompassActivityControllerTests {
       #expect(value.reading == nil)
       #expect(value.bearing == "—")
       #expect(!value.spokenDescription.contains("last recorded"))
-      #expect(value.spokenDescription == value.status)
+      #expect(value.spokenDescription == value.spokenStatus)
       #expect(value.compactBearing == "—")
     }
     #expect(
@@ -537,6 +537,11 @@ struct CompassActivityControllerTests {
         == ["NE 45°", "NE", "45°"])
     #expect(presentation(.waiting).bearingCandidates.isEmpty)
     #expect(presentation(.waiting).status == "Start moving")
+    // The shortened statuses are spoken in full.
+    #expect(presentation(.slow).status == "Keep moving")
+    #expect(presentation(.slow).spokenDescription == "Keep moving to show travel direction")
+    #expect(presentation(.unreliable).status == "Finding…")
+    #expect(presentation(.unreliable).spokenDescription == "Finding travel direction")
     var degreesOnly = AppearanceValues()
     degreesOnly.showDirection = false
     let custom = presentation(.usable, bearing: 180, appearance: degreesOnly)

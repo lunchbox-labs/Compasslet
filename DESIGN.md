@@ -87,8 +87,10 @@ These system-hosted surfaces have constraints beyond an ordinary iPhone screen.
   reading may have room for only direction or degrees; the When Only One Fits setting picks
   which, and defaults to degrees. The compact Dynamic Island always shows one field: the only
   one shown, or the one this setting picks. The Lock Screen and expanded Dynamic Island always
-  fit both. The setting shows on the Global and
-  Live Activity appearance pages when the readout shows both.
+  fit both. The setting shows on the Global and Live Activity appearance pages when the readout
+  shows both.
+- Live Activity statuses stay at about two words, such as "Keep moving", so they fit every
+  presentation at the largest text sizes. VoiceOver speaks a shortened status in full.
 
 ## Docs site
 
