@@ -44,7 +44,8 @@ jobs:
        contains(github.event.pull_request.labels.*.name, 'screenshots') &&
        (github.event.action != 'labeled' || github.event.label.name == 'screenshots'))
     runs-on: xcode-27
-    # A full run takes about 30 minutes on hosted runners, mostly simulator boots and captures.
+    # A full run takes about 30 minutes on hosted runners, mostly simulator boots and captures;
+    # parts of screens that scroll add a few seconds each.
     timeout-minutes: 75
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer

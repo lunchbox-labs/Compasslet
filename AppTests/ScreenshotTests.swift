@@ -462,7 +462,8 @@ final class ScreenshotTests: XCTestCase {
       target = min(target, Self.bottomOffset(of: scroll))
       scroll.setContentOffset(CGPoint(x: scroll.contentOffset.x, y: target), animated: false)
       // Long enough for new rows to lay out and a fade at the edge to follow the scroll.
-      try? await Task.sleep(for: .milliseconds(500))
+      // A cancelled test stops here rather than spinning until the deadline.
+      guard (try? await Task.sleep(for: .milliseconds(500))) != nil else { return false }
       scroll.layoutIfNeeded()
       let stayed = abs(scroll.contentOffset.y - target) < 0.5
       if stayed && target <= Self.bottomOffset(of: scroll) + 0.5 { return true }
