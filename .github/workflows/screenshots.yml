@@ -94,7 +94,7 @@ jobs:
           SCREEN_FILTER: ${{ inputs.filter }}
           MAX_PARTS: ${{ inputs.max-parts || '9' }}
         run: |
-          if [[ "$CAPTURE_SET" == accessibility || "$CAPTURE_SET" == listing ]]; then
+          if [[ -n "$CAPTURE_SET" && "$CAPTURE_SET" != "every screen" ]]; then
             python3 scripts/screenshots capture --set "$CAPTURE_SET" --filter "$SCREEN_FILTER" \
               --max-parts "$MAX_PARTS" --output "$RUNNER_TEMP/screenshots"
           else

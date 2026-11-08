@@ -1,5 +1,6 @@
 """Execute the workflow's inline shell steps without a simulator or GitHub token."""
 import os
+import re
 import runpy
 from pathlib import Path
 import subprocess
@@ -8,6 +9,7 @@ import textwrap
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
+SETS = runpy.run_path(str(ROOT / 'scripts/screenshots'))['SETS']
 
 
 def shell_step(name):
@@ -96,7 +98,7 @@ class ScreenshotWorkflowTests(unittest.TestCase):
             return record.read_text().splitlines()[1:]
 
     def test_each_set_leaves_devices_and_appearances_to_the_script(self):
-        for capture_set in ('accessibility', 'listing'):
+        for capture_set in SETS:
             with self.subTest(capture_set=capture_set):
                 arguments = self.capture_arguments(capture_set)
                 self.assertEqual(arguments[:3], ['capture', '--set', capture_set])
@@ -107,9 +109,12 @@ class ScreenshotWorkflowTests(unittest.TestCase):
 
     def test_the_workflow_offers_every_set_the_script_has(self):
         workflow = (ROOT / '.github/workflows/screenshots.yml').read_text()
-        options = workflow.split('        options: [every screen, ', 1)[1].split(']', 1)[0]
-        script = runpy.run_path(str(ROOT / 'scripts/screenshots'))
-        self.assertEqual(sorted(options.split(', ')), sorted(script['SETS']))
+        match = re.search(r'^      set:\n(?:        .*\n)*?        options: \[(.*)\]$', workflow,
+                          re.MULTILINE)
+        self.assertIsNotNone(match, 'the set input has no options list')
+        options = [option.strip() for option in match.group(1).split(',')]
+        self.assertEqual(options[0], 'every screen')
+        self.assertEqual(sorted(options[1:]), sorted(SETS))
 
     def test_pull_requests_and_the_default_choice_capture_every_screen(self):
         for capture_set in ('', 'every screen'):

@@ -30,18 +30,20 @@ while the release is still a draft.
 
 Run the [Screenshots workflow](https://github.com/lunchbox-labs/compasslet/actions/workflows/screenshots.yml)
 manually with `set` set to `listing` and `ref` set to the commit being submitted.
-It captures the compass in light and dark on iPhone 17, as
-`iphone-17-light-compass.png` and `iphone-17-dark-compass.png`. Upload both to the
-version's iPhone screenshots in App Store Connect.
+It captures the compass in light and dark on iPhone 17. Download
+`iphone-17-light-compass.png` and `iphone-17-dark-compass.png` from the run's
+`screenshots-run-<run number>` artifact (its `screenshots.json` describes the
+captures and isn't uploaded), then upload both to the version's iPhone screenshots
+in App Store Connect.
 
 Apple's [screenshot specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/)
-require only iPhone with Dynamic Island (medium display), which iPhone 17 is, and
-scale those screenshots for the other iPhone sizes. The app is iPhone only, so no
-iPad screenshots are needed
+list one required iPhone size, iPhone with Dynamic Island (medium display), which
+iPhone 17 is. The app is iPhone only, so no iPad screenshots are needed
 ([#309](https://github.com/lunchbox-labs/compasslet/issues/309)). Apple Watch
 ([#304](https://github.com/lunchbox-labs/compasslet/issues/304)) and iPhone Duo
 ([#305](https://github.com/lunchbox-labs/compasslet/issues/305)) screenshots are
-left out of the first release.
+left out of the first release. Apple says iPhone Duo screenshots become required
+from April 2027 for apps built with the iOS 27.1 SDK or later.
 
 ## Credentials and signing
 
