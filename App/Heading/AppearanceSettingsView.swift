@@ -85,11 +85,21 @@ struct AppearanceDetailView: View {
       if !followsGlobal {
         Section {
           AppearanceReadoutControl(surface: surface, store: store)
+          if surface != .phone, value.readoutMode == .both {
+            Picker("Shorter Readout", selection: binding(\.shortReadout)) {
+              Text("Degrees").tag(ShortReadout.degrees)
+              Text("Direction").tag(ShortReadout.direction)
+            }
+          }
         } header: {
           Text("Readout")
         } footer: {
           if value.readoutMode == nil {
             Text("This saved appearance hides the readout. Choose a mode to show it.")
+          } else if surface != .phone, value.readoutMode == .both {
+            Text(
+              "Live Activities show only the shorter readout when direction and degrees don’t fit together."
+            )
           }
         }
         Section {

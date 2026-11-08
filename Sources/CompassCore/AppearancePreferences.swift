@@ -55,6 +55,11 @@ public enum ReadoutMode: CaseIterable, Sendable {
   case direction, degrees, both
 }
 
+/// The one field a Live Activity keeps when its direction and degrees don't fit together.
+public enum ShortReadout: String, CaseIterable, Codable, Sendable {
+  case degrees, direction
+}
+
 /// How the last recorded travel sample is dated on a Live Activity.
 public enum ActivityTimestampMode: String, CaseIterable, Codable, Sendable {
   case hidden, time, elapsed
@@ -77,6 +82,8 @@ public struct AppearanceValues: Codable, Hashable, Sendable {
   public var lockScreenTimestamp: ActivityTimestampMode = .time
   /// Timestamp presentation for the small Live Activity in CarPlay and the Apple Watch Smart Stack.
   public var carPlayActivityTimestamp: ActivityTimestampMode = .time
+  /// The field a Live Activity keeps when both are shown and they don't fit together.
+  public var shortReadout: ShortReadout = .degrees
 
   public init() {}
 
@@ -85,6 +92,7 @@ public struct AppearanceValues: Codable, Hashable, Sendable {
     case cardinalLabels = "labels"
     case rotation, reducedMotionDial, lockScreenTimestamp
     case carPlayActivityTimestamp = "smallActivityTimestamp"
+    case shortReadout
   }
 
   /// Decodes saved values, keeping the standard choice for keys an earlier version did not store.
@@ -96,6 +104,8 @@ public struct AppearanceValues: Codable, Hashable, Sendable {
     carPlayActivityTimestamp =
       try values.decodeIfPresent(ActivityTimestampMode.self, forKey: .carPlayActivityTimestamp)
       ?? .time
+    shortReadout =
+      try values.decodeIfPresent(ShortReadout.self, forKey: .shortReadout) ?? standard.shortReadout
     showDirection =
       try values.decodeIfPresent(Bool.self, forKey: .showDirection) ?? standard.showDirection
     showDegrees =

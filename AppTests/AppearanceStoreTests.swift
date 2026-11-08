@@ -270,6 +270,64 @@ struct AppearanceStoreTests {
     }
   }
 
+  /// CarPlay Dashboard's Live Activity card inside its insets.
+  private static let carPlayContent = CGSize(width: 224, height: 70)
+
+  /// The height of a CarPlay reading laid out for the card's content size.
+  private func carPlayReadingHeight(
+    bearing: Double = 315, appearance: AppearanceValues = AppearanceValues(),
+    textSize: DynamicTypeSize = .large, weight: LegibilityWeight = .regular,
+    showsTimestamp: Bool = true
+  ) -> CGSize {
+    let state = CompassActivityAttributes.ContentState(
+      bearing: bearing, status: .usable, sampleTime: nil, expiry: nil, appearance: appearance)
+    let host = UIHostingController(
+      rootView: CarPlayReading(
+        presentation: CompassActivityReading(state: state, isStale: false),
+        size: Self.carPlayContent, showsTimestamp: showsTimestamp
+      ) {
+        Text("Last Updated 12:58 PM").font(.caption2).lineLimit(1).minimumScaleFactor(0.7)
+      }
+      .environment(\.locale, Locale(identifier: "en_US"))
+      .environment(\.dynamicTypeSize, textSize)
+      .environment(\.legibilityWeight, weight))
+    return host.sizeThatFits(in: CGSize(width: Self.carPlayContent.width, height: 1000))
+  }
+
+  @Test func carPlayReadingFillsItsCardWithoutOutgrowingIt() {
+    var custom = AppearanceValues()
+    custom.useSystemTextSize = false
+    custom.customTextSize = .accessibility5
+    var directionFirst = AppearanceValues()
+    directionFirst.shortReadout = .direction
+    for appearance in [AppearanceValues(), custom, directionFirst] {
+      for textSize in [DynamicTypeSize.xSmall, .large, .xxxLarge, .accessibility3, .accessibility5] {
+        for weight in [LegibilityWeight.regular, .bold] {
+          for showsTimestamp in [true, false] {
+            let size = carPlayReadingHeight(
+              appearance: appearance, textSize: textSize, weight: weight,
+              showsTimestamp: showsTimestamp)
+            #expect(
+              size.height <= Self.carPlayContent.height + 0.5,
+              "\(textSize) \(weight) \(showsTimestamp): \(size)")
+            #expect(size.width <= Self.carPlayContent.width + 0.5, "\(textSize) \(weight)")
+          }
+        }
+      }
+    }
+    // Most of the card's height goes to the reading: well over the title size it used to use,
+    // which with its line came to about 40 points.
+    #expect(carPlayReadingHeight().height > 60)
+  }
+
+  @Test func carPlayReadingKeepsOneSizeForEveryDirection() {
+    let bearings = Array(stride(from: 0.0, to: 360, by: 22.5)) + [7, 359]
+    for textSize in [DynamicTypeSize.large, .accessibility5] {
+      let heights = Set(bearings.map { carPlayReadingHeight(bearing: $0, textSize: textSize).height })
+      #expect(heights.count == 1, "\(textSize): \(heights)")
+    }
+  }
+
   /// The narrowest Lock Screen card's content: a 375-point iPhone with Display Zoom is 320
   /// points wide, less 22 points for the banner and 28 for the card's side insets.
   private static let narrowestLine: CGFloat = 270

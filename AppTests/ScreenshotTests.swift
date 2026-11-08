@@ -214,6 +214,13 @@ final class ScreenshotTests: XCTestCase {
           .environment(\.dynamicTypeSize, .accessibility5)
           .environment(\.legibilityWeight, .bold))
     },
+    // When the whole reading doesn't fit, the shorter readout chosen in Appearance shows.
+    Screen(name: "live-activity-widest-reading-keeps-direction-largest-text") {
+      AnyView(
+        LiveActivityScreen(bearing: 315, shortReadout: .direction)
+          .environment(\.dynamicTypeSize, .accessibility5)
+          .environment(\.legibilityWeight, .bold))
+    },
     Screen(name: "live-activity-status") { AnyView(LiveActivityScreen(status: .slow)) },
     Screen(name: "live-activity-status-largest-text") {
       AnyView(LiveActivityScreen(status: .slow).environment(\.dynamicTypeSize, .accessibility5))
@@ -692,6 +699,7 @@ private final class IdleActivity: CompassActivityPresenting {
 private struct LiveActivityScreen: View {
   var mode: ActivityTimestampMode = .time
   var bearing: Double = 47
+  var shortReadout = ShortReadout.degrees
   /// Anything but `.usable` shows that status instead of a reading.
   var status: CompassActivityAttributes.Status = .usable
 
@@ -699,6 +707,7 @@ private struct LiveActivityScreen: View {
     var appearance = AppearanceValues()
     appearance.lockScreenTimestamp = mode
     appearance.carPlayActivityTimestamp = mode
+    appearance.shortReadout = shortReadout
     return .init(
       bearing: status == .usable ? bearing : nil, status: status, sampleTime: sampleTime,
       expiry: nil, appearance: appearance)

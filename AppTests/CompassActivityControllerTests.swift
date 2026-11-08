@@ -355,6 +355,11 @@ struct CompassActivityControllerTests {
     #expect(Set(statuses).count == statuses.count)
     // Shorter forms are offered only when both fields are shown, and never without a reading.
     #expect(usable.bearingCandidates == ["NE 45°", "45°", "NE"])
+    var keepsDirection = AppearanceValues()
+    keepsDirection.shortReadout = .direction
+    #expect(
+      presentation(.usable, bearing: 45, appearance: keepsDirection).bearingCandidates
+        == ["NE 45°", "NE", "45°"])
     #expect(presentation(.waiting).bearingCandidates.isEmpty)
     #expect(presentation(.waiting).status == "Start moving")
     var degreesOnly = AppearanceValues()

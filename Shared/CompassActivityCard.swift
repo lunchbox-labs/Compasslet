@@ -43,16 +43,28 @@ struct CompassActivityCard: View {
     .accessibilityLabel(CompassActivityView.accessibilitySummary(state: state, isStale: isStale))
   }
 
-  /// A Lock Screen reading is sized to leave room in 160 points for its line, so it always shows
-  /// it, directly beneath it. Otherwise, the tallest layout that fits: diagnostics
+  /// A reading is sized to leave room for its line beneath it: on the Lock Screen within 160
+  /// points, so it always shows it, and in CarPlay within the card's height, unless even the
+  /// smallest reading leaves no room. A status takes the tallest layout that fits: diagnostics
   /// (Lock Screen only), then the status between balanced lines, then (Lock Screen only) the
   /// status above its line, then the status alone, so the Lock Screen card never grows past 160
   /// points and the CarPlay card never outgrows the size CarPlay gives it. In CarPlay, a status
-  /// long enough to wrap leaves no room for the line beneath it, and at large text sizes the
-  /// reading drops its Last Updated line to a bare label, then goes alone.
+  /// long enough to wrap leaves no room for the line beneath it.
   @ViewBuilder private var layouts: some View {
-    if !isSmall, presentation.reading != nil {
-      lockScreenReading
+    if presentation.reading != nil {
+      if isSmall {
+        GeometryReader { geometry in
+          CarPlayReading(
+            presentation: presentation, size: geometry.size,
+            showsTimestamp: timestampMode != .hidden
+          ) {
+            secondaryLine
+          }
+          .frame(width: geometry.size.width, height: geometry.size.height)
+        }
+      } else {
+        lockScreenReading
+      }
     } else {
       ViewThatFits(in: .vertical) {
         if !isSmall, let update = state.debugUpdateTime {
@@ -69,13 +81,6 @@ struct CompassActivityCard: View {
             secondaryLine
           }
           .fixedSize(horizontal: false, vertical: true)
-        }
-        VStack(spacing: 2) {
-          readout()
-          if presentation.reading != nil, timestampMode != .hidden {
-            Text("Last Updated").font(.caption2).foregroundStyle(secondaryStyle)
-              .lineLimit(1).minimumScaleFactor(Self.captionScale)
-          }
         }
         // CarPlay's card has a fixed height, so a status there shrinks to fit it rather than
         // growing past it.
@@ -133,13 +138,11 @@ struct CompassActivityCard: View {
     .lineLimit(1).minimumScaleFactor(0.85)
   }
 
-  /// On the Lock Screen the reading is as large as fits, at one size for every direction (see
-  /// `ActivityReading`). In CarPlay, at large text sizes, the reading drops to a shorter form
-  /// (degrees, then direction) before any text is scaled down, so an enlarged size stays
-  /// enlarged; the accessibility label keeps every detail. Status text wraps to a second line
-  /// before it shrinks: in CarPlay to no less than half size, so two lines still fit its card at
-  /// the largest text sizes, and on the Lock Screen, where it also uses a smaller style, to no
-  /// less than 80%.
+  /// A Lock Screen reading is as large as fits, at one size for every direction (see
+  /// `ActivityReading`); a CarPlay reading is laid out by `CarPlayReading` instead. Status text
+  /// wraps to a second line before it shrinks: in CarPlay to no less than half size, so two
+  /// lines still fit its card at the largest text sizes, and on the Lock Screen, where it also
+  /// uses a smaller style, to no less than 80%.
   private func readout(diagnosticLines: Int = 0) -> some View {
     Group {
       if presentation.reading == nil {
@@ -150,12 +153,6 @@ struct CompassActivityCard: View {
             .font(.title2.weight(.semibold))
             .multilineTextAlignment(.center)
             .lineLimit(2).minimumScaleFactor(0.8)
-        }
-      } else if isSmall {
-        ViewThatFits(in: .horizontal) {
-          ForEach(presentation.bearingCandidates, id: \.self) { candidate in
-            readoutText(candidate).lineLimit(1).minimumScaleFactor(0.8)
-          }
         }
       } else {
         ActivityReading(
@@ -262,6 +259,41 @@ struct ActivityReading: View {
     Text(verbatim: text)
       .font(.system(size: size, weight: .semibold)).monospacedDigit()
       .lineLimit(1)
+  }
+}
+
+/// The CarPlay reading as large as the card's height allows, at one size for every direction,
+/// with its Last Updated line beneath it. When even the smallest reading would leave no room for
+/// the line, as at the largest text sizes, the reading goes alone and fills the height. The
+/// smallest reading is the title size the card has always used, so a larger text size still
+/// enlarges it; on a line too narrow for it, the reading drops to its shorter form.
+struct CarPlayReading<Line: View>: View {
+  let presentation: CompassActivityReading
+  /// The card's size inside its insets.
+  let size: CGSize
+  let showsTimestamp: Bool
+  @ViewBuilder let line: Line
+  @Environment(\.dynamicTypeSize) private var systemTextSize
+
+  var body: some View {
+    let readoutSize = presentation.appearance.readoutTextSize(system: systemTextSize)
+    let minimum = max(
+      DynamicTypeSize.large.font(for: .title2).pointSize,
+      readoutSize.font(for: .title2).pointSize)
+    let lineHeight = showsTimestamp ? systemTextSize.font(for: .caption2).lineHeight + 2 : 0
+    let withLine = (size.height - lineHeight) / ActivityReading.lineHeight
+    let showsLine = showsTimestamp && withLine >= minimum
+    VStack(spacing: 2) {
+      ActivityReading(
+        presentation: presentation,
+        maximumSize: showsLine ? withLine : size.height / ActivityReading.lineHeight,
+        minimumSize: minimum
+      )
+      .dynamicTypeSize(readoutSize)
+      if showsLine {
+        line
+      }
+    }
   }
 }
 
