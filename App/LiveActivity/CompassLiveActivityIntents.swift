@@ -71,9 +71,11 @@ struct EndLiveActivityIntent: AppIntent {
   @MainActor
   func perform() async throws -> some IntentResult & ProvidesDialog {
     let drive = CompassAppDelegate.sharedDrive
-    let wasDriving = drive.isDriving
+    // A Live Activity left from an earlier launch has no drive in this one, but ending it
+    // still ends the Live Activity the user sees.
+    let wasRunning = drive.isDriving || drive.hasLiveActivity
     await drive.endLiveActivity()
-    guard wasDriving else { return .result(dialog: "The Live Activity isn’t running.") }
+    guard wasRunning else { return .result(dialog: "The Live Activity isn’t running.") }
     return .result(dialog: "Live Activity ended.")
   }
 }

@@ -25,7 +25,10 @@ final class DriveSessionControllerTests: XCTestCase {
   final class Activity: CompassActivityPresenting {
     var onDismiss: (() -> Void)?
     var canStartActivities = true
+    var hasActivities = false
     var starts = 0
+    var renewals = 0
+    func renew() { renewals += 1 }
     var invalidations = 0
     func invalidateReading() async { invalidations += 1 }
     var ends = 0
@@ -96,13 +99,14 @@ final class DriveSessionControllerTests: XCTestCase {
     await controller.endDrive()
   }
 
-  func testPhoneLaunchDoesNotAcquireAndPhoneRequestIsOnce() async {
+  func testPhoneLaunchDoesNotAcquireAndAsksOnceWhileUndecided() async {
     let sensor = Sensor(), activity = Activity()
     sensor.authorization = .notDetermined
     let controller = make(sensor, activity)
     XCTAssertEqual(sensor.starts, 0)
     controller.requestPhoneAuthorization(isForeground: false)
     XCTAssertEqual(sensor.requests, 0)
+    // The prompt makes the app inactive and active again, which mustn't ask a second time.
     await controller.phoneBecameActive()
     await controller.phoneBecameActive()
     XCTAssertEqual(sensor.requests, 1)
@@ -112,6 +116,85 @@ final class DriveSessionControllerTests: XCTestCase {
     await controller.phoneBecameActive()
     XCTAssertEqual(controller.setupStatus, .denied)
     XCTAssertEqual(sensor.requests, 1)
+  }
+
+  func testPermissionUndecidedAgainAfterAGrantAsksAgain() async {
+    let sensor = Sensor(), activity = Activity()
+    sensor.authorization = .notDetermined
+    let controller = make(sensor, activity)
+    await controller.phoneBecameActive()
+    XCTAssertEqual(sensor.requests, 1)
+    // Allow Once, which iOS later takes back.
+    sensor.authorization = .authorized
+    sensor.receive?(.authorizationChanged)
+    XCTAssertEqual(controller.setupStatus, .ready)
+    sensor.authorization = .notDetermined
+    sensor.receive?(.authorizationChanged)
+    XCTAssertEqual(controller.setupStatus, .permissionRequired)
+    await controller.phoneBecameActive()
+    XCTAssertEqual(sensor.requests, 2)
+    await controller.phoneBecameActive()
+    XCTAssertEqual(sensor.requests, 2)
+  }
+
+  func testPermissionUndecidedOnReturnAfterAGrantAsksAgain() async {
+    let sensor = Sensor(), activity = Activity()
+    sensor.authorization = .notDetermined
+    let controller = make(sensor, activity)
+    await controller.phoneBecameActive()
+    sensor.authorization = .authorized
+    await controller.phoneBecameActive()
+    XCTAssertEqual(controller.setupStatus, .ready)
+    // The grant ends while the app is away, with no change reported before it returns.
+    sensor.authorization = .notDetermined
+    await controller.phoneBecameActive()
+    XCTAssertEqual(controller.setupStatus, .permissionRequired)
+    XCTAssertEqual(sensor.requests, 2)
+  }
+
+  func testAskingFromSettingsWorksAfterAnEarlierUnansweredPrompt() async {
+    let sensor = Sensor(), activity = Activity()
+    sensor.authorization = .notDetermined
+    let controller = make(sensor, activity)
+    await controller.phoneBecameActive()
+    XCTAssertEqual(sensor.requests, 1)
+    // The prompt closed unanswered, so returning doesn't ask, but the user can.
+    await controller.phoneBecameActive()
+    XCTAssertEqual(sensor.requests, 1)
+    controller.askForLocationPermission()
+    XCTAssertEqual(sensor.requests, 2)
+    sensor.authorization = .denied
+    controller.askForLocationPermission()
+    XCTAssertEqual(sensor.requests, 2)
+  }
+
+  func testAskingFromSettingsDoesNotAskAgainWhileThePromptShows() async {
+    let sensor = Sensor(), activity = Activity()
+    sensor.authorization = .notDetermined
+    let controller = make(sensor, activity)
+    await controller.phoneBecameActive(requestingPermission: false)
+    controller.askForLocationPermission()
+    await controller.phoneBecameActive()
+    await controller.phoneBecameActive()
+    XCTAssertEqual(sensor.requests, 1)
+  }
+
+  func testPermissionUndecidedAgainDuringADriveAsksAgainOnReturn() async {
+    let sensor = Sensor(), activity = Activity()
+    sensor.authorization = .notDetermined
+    let controller = make(sensor, activity)
+    await controller.phoneBecameActive()
+    XCTAssertEqual(sensor.requests, 1)
+    sensor.authorization = .authorized
+    sensor.receive?(.authorizationChanged)
+    await controller.carPlayActivated()
+    XCTAssertTrue(controller.isDriving)
+    sensor.authorization = .notDetermined
+    sensor.receive?(.authorizationChanged)
+    XCTAssertFalse(controller.isDriving)
+    await controller.waitForPendingOperations()
+    await controller.phoneBecameActive()
+    XCTAssertEqual(sensor.requests, 2)
   }
 
   func testPhoneActivationCanHoldTheLocationPromptUntilAsked() async {
@@ -905,6 +988,30 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertFalse(controller.isDriving)
     XCTAssertEqual(activity.ends, 1)
     XCTAssertEqual(sensor.starts, 0)
+  }
+
+  func testTickRenewsOnlyAShowingActivity() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    controller.tick()
+    XCTAssertEqual(activity.renewals, 0)
+    await controller.carPlayActivated()
+    XCTAssertEqual(controller.compactStatus, .active)
+    controller.tick()
+    XCTAssertEqual(activity.renewals, 1)
+    activity.onDismiss?()
+    XCTAssertEqual(controller.compactStatus, .dismissed)
+    controller.tick()
+    XCTAssertEqual(activity.renewals, 1)
+    await controller.endDrive()
+    controller.tick()
+    XCTAssertEqual(activity.renewals, 1)
+  }
+
+  func testReportsALiveActivityLeftFromAnEarlierLaunch() {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    XCTAssertFalse(controller.hasLiveActivity)
+    activity.hasActivities = true
+    XCTAssertTrue(controller.hasLiveActivity)
   }
 
   func testEndingDuringAnActivityRestartLeavesTheDriveEnded() async {

@@ -47,6 +47,8 @@ final class DriveSessionController: ObservableObject {
   private var generation = UUID()
   private var active = false
   private var suppressed = false
+  /// Whether the location prompt was asked for while permission is undecided. It clears once a
+  /// decision arrives, because permission can become undecided again, as after Allow Once.
   private var requestedPermission = false
   private var preparation: Task<Void, Never>?
   private var activityOperation: Task<Void, Never>?
@@ -97,10 +99,20 @@ final class DriveSessionController: ObservableObject {
     if requestingPermission { requestPhoneAuthorization(isForeground: true) }
   }
 
+  /// Asks for location once while permission is undecided, so the inactive and active phases
+  /// that the prompt itself causes don't ask again.
   func requestPhoneAuthorization(isForeground: Bool) {
-    guard isForeground, !requestedPermission, setupStatus == .permissionRequired,
-      sensor.authorization == .notDetermined
-    else { return }
+    guard isForeground, !requestedPermission else { return }
+    askForLocationPermission()
+  }
+
+  /// Asks for location because the user chose to, even if it was asked for before, as when the
+  /// prompt closed without an answer because the app left the foreground.
+  func askForLocationPermission() {
+    refreshSetupStatus()
+    guard setupStatus == .permissionRequired, sensor.authorization == .notDetermined else {
+      return
+    }
     requestedPermission = true
     sensor.requestAuthorization()
     refreshSetupStatus()
@@ -278,6 +290,9 @@ final class DriveSessionController: ObservableObject {
       return
     }
     try? CompassDiagnostics.shared?.observe(.activity, active: compactStatus == .active)
+    // Keeps the activity current through a stop with nothing new to show. Once this stops
+    // running, as when the app's process ends, the activity goes stale on its own.
+    if compactStatus == .active { activity.renew() }
     if let lastReading,
       !(0...5).contains(now().timeIntervalSince(lastReading.timestamp))
     {
@@ -287,6 +302,9 @@ final class DriveSessionController: ObservableObject {
   }
 
   func waitForPendingOperations() async { await activityOperation?.value }
+
+  /// Whether a Live Activity is showing, including one left from an earlier launch.
+  var hasLiveActivity: Bool { activity.hasActivities }
 
   /// After a start from the background, waits for location and reports whether it couldn't
   /// start without the app in use. A drive that ended meanwhile, or one with Compasslet's
@@ -316,6 +334,7 @@ final class DriveSessionController: ObservableObject {
   }
 
   private func refreshSetupStatus() {
+    if sensor.authorization != .notDetermined { requestedPermission = false }
     if !sensor.servicesEnabled {
       setupStatus = .servicesDisabled
     } else if !sensor.available {
