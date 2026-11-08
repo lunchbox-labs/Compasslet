@@ -22,22 +22,31 @@ mkdir -p .build
 result_directory="$(mktemp -d .build/test-results.XXXXXX)"
 # Boot the device now, in the background, so the boot overlaps the compile instead of
 # following it. bootstatus -b boots a shut-down device and returns once it is ready, or at
-# once when it is already booted. Its output goes to a log, shown only if the boot fails.
+# once when it is already booted. Its output goes to a log, shown only if the boot fails,
+# and the log ends with how long the boot took, which is printed once it's done.
 boot_log="$result_directory/simulator-boot.log"
-xcrun simctl bootstatus "$destination" -b >"$boot_log" 2>&1 &
+boot_start=$SECONDS
+(
+  xcrun simctl bootstatus "$destination" -b
+  echo "Simulator $destination booted in $((SECONDS - boot_start)) s"
+) >"$boot_log" 2>&1 &
 boot=$!
-# A failed build leaves nothing waiting on the boot, so stop watching it on any exit.
+# A failed build leaves nothing waiting on the boot, so stop watching it on any exit. The
+# device itself carries on booting, as it would after a failed xcodebuild test.
 trap 'kill "$boot" 2>/dev/null || true' EXIT
 xcodebuild_arguments=(-project Compass.xcodeproj -scheme Compass
   -destination "platform=iOS Simulator,id=$destination" -derivedDataPath .build/xcode
   CODE_SIGNING_ALLOWED=NO)
 # Exclude unused simulator slices on ARM hosts, when building and testing the app.
-bash scripts/simulator-xcodebuild "${xcodebuild_arguments[@]}" build-for-testing
+# The build's own result bundle keeps any compile errors next to the test results.
+bash scripts/simulator-xcodebuild "${xcodebuild_arguments[@]}" \
+  -resultBundlePath "$result_directory/CompassBuild.xcresult" build-for-testing
 if ! wait "$boot"; then
   cat "$boot_log" >&2
   echo "The simulator $destination did not boot" >&2
   exit 1
 fi
 trap - EXIT
+tail -n 1 "$boot_log"
 bash scripts/simulator-xcodebuild "${xcodebuild_arguments[@]}" \
   -resultBundlePath "$result_directory/CompassTests.xcresult" ${@+"$@"} test-without-building

@@ -85,8 +85,10 @@ class SimulatorArchitectureTests(unittest.TestCase):
                     self.assertIn('platform=iOS Simulator,id=phone', call)
                     exclusions = [arg for arg in call if arg.startswith('EXCLUDED_ARCHS')]
                     self.assertEqual(exclusions, ['EXCLUDED_ARCHS=x86_64'] if arch == 'arm64' else [])
-                self.assertNotIn('-resultBundlePath', builds[0])
-                self.assertIn('-resultBundlePath', builds[1])
+                bundles = [call[call.index('-resultBundlePath') + 1] for call in builds]
+                self.assertRegex(bundles[0], r'^\.build/test-results\.[^/]+/CompassBuild\.xcresult$')
+                self.assertRegex(bundles[1], r'^\.build/test-results\.[^/]+/CompassTests\.xcresult$')
+                self.assertRegex(result.stdout, r'Simulator phone booted in \d+ s')
                 self.assertNotIn('boot progress', result.stdout + result.stderr)
 
     def test_ios_entrypoint_preserves_a_build_failure_and_does_not_test(self):
@@ -98,7 +100,7 @@ class SimulatorArchitectureTests(unittest.TestCase):
     def test_ios_entrypoint_reports_a_failed_boot_and_does_not_test(self):
         with tempfile.TemporaryDirectory() as directory:
             result, _, builds = self.run_test_ios(directory, boot_status=3)
-            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(result.returncode, 1)
             self.assertIn('boot progress', result.stderr)
             self.assertIn('did not boot', result.stderr)
             self.assertEqual([self.action(call) for call in builds], ['build-for-testing'])
