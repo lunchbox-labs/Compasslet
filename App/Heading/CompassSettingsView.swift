@@ -18,7 +18,10 @@ struct CompassSettingsView: View {
             Text(locationEnabled ? "Yes" : "No").foregroundStyle(.primary)
           }
           Text(locationDetail).foregroundStyle(.primary)
-          if canOpenSettings, let url = URL(string: UIApplication.openSettingsURLString) {
+          if drive.setupStatus == .permissionRequired {
+            Button("Enable Location") { drive.askForLocationPermission() }
+              .foregroundStyle(.tint)
+          } else if canOpenSettings, let url = URL(string: UIApplication.openSettingsURLString) {
             Link("Open Settings", destination: url).foregroundStyle(.tint)
           }
         }

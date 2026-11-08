@@ -38,6 +38,8 @@ final class DriveSessionController: ObservableObject {
   private var generation = UUID()
   private var active = false
   private var suppressed = false
+  /// Whether the location prompt was asked for while permission is undecided. It clears once a
+  /// decision arrives, because permission can become undecided again, as after Allow Once.
   private var requestedPermission = false
   private var preparation: Task<Void, Never>?
   private var activityOperation: Task<Void, Never>?
@@ -86,10 +88,20 @@ final class DriveSessionController: ObservableObject {
     if requestingPermission { requestPhoneAuthorization(isForeground: true) }
   }
 
+  /// Asks for location once while permission is undecided, so the inactive and active phases
+  /// that the prompt itself causes don't ask again.
   func requestPhoneAuthorization(isForeground: Bool) {
-    guard isForeground, !requestedPermission, setupStatus == .permissionRequired,
-      sensor.authorization == .notDetermined
-    else { return }
+    guard isForeground, !requestedPermission else { return }
+    askForLocationPermission()
+  }
+
+  /// Asks for location because the user chose to, even if it was asked for before, as when the
+  /// prompt closed without an answer because the app left the foreground.
+  func askForLocationPermission() {
+    refreshSetupStatus()
+    guard setupStatus == .permissionRequired, sensor.authorization == .notDetermined else {
+      return
+    }
     requestedPermission = true
     sensor.requestAuthorization()
     refreshSetupStatus()
@@ -296,6 +308,7 @@ final class DriveSessionController: ObservableObject {
   }
 
   private func refreshSetupStatus() {
+    if sensor.authorization != .notDetermined { requestedPermission = false }
     if !sensor.servicesEnabled {
       setupStatus = .servicesDisabled
     } else if !sensor.available {

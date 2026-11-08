@@ -142,6 +142,10 @@ final class ScreenshotTests: XCTestCase {
           .environment(\.dynamicTypeSize, .accessibility5))
     },
     Screen(name: "settings-bottom", showsEnd: true) { ScreenshotTests.settings() },
+    // Location is undecided, as after Allow Once ends, so Settings offers the prompt.
+    Screen(name: "settings-location-undecided") {
+      ScreenshotTests.settings(location: .notDetermined)
+    },
     Screen(name: "settings-diagnostics-export", onlyWhenNamed: true, presentsSheet: true) {
       AnyView(
         ScreenshotTests.settings().sheet(isPresented: .constant(true)) {
@@ -525,8 +529,8 @@ final class ScreenshotTests: XCTestCase {
     return onboarding
   }
 
-  private static func settings() -> AnyView {
-    AnyView(CompassSettingsView(drive: drive(location: .allowed), showTour: {}))
+  private static func settings(location: FixedTravelSensor.Access = .allowed) -> AnyView {
+    AnyView(CompassSettingsView(drive: drive(location: location), showTour: {}))
   }
 
   /// A small file with the real export's name, since the share sheet previews its name and type.
