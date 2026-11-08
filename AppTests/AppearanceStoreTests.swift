@@ -349,6 +349,11 @@ struct AppearanceStoreTests {
       height: height, readoutSize: .accessibility5, systemTextSize: .xSmall,
       showsTimestamp: true)
     #expect(!custom.showsLine)
+
+    // A small readout size keeps the standard Title 2 size as its floor.
+    let small = CarPlayReading<EmptyView>.sizing(
+      height: height, readoutSize: .xSmall, systemTextSize: .xSmall, showsTimestamp: true)
+    #expect(small.minimum == title2)
   }
 
   @Test func activityReadingAlwaysTriesItsMinimumSize() {
@@ -356,7 +361,7 @@ struct AppearanceStoreTests {
       for maximum: CGFloat in [40, 57, 58, 96] {
         let sizes = ActivityReading.sizes(minimum: minimum, maximum: maximum)
         #expect(sizes.last == minimum, "\(minimum) \(maximum): \(sizes)")
-        #expect(sizes == sizes.sorted(by: >))
+        #expect(zip(sizes, sizes.dropFirst()).allSatisfy { $0 > $1 }, "\(sizes)")
       }
     }
   }

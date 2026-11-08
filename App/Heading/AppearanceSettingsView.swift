@@ -98,7 +98,7 @@ struct AppearanceDetailView: View {
             Text("This saved appearance hides the readout. Choose a mode to show it.")
           } else if surface != .phone, value.readoutMode == .both {
             Text(
-              "At the largest text sizes, CarPlay and Apple Watch may have room for only direction or degrees. If Both Don’t Fit picks which one shows."
+              "At the largest text sizes, CarPlay and Apple Watch may have room for only direction or degrees. Choose which one shows."
             )
           }
         }
@@ -486,8 +486,8 @@ struct AppearancePreview: View {
 /// A Live Activity card in the shape the system gives it, following Apple's Live Activity
 /// specifications: the Lock Screen card fills the width it is given (on the Lock Screen, the
 /// screen less 22 points) and stays between 84 and 160 points tall, and the CarPlay card is 240 by
-/// 78 points, one of CarPlay Dashboard's sizes, growing taller rather than clip when a status
-/// uses a larger text size.
+/// 78 points, one of CarPlay Dashboard's sizes, growing taller only if even its shrunk status
+/// needs more height.
 struct LiveActivityExample: View {
   enum Presentation {
     case lockScreen, carPlay
