@@ -12,11 +12,12 @@ MODULE = runpy.run_path(str(SCRIPTS / "ci-scope"))
 
 DOCUMENTATION = ["README.md", "AGENTS.md", ".github/CODEOWNERS",
                  "docs/superpowers/specs/2026-10-30-widget-history.md",
-                 "app-store/en-US/description.txt", "website/docs/privacy.md"]
+                 "app-store/en-US/description.txt", "website/docs/privacy.md",
+                 "wiki/Developer-State-Machines.md"]
 CODE = ["App/Heading/CompassView.swift", "Tests/CompassCoreTests/CompassCoreTests.swift",
         "Package.swift", "Compass.xcodeproj/project.pbxproj", ".github/workflows/check.yml",
         "scripts/test-ios", ".swift-format", "docs-site/index.md", "README.md.bak",
-        ".github/workflows/pages.yml"]
+        ".github/workflows/pages.yml", ".github/workflows/wiki.yml", "scripts/sync-wiki"]
 
 
 class ClassificationTests(unittest.TestCase):

@@ -44,8 +44,7 @@ npm test --prefix scripts/tests/workflows
 
 Simulator tests inject heading and location input, so they don't validate the physical sensors
 or in-car CarPlay operation. Physical-device checks are on the
-[Development](https://github.com/lunchbox-labs/compasslet/wiki/Developer-Development#device-validation)
-wiki page.
+[Development](wiki/Developer-Development.md#device-validation) wiki page.
 
 ## UI capitalization
 
@@ -82,14 +81,16 @@ cover the file layout, invocation in each tool and reviewer permissions.
 Much of the app's behavior lives in implicit state machines: flags, enums, optionals, tasks and
 timers that together decide what a drive, the Live Activity, CarPlay or a permission prompt
 does next. The
-[State Machines](https://github.com/lunchbox-labs/compasslet/wiki/Developer-State-Machines)
-wiki page maps each one, its owner and its known failure states.
+[State Machines](wiki/Developer-State-Machines.md) wiki page maps each one, its owner and its
+known failure states.
 
 Before changing code that keeps state across timers, tasks or app and scene lifecycles, find
 the machine it belongs to on that page, or add it as a new machine with its own section and
-Overview row. Prepare the page's updates to states, transitions, diagrams and source
-references, including the commit they cite, with the change, and push them once it merges.
-Agents that can't push to the wiki give the requester a patch for the wiki repository instead.
+Overview row. Update the page's states, transitions, diagrams and source references in the
+same pull request as the change. Its line links cite one commit on `main`, and readers search
+for the named symbol when lines have moved, so name code the change adds by file and symbol
+without a line link. Re-pin the page to a newer `main` commit only when refreshing every
+reference.
 
 Test every transition the change adds or alters through observable behavior, not only the
 expected path: failure and denial, relaunch and process termination, backgrounding and return,
@@ -105,6 +106,19 @@ outlives its process, file a `bug` issue with how to reach it and the code that 
 Add it to the page's known failure states and to that machine's section. Fix it in the current
 change only when that is the change's purpose; a change that fixes a listed failure state
 removes it from the page.
+
+## Wiki
+
+The [wiki](https://github.com/lunchbox-labs/compasslet/wiki) is published from the `wiki`
+folder. Edit the pages there in a pull request, like any other change; the Wiki workflow
+(`.github/workflows/wiki.yml`) makes the wiki match the folder when the change merges to
+`main`, as a new commit on top of the wiki's history. Edits made on the wiki itself are
+replaced by the next sync, so make them in the folder instead.
+
+Each file name is a page name. Link between pages with the page name and no `.md`, as in
+`[Publishing](Developer-Publishing)`, so links work on the wiki. `_Sidebar.md` is the wiki's
+navigation; add a new page to it and to `Home.md`. `Home.md` must stay, since the sync refuses
+to publish a folder without it.
 
 ## Screenshots
 

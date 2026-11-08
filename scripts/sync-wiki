@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Make a wiki repository match a folder, as one new commit on top of the wiki's history.
+#
+# Pages added, changed or removed in the folder are added, changed or removed in the wiki.
+# The wiki's earlier commits are kept: this never force-pushes or rewrites history.
+set -euo pipefail
+
+usage() {
+  printf 'Usage: bash scripts/sync-wiki SOURCE_DIR WIKI_URL [SOURCE_NAME]\n' >&2
+  exit 2
+}
+(( $# == 2 || $# == 3 )) || usage
+source_dir=$1
+wiki_url=$2
+source_name=${3:-}
+
+# A missing or emptied folder would otherwise publish an empty wiki.
+if [[ ! -f "$source_dir/Home.md" ]]; then
+  printf '%s/Home.md is missing; refusing to replace the wiki with it.\n' "$source_dir" >&2
+  exit 1
+fi
+source_dir=$(cd "$source_dir" && pwd)
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+git clone --quiet -- "$wiki_url" "$work/wiki"
+cd "$work/wiki"
+
+find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} +
+cp -R -- "$source_dir/." .
+git add --all
+if git diff --cached --quiet; then
+  printf 'The wiki already matches %s.\n' "$source_dir"
+  exit 0
+fi
+
+message="Sync the wiki from the repository"
+if [[ -n "$source_name" ]]; then
+  message="Sync the wiki from $source_name"
+fi
+git -c user.name='github-actions[bot]' \
+  -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+  commit --quiet -m "$message"
+git diff --stat HEAD~1 HEAD 2>/dev/null || git show --stat --format= HEAD
+git push --quiet origin HEAD

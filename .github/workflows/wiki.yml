@@ -1,0 +1,38 @@
+name: Wiki
+on:
+  push:
+    branches: [main]
+    paths:
+      - "wiki/**"
+      - "scripts/sync-wiki"
+      - ".github/workflows/wiki.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: wiki
+  cancel-in-progress: false
+jobs:
+  sync:
+    # Only main is published, so a manual run from another branch can't publish unmerged pages.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      # The repository's own token can push to its wiki with contents write access.
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Make the wiki match the wiki folder
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          basic=$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)
+          echo "::add-mask::$basic"
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0="http.$GITHUB_SERVER_URL/.extraheader"
+          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $basic"
+          bash scripts/sync-wiki wiki "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.wiki.git" \
+            "$GITHUB_REPOSITORY@${GITHUB_SHA::7}"

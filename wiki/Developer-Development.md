@@ -55,3 +55,10 @@ contracts.
 
 [State Machines](Developer-State-Machines) maps the states and transitions that enforce the
 reading policies above. Release maintainers use [Publishing](Developer-Publishing).
+
+## Editing this wiki
+
+These pages live in the repository's
+[`wiki` folder](https://github.com/lunchbox-labs/compasslet/tree/main/wiki). Change them there
+in a pull request; the Wiki workflow publishes the folder when the change merges to `main`, and
+replaces any edit made directly on the wiki.
