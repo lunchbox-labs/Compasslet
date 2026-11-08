@@ -43,8 +43,8 @@ struct CompassActivityCard: View {
     .accessibilityLabel(CompassActivityView.accessibilitySummary(state: state, isStale: isStale))
   }
 
-  /// A Lock Screen reading is sized to leave room in 160 points for every line beneath it, so it
-  /// always shows them, directly beneath it. Otherwise, the tallest layout that fits: diagnostics
+  /// A Lock Screen reading is sized to leave room in 160 points for its line, so it always shows
+  /// it, directly beneath it. Otherwise, the tallest layout that fits: diagnostics
   /// (Lock Screen only), then the status between balanced lines, then (Lock Screen only) the
   /// status above its line, then the status alone, so the Lock Screen card never grows past 160
   /// points and the CarPlay card never outgrows the size CarPlay gives it. In CarPlay, a status
@@ -88,19 +88,29 @@ struct CompassActivityCard: View {
     }
   }
 
-  /// The Lock Screen reading, with its Last Updated line and any diagnostic times beneath it.
+  /// The Lock Screen reading with its Last Updated line directly beneath it, where it is sized to
+  /// leave room for it. Diagnostic times go beneath that when they fit too, and otherwise go.
   private var lockScreenReading: some View {
-    let diagnosticLines = state.debugUpdateTime == nil ? 0 : state.sampleTime == nil ? 1 : 2
-    return VStack(spacing: 2) {
+    ViewThatFits(in: .vertical) {
+      if let update = state.debugUpdateTime {
+        VStack(spacing: 2) {
+          readingWithLine(diagnosticLines: state.sampleTime == nil ? 1 : 2)
+          diagnostics(update: update)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+      }
+      // The last choice, so it shows even if it doesn't fit.
+      readingWithLine(diagnosticLines: 0).fixedSize(horizontal: false, vertical: true)
+    }
+  }
+
+  private func readingWithLine(diagnosticLines: Int) -> some View {
+    VStack(spacing: 2) {
       readout(diagnosticLines: diagnosticLines)
       if timestampMode != .hidden {
         secondaryLine
       }
-      if let update = state.debugUpdateTime {
-        diagnostics(update: update)
-      }
     }
-    .fixedSize(horizontal: false, vertical: true)
   }
 
   private var balanced: some View {
