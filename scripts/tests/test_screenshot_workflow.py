@@ -1,5 +1,6 @@
 """Execute the workflow's inline shell steps without a simulator or GitHub token."""
 import os
+import runpy
 from pathlib import Path
 import subprocess
 import tempfile
@@ -94,13 +95,21 @@ class ScreenshotWorkflowTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             return record.read_text().splitlines()[1:]
 
-    def test_the_accessibility_set_leaves_devices_and_appearances_to_the_script(self):
-        arguments = self.capture_arguments('accessibility')
-        self.assertEqual(arguments[:3], ['capture', '--set', 'accessibility'])
-        self.assertNotIn('--devices', arguments)
-        self.assertNotIn('--appearances', arguments)
-        self.assertEqual(arguments[arguments.index('--filter') + 1], 'tour; exit 3')
-        self.assertEqual(arguments[arguments.index('--max-parts') + 1], '3')
+    def test_each_set_leaves_devices_and_appearances_to_the_script(self):
+        for capture_set in ('accessibility', 'listing'):
+            with self.subTest(capture_set=capture_set):
+                arguments = self.capture_arguments(capture_set)
+                self.assertEqual(arguments[:3], ['capture', '--set', capture_set])
+                self.assertNotIn('--devices', arguments)
+                self.assertNotIn('--appearances', arguments)
+                self.assertEqual(arguments[arguments.index('--filter') + 1], 'tour; exit 3')
+                self.assertEqual(arguments[arguments.index('--max-parts') + 1], '3')
+
+    def test_the_workflow_offers_every_set_the_script_has(self):
+        workflow = (ROOT / '.github/workflows/screenshots.yml').read_text()
+        options = workflow.split('        options: [every screen, ', 1)[1].split(']', 1)[0]
+        script = runpy.run_path(str(ROOT / 'scripts/screenshots'))
+        self.assertEqual(sorted(options.split(', ')), sorted(script['SETS']))
 
     def test_pull_requests_and_the_default_choice_capture_every_screen(self):
         for capture_set in ('', 'every screen'):

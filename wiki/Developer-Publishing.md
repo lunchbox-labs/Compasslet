@@ -26,6 +26,23 @@ Published releases are [immutable](https://docs.github.com/en/code-security/conc
 assets cannot be added, replaced or deleted after publication. Attach screenshots
 while the release is still a draft.
 
+## App Store listing screenshots
+
+Run the [Screenshots workflow](https://github.com/lunchbox-labs/compasslet/actions/workflows/screenshots.yml)
+manually with `set` set to `listing` and `ref` set to the commit being submitted.
+It captures the compass in light and dark on iPhone 17, as
+`iphone-17-light-compass.png` and `iphone-17-dark-compass.png`. Upload both to the
+version's iPhone screenshots in App Store Connect.
+
+Apple's [screenshot specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/)
+require only iPhone with Dynamic Island (medium display), which iPhone 17 is, and
+scale those screenshots for the other iPhone sizes. The app is iPhone only, so no
+iPad screenshots are needed
+([#309](https://github.com/lunchbox-labs/compasslet/issues/309)). Apple Watch
+([#304](https://github.com/lunchbox-labs/compasslet/issues/304)) and iPhone Duo
+([#305](https://github.com/lunchbox-labs/compasslet/issues/305)) screenshots are
+left out of the first release.
+
 ## Credentials and signing
 
 Keep these key IDs as environment Variables and private keys as environment Secrets:

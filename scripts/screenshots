@@ -9,6 +9,8 @@ capture     Build the app once, then run ScreenshotTests on each device and appe
             --set accessibility captures the simulator part of the App Store accessibility
             evidence instead: fixed devices, text sizes, Bold Text, Increase Contrast,
             Reduce Transparency and Dark Mode, as listed in ACCESSIBILITY_SET.
+            --set listing captures the App Store listing screenshots, as listed in
+            LISTING_SET.
 """
 import argparse
 import json
@@ -100,7 +102,13 @@ ACCESSIBILITY_SET = (
     # Last on its simulator: the prompt stays up until the run ends.
     CapturePass(CURRENT_PHONE, "dark", ("compass-location-prompt",), undecided_location=True),
 )
-SETS = {"accessibility": ACCESSIBILITY_SET}
+# The App Store listing needs one iPhone size, iPhone with Dynamic Island (medium display), which
+# iPhone 17 is; App Store Connect scales those for the other iPhone sizes. The app is iPhone only
+# (#309) and ships without Apple Watch (#304) or iPhone Duo (#305) screenshots for now.
+LISTING_PHONE = CURRENT_PHONE
+LISTING_SET = tuple(CapturePass(LISTING_PHONE, appearance, ("compass",))
+                    for appearance in APPEARANCES)
+SETS = {"accessibility": ACCESSIBILITY_SET, "listing": LISTING_SET}
 
 
 def split_list(value):

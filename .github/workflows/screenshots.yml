@@ -9,9 +9,9 @@ on:
         required: false
         default: ""
       set:
-        description: What to capture; the accessibility set chooses its own simulators and appearances
+        description: What to capture; the accessibility and listing sets choose their own simulators and appearances
         type: choice
-        options: [every screen, accessibility]
+        options: [every screen, accessibility, listing]
         default: every screen
       devices:
         description: Simulators, as largest, smallest or exact names, separated by commas
@@ -94,8 +94,8 @@ jobs:
           SCREEN_FILTER: ${{ inputs.filter }}
           MAX_PARTS: ${{ inputs.max-parts || '9' }}
         run: |
-          if [[ "$CAPTURE_SET" == accessibility ]]; then
-            python3 scripts/screenshots capture --set accessibility --filter "$SCREEN_FILTER" \
+          if [[ "$CAPTURE_SET" == accessibility || "$CAPTURE_SET" == listing ]]; then
+            python3 scripts/screenshots capture --set "$CAPTURE_SET" --filter "$SCREEN_FILTER" \
               --max-parts "$MAX_PARTS" --output "$RUNNER_TEMP/screenshots"
           else
             python3 scripts/screenshots capture --devices "$DEVICES" \
