@@ -390,10 +390,13 @@ final class ScreenshotTests: XCTestCase {
     throw EndNotVisible()
   }
 
-  /// Less than this much more content below the visible area doesn't need another capture.
-  private static let minimumOverflow: CGFloat = 2
-  /// The share of the visible height each scroll step keeps from the previous part.
+  /// Less than this much more below the visible area is a Form's trailing spacing or the edge of
+  /// a row already shown, which doesn't need another capture.
+  private static let minimumOverflow: CGFloat = 24
+  /// The share of the visible height each scroll step keeps from the previous part, and the
+  /// least it keeps: more than the tour card's 40-point fade, so faded text shows in full next.
   private static let partOverlap: CGFloat = 0.15
+  private static let minimumPartOverlap: CGFloat = 48
 
   private static func bottomOffset(of scroll: UIScrollView) -> CGFloat {
     let inset = scroll.adjustedContentInset
@@ -434,9 +437,14 @@ final class ScreenshotTests: XCTestCase {
       }
       let inset = scroll.adjustedContentInset
       let visible = scroll.bounds.height - inset.top - inset.bottom
-      let step = max(1, (visible * (1 - Self.partOverlap)).rounded(.down))
+      let overlap = max(visible * Self.partOverlap, Self.minimumPartOverlap)
+      let step = max(1, max(visible - overlap, visible / 2).rounded(.down))
       let start = scroll.contentOffset.y
-      try await settle(scroll, at: min(start + step, Self.bottomOffset(of: scroll)))
+      // A part is an extra, so one that won't hold still ends this screen's parts, not the run.
+      guard await settle(scroll, at: min(start + step, Self.bottomOffset(of: scroll))) else {
+        print("Screenshots: part \(part + 1) of \(name) didn't stay in place, so it isn't captured")
+        return
+      }
       // Content that shrank as it laid out can leave nothing new to show.
       guard scroll.contentOffset.y > start + 0.5 else { return }
       part += 1
@@ -445,23 +453,21 @@ final class ScreenshotTests: XCTestCase {
   }
 
   /// Scrolls to an offset and waits until it stays there, since rows the Form sizes as they
-  /// appear can change its height, and so its end, after the scroll.
-  private func settle(_ scroll: UIScrollView, at offset: CGFloat) async throws {
+  /// appear can change its height, and so its end, after the scroll. False if it never does.
+  private func settle(_ scroll: UIScrollView, at offset: CGFloat) async -> Bool {
     var target = offset
     let deadline = ContinuousClock.now + .seconds(3)
     repeat {
       scroll.layoutIfNeeded()
       target = min(target, Self.bottomOffset(of: scroll))
       scroll.setContentOffset(CGPoint(x: scroll.contentOffset.x, y: target), animated: false)
-      // Long enough for a large title to collapse and a fade at the edge to follow the scroll.
-      try await Task.sleep(for: .milliseconds(500))
+      // Long enough for new rows to lay out and a fade at the edge to follow the scroll.
+      try? await Task.sleep(for: .milliseconds(500))
       scroll.layoutIfNeeded()
       let stayed = abs(scroll.contentOffset.y - target) < 0.5
-      if stayed && target <= Self.bottomOffset(of: scroll) + 0.5 { return }
+      if stayed && target <= Self.bottomOffset(of: scroll) + 0.5 { return true }
     } while ContinuousClock.now < deadline
-    struct PartNotSettled: Error {}
-    XCTFail("The scrolled part didn't stay in place before capture")
-    throw PartNotSettled()
+    return false
   }
 
   /// TipKit decides whether to show a tip asynchronously, so a tip invalidated just before its

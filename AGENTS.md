@@ -143,16 +143,19 @@ A screen whose content runs past the display, as many do at the accessibility te
 captured in parts. After the usual capture, the test scrolls the screen's largest scroll view
 that has more below, about one visible height at a time with a little of the previous part kept,
 and captures each further part until the end is on screen. The first part keeps the screen's
-name; later parts add `-part2`, `-part3` and so on, and `screenshots.json` records each `part`.
-Screens that fit are captured exactly as before. `max-parts` (default 6, at most 9; 1 for only
-the top) caps the captures per screen. Screens shown at a chosen scroll position, or with a tip
-or sheet over them, are captured only as shown; set `scrollsInParts: false` on a `Screen` entry
-to leave out another. Choose the `accessibility` set to capture the simulator part
-of the App Store accessibility evidence
-([#147](https://github.com/lunchbox-labs/compasslet/issues/147)) instead. It picks its own
-simulators and appearances, applies text sizes and Bold Text in the test, and turns on Increase
-Contrast and Reduce Transparency in the simulator, which the test confirms before capturing.
-`ACCESSIBILITY_SET` in `scripts/screenshots` lists it. A named iPhone that iOS 27 supports but the
+name; later parts add `-part2`, `-part3` and so on. In `screenshots.json`, every image of a
+screen captured in parts has a `part` number, and images of other screens have none. Screens
+that fit are captured exactly as before. The `max-parts` input (`--max-parts` in the script;
+default 6, at most 9, and 1 for only the top) caps the captures per screen. Screens shown at a
+chosen scroll position, with a tip or the share sheet over them, or with the location prompt up,
+are captured only as shown. Set `scrollsInParts: false` on a `Screen` entry to leave out
+another, as `compass-settings-sheet` does.
+
+Choose the `accessibility` set instead of every screen to capture the simulator part of the App
+Store accessibility evidence ([#147](https://github.com/lunchbox-labs/compasslet/issues/147)). It
+picks its own simulators and appearances, applies text sizes and Bold Text in the test, and turns
+on Increase Contrast and Reduce Transparency in the simulator, which the test confirms before
+capturing. `ACCESSIBILITY_SET` in `scripts/screenshots` lists it. A named iPhone that iOS 27 supports but the
 Mac hasn't set up is created for the run and deleted afterwards. Use these captures for mock-ups;
 don't push other branches to produce them. Clients that can't download artifacts can set
 `log-images` and read the images from the job log.
