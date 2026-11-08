@@ -60,6 +60,8 @@ final class DriveSessionControllerTests: XCTestCase {
   }
   var time = Date(timeIntervalSince1970: 1_000)
   var carAudio = false
+  var backgroundHolds = 0
+  var backgroundReleases = 0
   func reading(_ course: Double = 90) -> TravelSensorEvent {
     .reading(
       TravelReading(
@@ -69,7 +71,11 @@ final class DriveSessionControllerTests: XCTestCase {
   func make(_ sensor: Sensor, _ activity: Activity) -> DriveSessionController {
     DriveSessionController(
       sensor: sensor, activity: activity, now: { self.time }, automaticTick: false,
-      carAudioRoute: { self.carAudio })
+      carAudioRoute: { self.carAudio },
+      backgroundTime: {
+        self.backgroundHolds += 1
+        return { self.backgroundReleases += 1 }
+      })
   }
   func disconnectPastTheAbsenceLimit(_ controller: DriveSessionController) async {
     controller.carPlayDisconnected()
@@ -746,6 +752,93 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertTrue(needed)
     await controller.endDrive()
     XCTAssertFalse(controller.locationNeedsForeground)
+  }
+
+  func testLateNotInUseWithoutLaterReadingsEndsTheDrive() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    setCarAudio(true, controller)
+    await controller.startLiveActivity()
+    sensor.receive?(reading())
+    let needed = await controller.needsForegroundStart(waitingUpTo: .milliseconds(300))
+    XCTAssertFalse(needed)
+    sensor.receive?(.notInUse)
+    sensor.receive?(.notInUse)
+    XCTAssertEqual(backgroundHolds, 1)
+    time += DriveSessionController.notInUseLimit
+    controller.tick()
+    XCTAssertTrue(controller.isDriving)
+    time += 1
+    activity.pauseEnd = true
+    controller.tick()
+    XCTAssertFalse(controller.isDriving)
+    while activity.endContinuation == nil { await Task.yield() }
+    // The background time lasts until the Live Activity has ended.
+    XCTAssertEqual(backgroundReleases, 0)
+    activity.endContinuation?.resume()
+    await controller.waitForPendingOperations()
+    XCTAssertEqual(activity.ends, 2)
+    XCTAssertEqual(sensor.stops, 1)
+    XCTAssertEqual(backgroundReleases, 1)
+  }
+
+  func testReadingTakenBeforeTheNotInUseReportStillEndsTheDrive() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    setCarAudio(true, controller)
+    await controller.startLiveActivity()
+    let earlier = reading()
+    time += 1
+    sensor.receive?(.notInUse)
+    sensor.receive?(earlier)
+    XCTAssertEqual(backgroundReleases, 0)
+    time += DriveSessionController.notInUseLimit + 1
+    controller.tick()
+    await controller.waitForPendingOperations()
+    XCTAssertFalse(controller.isDriving)
+    XCTAssertEqual(backgroundReleases, 1)
+  }
+
+  func testLateNotInUseFollowedByReadingsKeepsTheDrive() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    setCarAudio(true, controller)
+    await controller.startLiveActivity()
+    sensor.receive?(reading())
+    sensor.receive?(.notInUse)
+    time += 1
+    sensor.receive?(reading())
+    XCTAssertEqual(backgroundReleases, 1)
+    time += DriveSessionController.notInUseLimit + 1
+    sensor.receive?(reading())
+    controller.tick()
+    XCTAssertTrue(controller.isDriving)
+    // A later report waits again, and ending the drive gives the background time back.
+    sensor.receive?(.notInUse)
+    XCTAssertEqual(backgroundHolds, 2)
+    await controller.endDrive()
+    XCTAssertEqual(backgroundReleases, 2)
+  }
+
+  func testNotInUseDuringACarPlaySceneDriveKeepsTheDrive() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    await controller.carPlayActivated()
+    sensor.receive?(.notInUse)
+    time += DriveSessionController.notInUseLimit + 1
+    controller.tick()
+    XCTAssertTrue(controller.isDriving)
+    XCTAssertEqual(backgroundHolds, 0)
+    await controller.endDrive()
+  }
+
+  func testNotInUseBeforeTheCarPlaySceneOpensKeepsTheDrive() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    setCarAudio(true, controller)
+    await controller.startLiveActivity()
+    sensor.receive?(.notInUse)
+    await controller.carPlayActivated()
+    XCTAssertEqual(backgroundReleases, 1)
+    time += DriveSessionController.notInUseLimit + 1
+    controller.tick()
+    XCTAssertTrue(controller.isDriving)
+    await controller.endDrive()
   }
 
   func testBackgroundStartWithAReadingStaysInTheBackground() async {
