@@ -85,8 +85,9 @@ These system-hosted surfaces have constraints beyond an ordinary iPhone screen.
   past the card.
 - CarPlay and the Apple Watch Smart Stack share the small card. At the largest text sizes its
   reading may have room for only direction or degrees; the When Only One Fits setting picks
-  which, and defaults to degrees. The compact Dynamic Island always shows only that one. The
-  Lock Screen and expanded Dynamic Island always fit both. The setting shows on the Global and
+  which, and defaults to degrees. The compact Dynamic Island always shows one field: the only
+  one shown, or the one this setting picks. The Lock Screen and expanded Dynamic Island always
+  fit both. The setting shows on the Global and
   Live Activity appearance pages when the readout shows both.
 
 ## Docs site

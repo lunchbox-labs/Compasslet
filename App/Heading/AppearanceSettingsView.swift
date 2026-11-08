@@ -98,7 +98,7 @@ struct AppearanceDetailView: View {
             Text("This saved appearance hides the readout. Choose a mode to show it.")
           } else if surface != .phone, value.readoutMode == .both {
             Text(
-              "The Dynamic Island has room for only direction or degrees, and so may CarPlay and Apple Watch at the largest text sizes. Choose which one shows."
+              "The Dynamic Island shows only direction or degrees, and CarPlay and Apple Watch may too at the largest text sizes. Choose which one shows."
             )
           }
         }

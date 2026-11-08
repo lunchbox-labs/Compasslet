@@ -227,7 +227,7 @@ final class ScreenshotTests: XCTestCase {
           .environment(\.dynamicTypeSize, .accessibility5)
           .environment(\.legibilityWeight, .bold))
     },
-    // When the whole reading doesn't fit, the field When Only One Fits keeps shows.
+    // When the whole reading doesn't fit, the field the When Only One Fits setting keeps shows.
     Screen(name: "live-activity-widest-reading-keeps-direction-largest-text") {
       AnyView(
         LiveActivityScreen(bearing: 315, shortReadout: .direction)
