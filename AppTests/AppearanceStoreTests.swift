@@ -124,23 +124,35 @@ struct AppearanceStoreTests {
     }
     for small in [false, true] {
       let card = CompassActivityCard(state: state, isSmall: small)
-      let reading = Text(verbatim: "NE 45°")
-        .font((small ? Font.title2 : Font.largeTitle).weight(.semibold)).monospacedDigit()
-        .multilineTextAlignment(.center)
-        .lineLimit(1).minimumScaleFactor(0.8)
-        .frame(maxWidth: .infinity)
       // Match the card's text proposal and placement; a bare Text can rasterize its trailing
       // degree symbol differently even when the visible content and center are identical.
       let expected: AnyView
       if small {
+        // With no line beneath it, the reading fills the card's height alone.
+        let reading = GeometryReader { geometry in
+          CarPlayReading(
+            presentation: CompassActivityReading(state: state, isStale: false),
+            size: geometry.size, showsTimestamp: false
+          ) {
+            Text(verbatim: "Last Updated")
+          }
+          .frame(width: geometry.size.width, height: geometry.size.height)
+        }
         expected = AnyView(
           reading.padding(.horizontal, 8).padding(.vertical, 4)
             .frame(maxWidth: .infinity, maxHeight: .infinity))
       } else {
+        // With no line beneath it, the reading may fill the card's whole height.
+        let insets = CompassActivityCard.lockScreenInsets
+        let height = LockScreenHeight.heights.upperBound - insets.top - insets.bottom
+        let reading = ActivityReading(
+          presentation: CompassActivityReading(state: state, isStale: false),
+          maximumSize: height / ActivityReading.lineHeight
+        )
+        .frame(maxWidth: .infinity)
         expected = AnyView(
           LockScreenHeight {
-            reading.padding(.horizontal, 14).padding(.vertical, 8)
-              .frame(maxWidth: .infinity)
+            reading.padding(insets).frame(maxWidth: .infinity)
           })
       }
       #expect(try render(card) == render(expected), "small=\(small)")
@@ -193,13 +205,47 @@ struct AppearanceStoreTests {
       let state = CompassActivityAttributes.ContentState(
         bearing: 359, status: test.status, sampleTime: sample, expiry: nil,
         debugUpdateTime: test.diagnostics ? sample : nil, appearance: test.appearance)
-      host.rootView = AnyView(
-        CompassActivityCard(state: state, isStale: test.stale)
-          .environment(\.dynamicTypeSize, test.textSize))
-      // Narrower than any supported banner (a 375-point screen less 22), for margin.
-      let size = host.sizeThatFits(in: CGSize(width: 298, height: 1000))
-      // The card reports its full height above 160 points, so an overflow shows here.
-      #expect(size.height <= 160, "\(test): \(size.height)")
+      for weight in [LegibilityWeight.regular, .bold] {
+        host.rootView = AnyView(
+          CompassActivityCard(state: state, isStale: test.stale)
+            .environment(\.dynamicTypeSize, test.textSize)
+            .environment(\.legibilityWeight, weight))
+        // Narrower than any supported banner (a 375-point screen less 22), for margin, and the
+        // widest iPhone banners, where the reading is limited by the card's height, not width.
+        for width in [298.0, 380, 418] {
+          let size = host.sizeThatFits(in: CGSize(width: width, height: 1000))
+          // The card reports its full height above 160 points, so an overflow shows here.
+          #expect(size.height <= 160, "\(test) \(weight) \(width): \(size.height)")
+        }
+      }
+    }
+  }
+
+  @Test func lockScreenReadingAlwaysShowsItsLine() throws {
+    let sample = Date(timeIntervalSince1970: 100)
+    func render(_ mode: ActivityTimestampMode, width: CGFloat, textSize: DynamicTypeSize) throws
+      -> Data
+    {
+      var appearance = AppearanceValues()
+      appearance.lockScreenTimestamp = mode
+      let state = CompassActivityAttributes.ContentState(
+        bearing: 315, status: .usable, sampleTime: sample, expiry: nil, appearance: appearance)
+      // At its own height.
+      let renderer = ImageRenderer(
+        content: CompassActivityCard(state: state)
+          .frame(width: width)
+          .environment(\.dynamicTypeSize, textSize)
+          .environment(\.colorScheme, .light))
+      renderer.scale = 3
+      return try #require(renderer.uiImage?.pngData())
+    }
+    for textSize in [DynamicTypeSize.large, .accessibility5] {
+      for width in [298.0, 380, 418] {
+        // A card without its line would look the same whichever time it shows.
+        #expect(
+          try render(.time, width: width, textSize: textSize)
+            != render(.elapsed, width: width, textSize: textSize), "\(textSize) \(width)")
+      }
     }
   }
 
@@ -229,9 +275,212 @@ struct AppearanceStoreTests {
     }
   }
 
+  /// CarPlay Dashboard's Live Activity card inside its insets.
+  private static let carPlayContent = CGSize(width: 224, height: 70)
+
+  /// The size of a CarPlay reading laid out for the card's content size.
+  private func carPlayReadingSize(
+    bearing: Double = 315, appearance: AppearanceValues = AppearanceValues(),
+    textSize: DynamicTypeSize = .large, weight: LegibilityWeight = .regular,
+    showsTimestamp: Bool = true
+  ) -> CGSize {
+    let state = CompassActivityAttributes.ContentState(
+      bearing: bearing, status: .usable, sampleTime: nil, expiry: nil, appearance: appearance)
+    let host = UIHostingController(
+      rootView: CarPlayReading(
+        presentation: CompassActivityReading(state: state, isStale: false),
+        size: Self.carPlayContent, showsTimestamp: showsTimestamp
+      ) {
+        Text("Last Updated 12:58 PM").font(.caption2).lineLimit(1).minimumScaleFactor(0.7)
+      }
+      .environment(\.locale, Locale(identifier: "en_US"))
+      .environment(\.dynamicTypeSize, textSize)
+      .environment(\.legibilityWeight, weight))
+    return host.sizeThatFits(in: CGSize(width: Self.carPlayContent.width, height: 1000))
+  }
+
+  @Test func carPlayReadingFillsItsCardWithoutOutgrowingIt() {
+    var custom = AppearanceValues()
+    custom.useSystemTextSize = false
+    custom.customTextSize = .accessibility5
+    var directionFirst = AppearanceValues()
+    directionFirst.shortReadout = .direction
+    for appearance in [AppearanceValues(), custom, directionFirst] {
+      let textSizes: [DynamicTypeSize] = [
+        .xSmall, .large, .xxxLarge, .accessibility3, .accessibility5,
+      ]
+      for textSize in textSizes {
+        for weight in [LegibilityWeight.regular, .bold] {
+          for showsTimestamp in [true, false] {
+            let size = carPlayReadingSize(
+              appearance: appearance, textSize: textSize, weight: weight,
+              showsTimestamp: showsTimestamp)
+            #expect(
+              size.height <= Self.carPlayContent.height + 0.5,
+              "\(textSize) \(weight) \(showsTimestamp): \(size)")
+            #expect(size.width <= Self.carPlayContent.width + 0.5, "\(textSize) \(weight)")
+          }
+        }
+      }
+    }
+    // Most of the card's height goes to the reading: well over the title size it used to use,
+    // which with its line came to about 40 points.
+    #expect(carPlayReadingSize().height > 60)
+  }
+
+  @Test func carPlayReadingShowsItsLineOnlyWhenItFits() {
+    let height = Self.carPlayContent.height
+    let title2 = DynamicTypeSize.large.font(for: .title2).pointSize
+    let standard = CarPlayReading<EmptyView>.sizing(
+      height: height, readoutSize: .large, systemTextSize: .large, showsTimestamp: true)
+    #expect(standard.showsLine)
+    #expect(standard.maximum > title2 * 1.5, "\(standard)")
+    #expect(standard.minimum == title2)
+
+    let largest = CarPlayReading<EmptyView>.sizing(
+      height: height, readoutSize: .accessibility5, systemTextSize: .accessibility5,
+      showsTimestamp: true)
+    #expect(!largest.showsLine)
+    #expect(largest.minimum == DynamicTypeSize.accessibility5.font(for: .title2).pointSize)
+    #expect(largest.maximum == height / ActivityReading.lineHeight)
+
+    let hidden = CarPlayReading<EmptyView>.sizing(
+      height: height, readoutSize: .large, systemTextSize: .large, showsTimestamp: false)
+    #expect(!hidden.showsLine)
+    #expect(hidden.maximum == height / ActivityReading.lineHeight)
+
+    // A large custom readout size leaves no room for the line, whatever the system's size.
+    let custom = CarPlayReading<EmptyView>.sizing(
+      height: height, readoutSize: .accessibility5, systemTextSize: .xSmall,
+      showsTimestamp: true)
+    #expect(!custom.showsLine)
+
+    // A small readout size keeps the standard Title 2 size as its floor.
+    let small = CarPlayReading<EmptyView>.sizing(
+      height: height, readoutSize: .xSmall, systemTextSize: .xSmall, showsTimestamp: true)
+    #expect(small.minimum == title2)
+  }
+
+  @Test func activityReadingAlwaysTriesItsMinimumSize() {
+    for minimum: CGFloat in [28, 34, 50, 51, 56] {
+      for maximum: CGFloat in [40, 57, 58, 96] {
+        let sizes = ActivityReading.sizes(minimum: minimum, maximum: maximum)
+        #expect(sizes.last == minimum, "\(minimum) \(maximum): \(sizes)")
+        #expect(zip(sizes, sizes.dropFirst()).allSatisfy { $0 > $1 }, "\(sizes)")
+      }
+    }
+  }
+
+  @Test func carPlayReadingKeepsOneSizeForEveryDirection() {
+    let bearings = Array(stride(from: 0.0, to: 360, by: 22.5)) + [7, 359]
+    for textSize in [DynamicTypeSize.large, .accessibility5] {
+      let sizes = bearings.map { carPlayReadingSize(bearing: $0, textSize: textSize) }
+      let heights = Set(sizes.map(\.height))
+      #expect(heights.count == 1, "\(textSize): \(heights)")
+    }
+  }
+
   /// The narrowest Lock Screen card's content: a 375-point iPhone with Display Zoom is 320
   /// points wide, less 22 points for the banner and 28 for the card's side insets.
   private static let narrowestLine: CGFloat = 270
+  /// A 402-point iPhone's Lock Screen card content, less the same banner and insets.
+  private static let typicalLine: CGFloat = 352
+
+  /// The height of a Lock Screen reading on a line of the given width, with room for any size.
+  private func readingHeight(
+    bearing: Double, appearance: AppearanceValues = AppearanceValues(), width: CGFloat,
+    textSize: DynamicTypeSize = .large, weight: LegibilityWeight = .regular
+  ) -> CGFloat {
+    let state = CompassActivityAttributes.ContentState(
+      bearing: bearing, status: .usable, sampleTime: nil, expiry: nil, appearance: appearance)
+    let host = UIHostingController(
+      rootView: ActivityReading(
+        presentation: CompassActivityReading(state: state, isStale: false), maximumSize: 200
+      )
+      .environment(\.locale, Locale(identifier: "en_US"))
+      .environment(\.dynamicTypeSize, textSize)
+      .environment(\.legibilityWeight, weight))
+    return host.sizeThatFits(in: CGSize(width: width, height: 1000)).height
+  }
+
+  @Test func lockScreenReadingKeepsOneSizeForEveryDirection() {
+    // Every point, and one-, two- and three-digit angles.
+    let bearings = Array(stride(from: 0.0, to: 360, by: 22.5)) + [7, 359]
+    var degreesOnly = AppearanceValues()
+    degreesOnly.showDirection = false
+    var directionOnly = AppearanceValues()
+    directionOnly.showDegrees = false
+    for appearance in [AppearanceValues(), degreesOnly, directionOnly] {
+      for weight in [LegibilityWeight.regular, .bold] {
+        for width in [Self.narrowestLine, Self.typicalLine] {
+          let heights = Set(
+            bearings.map {
+              readingHeight(bearing: $0, appearance: appearance, width: width, weight: weight)
+            })
+          #expect(heights.count == 1, "\(appearance) \(weight) \(width): \(heights)")
+        }
+      }
+    }
+  }
+
+  @Test func widestBearingIsAtLeastAsWideAsEveryReading() {
+    func width(_ text: String, weight: LegibilityWeight) -> CGFloat {
+      let host = UIHostingController(
+        rootView: Text(verbatim: text)
+          .font(.system(size: 100, weight: .semibold)).monospacedDigit()
+          .environment(\.legibilityWeight, weight))
+      let unbounded = CGFloat.greatestFiniteMagnitude
+      return host.sizeThatFits(in: CGSize(width: unbounded, height: unbounded)).width
+    }
+    let state = CompassActivityAttributes.ContentState(
+      bearing: 0, status: .usable, sampleTime: nil, expiry: nil)
+    let widest = CompassActivityReading(state: state, isStale: false).widestBearing
+    for weight in [LegibilityWeight.regular, .bold] {
+      let limit = width(widest, weight: weight)
+      for point in CompassPoint.allCases {
+        for degrees in ["0°", "111°", "359°", "888°"] {
+          let reading = "\(point.abbreviation) \(degrees)"
+          #expect(width(reading, weight: weight) <= limit + 0.5, "\(reading) \(weight)")
+        }
+      }
+    }
+  }
+
+  @Test func lockScreenReadingIsFarLargerThanTheLargeTitle() {
+    let host = UIHostingController(
+      rootView: Text(verbatim: "NE 47°").font(.largeTitle.weight(.semibold)).monospacedDigit()
+        .environment(\.dynamicTypeSize, .large))
+    let title = host.sizeThatFits(in: CGSize(width: Self.typicalLine, height: 1000)).height
+    let reading = readingHeight(bearing: 47, width: Self.typicalLine)
+    #expect(reading >= title * 1.6, "\(reading) vs \(title)")
+  }
+
+  @Test func lockScreenReadingFollowsSmallerTextSizesOnly() {
+    let smaller = [DynamicTypeSize.xSmall, .small, .medium, .large].map {
+      readingHeight(bearing: 47, width: Self.typicalLine, textSize: $0)
+    }
+    #expect(zip(smaller, smaller.dropFirst()).allSatisfy { $0 < $1 }, "\(smaller)")
+    // A larger text size can't widen the line.
+    #expect(
+      readingHeight(bearing: 47, width: Self.typicalLine, textSize: .accessibility5)
+        == smaller.last)
+  }
+
+  @Test func lockScreenCardFollowsASmallerCustomTextSize() {
+    func height(_ appearance: AppearanceValues) -> CGFloat {
+      var appearance = appearance
+      appearance.lockScreenTimestamp = .hidden
+      let state = CompassActivityAttributes.ContentState(
+        bearing: 47, status: .usable, sampleTime: nil, expiry: nil, appearance: appearance)
+      let host = UIHostingController(
+        rootView: CompassActivityCard(state: state).environment(\.dynamicTypeSize, .large))
+      return host.sizeThatFits(in: CGSize(width: Self.typicalLine + 28, height: 1000)).height
+    }
+    var custom = AppearanceValues()
+    custom.useSystemTextSize = false
+    custom.customTextSize = .xSmall
+    #expect(height(custom) < height(AppearanceValues()))
+  }
 
   private func idealWidth(_ view: some View) -> CGFloat {
     let styled = view.font(.caption2).monospacedDigit()

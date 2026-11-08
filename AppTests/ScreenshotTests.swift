@@ -219,6 +219,21 @@ final class ScreenshotTests: XCTestCase {
     Screen(name: "live-activity-waiting-largest-text") {
       AnyView(LiveActivityScreen(status: .waiting).environment(\.dynamicTypeSize, .accessibility5))
     },
+    // Northwest is the widest direction, which sets the reading's size for every direction.
+    Screen(name: "live-activity-widest-reading") { AnyView(LiveActivityScreen(bearing: 315)) },
+    Screen(name: "live-activity-widest-reading-largest-text") {
+      AnyView(
+        LiveActivityScreen(bearing: 315)
+          .environment(\.dynamicTypeSize, .accessibility5)
+          .environment(\.legibilityWeight, .bold))
+    },
+    // When the whole reading doesn't fit, the field If Both Don’t Fit keeps shows.
+    Screen(name: "live-activity-widest-reading-keeps-direction-largest-text") {
+      AnyView(
+        LiveActivityScreen(bearing: 315, shortReadout: .direction)
+          .environment(\.dynamicTypeSize, .accessibility5)
+          .environment(\.legibilityWeight, .bold))
+    },
     Screen(name: "live-activity-status") { AnyView(LiveActivityScreen(status: .slow)) },
     Screen(name: "live-activity-status-largest-text") {
       AnyView(LiveActivityScreen(status: .slow).environment(\.dynamicTypeSize, .accessibility5))
@@ -783,6 +798,8 @@ private final class IdleActivity: CompassActivityPresenting {
 /// simulator can't show a running Live Activity without CarPlay.
 private struct LiveActivityScreen: View {
   var mode: ActivityTimestampMode = .time
+  var bearing: Double = 47
+  var shortReadout = ShortReadout.degrees
   /// Anything but `.usable` shows that status instead of a reading.
   var status: CompassActivityAttributes.Status = .usable
 
@@ -790,8 +807,9 @@ private struct LiveActivityScreen: View {
     var appearance = AppearanceValues()
     appearance.lockScreenTimestamp = mode
     appearance.carPlayActivityTimestamp = mode
+    appearance.shortReadout = shortReadout
     return .init(
-      bearing: status == .usable ? 47 : nil, status: status, sampleTime: sampleTime,
+      bearing: status == .usable ? bearing : nil, status: status, sampleTime: sampleTime,
       expiry: nil, appearance: appearance)
   }
 

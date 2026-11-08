@@ -63,12 +63,18 @@ struct CompassActivityReading {
     ].compactMap { $0 }.joined(separator: " ")
   }
 
-  /// The visible reading followed by its shorter forms, degrees then direction, when both fields
-  /// are shown, so a small presentation can shorten before shrinking; nothing without a reading.
+  /// The visible reading followed by its shorter forms when both fields are shown, the one the
+  /// appearance keeps first, so a small presentation can shorten before shrinking; nothing
+  /// without a reading.
   var bearingCandidates: [String] {
     guard let reading else { return [] }
     guard appearance.showDirection && appearance.showDegrees else { return [bearing] }
-    return [bearing, reading.degrees, reading.point.abbreviation]
+    let degrees = reading.degrees
+    let direction = reading.point.abbreviation
+    return switch appearance.shortReadout {
+    case .degrees: [bearing, degrees, direction]
+    case .direction: [bearing, direction, degrees]
+    }
   }
 
   /// The spoken description without the sample time, which a view appends in the user's format.

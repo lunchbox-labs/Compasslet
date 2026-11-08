@@ -261,6 +261,7 @@ import Testing
   let activity = preferences.effective(for: .activity)
   #expect(activity.lockScreenTimestamp == .time)
   #expect(activity.carPlayActivityTimestamp == .time)
+  #expect(activity.shortReadout == .degrees)
   #expect(activity.customTextSize == .xxLarge)
   #expect(!activity.useSystemTextSize)
   #expect(!preferences.global.showDegrees)
@@ -277,6 +278,16 @@ import Testing
   #expect(restored.effective(for: .activity).carPlayActivityTimestamp == .elapsed)
   #expect(restored.global.lockScreenTimestamp == .time)
   #expect(restored.global.carPlayActivityTimestamp == .time)
+}
+
+@Test func shortReadoutChoicePersistsPerSurface() throws {
+  var preferences = AppearancePreferences()
+  var activity = preferences.effective(for: .activity)
+  activity.shortReadout = .direction
+  preferences.setOverride(activity, for: .activity)
+  let restored = AppearancePreferences.decode(try JSONEncoder().encode(preferences))
+  #expect(restored.effective(for: .activity).shortReadout == .direction)
+  #expect(restored.global.shortReadout == .degrees)
 }
 
 @Test func renamedFieldsKeepTheirStoredKeys() throws {
