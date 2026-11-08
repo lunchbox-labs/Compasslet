@@ -4,6 +4,8 @@
 capture     Build the app once, then run ScreenshotTests on each device and appearance. The
             test shows one screen at a time and asks for a screenshot by writing a request
             file; this script answers with a full simulator screenshot and a done file.
+            A screen that scrolls is then scrolled about one screen at a time and each
+            further part saved as <name>-part2, -part3 and so on, up to --max-parts.
             --set accessibility captures the simulator part of the App Store accessibility
             evidence instead: fixed devices, text sizes, Bold Text, Increase Contrast,
             Reduce Transparency and Dark Mode, as listed in ACCESSIBILITY_SET.
@@ -27,6 +29,11 @@ BUNDLE_IDENTIFIER = "dev.lunchbox-labs.carplay-compass"
 MANIFEST = "screenshots.json"
 MINIMUM_IOS = 27
 LAUNCH_SCREEN = "launch-first-frame"
+# Parts of one scrolling screen, counting the first. Nine keeps part numbers to one digit, so
+# they sort in order.
+DEFAULT_MAX_PARTS = 6
+MAX_PARTS_LIMIT = 9
+PART_SUFFIX = re.compile(r"^(.+)-part([2-9])$")
 
 
 @dataclass(frozen=True)
@@ -217,6 +224,34 @@ def passes_for(set_name, screen_filter):
     return narrowed
 
 
+def split_part(request):
+    """The screen request and part a capture names, as the test joins them: request-partN.
+    The first part keeps the screen's own name."""
+    match = PART_SUFFIX.match(request)
+    return (match.group(1), int(match.group(2))) if match else (request, 1)
+
+
+def number_first_parts(entries):
+    """Marks the first capture of each screen that has later parts as part 1."""
+    def key(entry):
+        return entry["screen"], entry.get("text_variant")
+
+    scrolled = {key(entry) for entry in entries if "part" in entry}
+    return [dict(entry, part=1) if "part" not in entry and key(entry) in scrolled else entry
+            for entry in entries]
+
+
+def max_parts(value):
+    """Parses --max-parts: a whole number from 1, only the top of each screen, to the limit."""
+    try:
+        parts = int(value)
+    except ValueError:
+        parts = 0
+    if not 1 <= parts <= MAX_PARTS_LIMIT:
+        raise argparse.ArgumentTypeError("use a whole number from 1 to " + str(MAX_PARTS_LIMIT))
+    return parts
+
+
 def split_text_variant(request, text_variants):
     """The screen and text variant a request names, as the test joins them: screen-variant."""
     for variant in sorted(text_variants, key=len, reverse=True):
@@ -330,7 +365,7 @@ def capture_launch(device, capture_pass, output):
     return None
 
 
-def run_pass(xcodebuild, device, capture_pass, output, screen_filter):
+def run_pass(xcodebuild, device, capture_pass, output, screen_filter, parts):
     """Runs ScreenshotTests once; returns the captured entries and whether anything failed."""
     udid = device["udid"]
     captured, failed = [], False
@@ -354,6 +389,7 @@ def run_pass(xcodebuild, device, capture_pass, output, screen_filter):
                     TEST_RUNNER_SCREENSHOT_APPEARANCE=capture_pass.appearance,
                     TEST_RUNNER_SCREENSHOT_FILTER=screen_filter,
                     TEST_RUNNER_SCREENSHOT_SCREENS=",".join(capture_pass.screens),
+                    TEST_RUNNER_SCREENSHOT_MAX_PARTS=str(parts),
                     TEST_RUNNER_SCREENSHOT_TEXT_VARIANTS=",".join(capture_pass.text_variants),
                     TEST_RUNNER_SCREENSHOT_SYSTEM_SETTINGS=",".join(capture_pass.system_settings))
                 try:
@@ -366,12 +402,17 @@ def run_pass(xcodebuild, device, capture_pass, output, screen_filter):
             failed = failed or result.returncode != 0 or bool(responder.failed)
             for name in responder.failed:
                 print("No screenshot was saved for " + name, file=sys.stderr)
+            screens = []
             for entry in responder.captured:
+                screen, part = split_part(entry["screen"])
+                entry = dict(entry, screen=screen)
+                if part > 1:
+                    entry["part"] = part
                 if capture_pass.text_variants:
-                    screen, variant = split_text_variant(entry["screen"],
-                                                         capture_pass.text_variants)
+                    screen, variant = split_text_variant(screen, capture_pass.text_variants)
                     entry = dict(entry, screen=screen, text_variant=variant)
-                captured.append(entry)
+                screens.append(entry)
+            captured += number_first_parts(screens)
     finally:
         for setting in capture_pass.system_settings:
             set_system_setting(udid, setting, False)
@@ -433,7 +474,7 @@ def capture(arguments):
             try:
                 for capture_pass in device_passes:
                     entries, pass_failed = run_pass(xcodebuild, device, capture_pass, output,
-                                                    screen_filter)
+                                                    screen_filter, arguments.max_parts)
                     manifest += entries
                     failed = failed or pass_failed
             finally:
@@ -465,6 +506,11 @@ def main(argv=None):
     capture_parser.add_argument("--appearances", help="light, dark or both; default light,dark")
     capture_parser.add_argument("--filter", default="",
                                 help="comma-separated screen name prefixes; empty for all")
+    capture_parser.add_argument("--max-parts", type=max_parts, default=DEFAULT_MAX_PARTS,
+                                help="most captures of each screen that scrolls, counting the "
+                                     "first, from 1 (only the top) to "
+                                     + str(MAX_PARTS_LIMIT) + "; default "
+                                     + str(DEFAULT_MAX_PARTS))
     capture_parser.add_argument("--output", default=".build/screenshots")
     capture_parser.add_argument("--derived-data", default=".build/xcode")
     capture_parser.set_defaults(handler=capture)

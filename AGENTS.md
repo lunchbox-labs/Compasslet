@@ -137,7 +137,17 @@ commit recorded in its event and reports that exact commit in the run summary.
 For custom captures, use Actions → Screenshots → Run workflow. Set `ref` to a branch, tag, commit
 or pull request number (empty uses the run's branch), choose `devices` and `appearances`, and
 narrow it with `filter` when only a few screens matter. Each run keeps its images for 7 days as a
-`screenshots-run-<number>` artifact. Choose the `accessibility` set to capture the simulator part
+`screenshots-run-<number>` artifact.
+
+A screen whose content runs past the display, as many do at the accessibility text sizes, is
+captured in parts. After the usual capture, the test scrolls the screen's largest scroll view
+that has more below, about one visible height at a time with a little of the previous part kept,
+and captures each further part until the end is on screen. The first part keeps the screen's
+name; later parts add `-part2`, `-part3` and so on, and `screenshots.json` records each `part`.
+Screens that fit are captured exactly as before. `max-parts` (default 6, at most 9; 1 for only
+the top) caps the captures per screen. Screens shown at a chosen scroll position, or with a tip
+or sheet over them, are captured only as shown; set `scrollsInParts: false` on a `Screen` entry
+to leave out another. Choose the `accessibility` set to capture the simulator part
 of the App Store accessibility evidence
 ([#147](https://github.com/lunchbox-labs/compasslet/issues/147)) instead. It picks its own
 simulators and appearances, applies text sizes and Bold Text in the test, and turns on Increase

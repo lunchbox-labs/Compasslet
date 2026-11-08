@@ -16,6 +16,9 @@ To include screenshots:
 1. Run the [Screenshots workflow](https://github.com/lunchbox-labs/compasslet/actions/workflows/screenshots.yml)
    manually with its `ref` input set to that version tag or commit.
 2. Download the images from the run's `screenshots-run-<run number>` artifact.
+   Images ending in `-part2`, `-part3` and so on show the rest of a screen that
+   scrolls; leave them out, or set the run's `max-parts` input to 1 to capture only
+   the top of each screen.
 3. Attach the images to the draft GitHub Release, then publish it once all assets
    are in place.
 

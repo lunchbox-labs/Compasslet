@@ -88,7 +88,7 @@ class ScreenshotWorkflowTests(unittest.TestCase):
                 ['bash', '-e', '-c', shell_step('Capture the screens')],
                 env=dict(os.environ, PATH=str(bin_directory) + os.pathsep + os.environ['PATH'],
                          RECORD=str(record), CAPTURE_SET=capture_set, DEVICES='largest',
-                         APPEARANCES='dark', SCREEN_FILTER='tour; exit 3',
+                         APPEARANCES='dark', SCREEN_FILTER='tour; exit 3', MAX_PARTS='3',
                          RUNNER_TEMP=directory),
                 capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
@@ -100,6 +100,7 @@ class ScreenshotWorkflowTests(unittest.TestCase):
         self.assertNotIn('--devices', arguments)
         self.assertNotIn('--appearances', arguments)
         self.assertEqual(arguments[arguments.index('--filter') + 1], 'tour; exit 3')
+        self.assertEqual(arguments[arguments.index('--max-parts') + 1], '3')
 
     def test_pull_requests_and_the_default_choice_capture_every_screen(self):
         for capture_set in ('', 'every screen'):
@@ -108,6 +109,7 @@ class ScreenshotWorkflowTests(unittest.TestCase):
                 self.assertNotIn('--set', arguments)
                 self.assertEqual(arguments[arguments.index('--devices') + 1], 'largest')
                 self.assertEqual(arguments[arguments.index('--appearances') + 1], 'dark')
+                self.assertEqual(arguments[arguments.index('--max-parts') + 1], '3')
 
 
 if __name__ == '__main__':

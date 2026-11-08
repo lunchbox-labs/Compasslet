@@ -7,7 +7,8 @@ import XCTest
 @testable import Compass
 
 /// Renders every named screen with fixed sensor input for `scripts/screenshots`, which takes a
-/// full simulator screenshot of each. Runs only when that script sets `SCREENSHOT_DIRECTORY`.
+/// full simulator screenshot of each, and of each further part of a screen that scrolls. Runs
+/// only when that script sets `SCREENSHOT_DIRECTORY`.
 ///
 /// A pull request that adds or changes a screen adds or updates its entry in `screens`.
 @MainActor
@@ -25,7 +26,16 @@ final class ScreenshotTests: XCTestCase {
     var onlyWhenNamed = false
     /// Presents the system share sheet, whose content loads after the sheet appears.
     var presentsSheet = false
+    /// Scrolls through the rest of the screen after its first capture, when it has more than
+    /// fits, and captures each part. Off for a screen whose point is what is over it.
+    var scrollsInParts = true
     let content: @MainActor () async -> AnyView
+
+    /// A screen shown at a chosen scroll position, or with a tip or sheet over it, is captured
+    /// only as it is.
+    var capturesScrolledParts: Bool {
+      scrollsInParts && !showsEnd && !showsLastRow && !showsTip && !presentsSheet
+    }
   }
 
   /// A text size and Bold Text combination applied to the window as the system would apply it.
@@ -77,7 +87,10 @@ final class ScreenshotTests: XCTestCase {
     Screen(name: "compass-large-text") {
       AnyView(await ScreenshotTests.compass().environment(\.dynamicTypeSize, .accessibility3))
     },
-    Screen(name: "compass-settings-sheet") { await ScreenshotTests.compass(showsSettings: true) },
+    // The sheet's Form is the settings screen, which has its own parts.
+    Screen(name: "compass-settings-sheet", scrollsInParts: false) {
+      await ScreenshotTests.compass(showsSettings: true)
+    },
     Screen(name: "compass-finding-north") { await ScreenshotTests.compass(heading: nil) },
     Screen(name: "compass-calibration") {
       await ScreenshotTests.compass(heading: .calibrationNeeded)
@@ -218,6 +231,8 @@ final class ScreenshotTests: XCTestCase {
   private var namedScreens: [String] = []
   private var textVariants = [TextVariant.standard]
   private var interfaceStyle = UIUserInterfaceStyle.light
+  /// The most captures of one screen that scrolls, counting the first.
+  private var maxParts = 1
 
   override func setUp() async throws {
     let environment = ProcessInfo.processInfo.environment
@@ -228,6 +243,10 @@ final class ScreenshotTests: XCTestCase {
     nameFilter = Self.list(environment["SCREENSHOT_FILTER"])
     namedScreens = Self.list(environment["SCREENSHOT_SCREENS"])
     interfaceStyle = environment["SCREENSHOT_APPEARANCE"] == "dark" ? .dark : .light
+    if let parts = environment["SCREENSHOT_MAX_PARTS"], !parts.isEmpty {
+      maxParts = try XCTUnwrap(Int(parts), "SCREENSHOT_MAX_PARTS must be a number, not \(parts)")
+      XCTAssertGreaterThanOrEqual(maxParts, 1, "SCREENSHOT_MAX_PARTS must be at least 1")
+    }
     let variantNames = Self.list(environment["SCREENSHOT_TEXT_VARIANTS"])
     if !variantNames.isEmpty {
       textVariants = try variantNames.map { name in
@@ -302,6 +321,9 @@ final class ScreenshotTests: XCTestCase {
         try await requestScreenshot(name, in: directory)
         // Still undecided means the prompt hadn't been answered or dismissed when captured.
         if asksForLocation { try requireUndecidedLocation() }
+        if screen.capturesScrolledParts && !asksForLocation {
+          try await captureParts(of: name, in: window, to: directory)
+        }
         window.isHidden = true
       }
     }
@@ -354,21 +376,92 @@ final class ScreenshotTests: XCTestCase {
   /// they appear can change its height after the first scroll.
   private func showEnd(in window: UIWindow) async throws {
     let form = try onlyForm(in: window)
-    func bottomOffset() -> CGFloat {
-      let inset = form.adjustedContentInset
-      return max(-inset.top, form.contentSize.height + inset.bottom - form.bounds.height)
-    }
     let deadline = ContinuousClock.now + .seconds(3)
     repeat {
       form.layoutIfNeeded()
-      form.setContentOffset(CGPoint(x: form.contentOffset.x, y: bottomOffset()), animated: false)
+      form.setContentOffset(
+        CGPoint(x: form.contentOffset.x, y: Self.bottomOffset(of: form)), animated: false)
       try await Task.sleep(for: .milliseconds(200))
       form.layoutIfNeeded()
-      if abs(form.contentOffset.y - bottomOffset()) < 0.5 { return }
+      if abs(form.contentOffset.y - Self.bottomOffset(of: form)) < 0.5 { return }
     } while ContinuousClock.now < deadline
     struct EndNotVisible: Error {}
     XCTFail("The end of the Form must be on screen before capture")
     throw EndNotVisible()
+  }
+
+  /// Less than this much more content below the visible area doesn't need another capture.
+  private static let minimumOverflow: CGFloat = 2
+  /// The share of the visible height each scroll step keeps from the previous part.
+  private static let partOverlap: CGFloat = 0.15
+
+  private static func bottomOffset(of scroll: UIScrollView) -> CGFloat {
+    let inset = scroll.adjustedContentInset
+    return max(-inset.top, scroll.contentSize.height + inset.bottom - scroll.bounds.height)
+  }
+
+  /// The scroll view showing the most of the screen whose content runs past its visible area,
+  /// such as a Form or a tour card at the largest text sizes, or nil when everything fits.
+  private func overflowingScrollView(in window: UIWindow) -> UIScrollView? {
+    func scrollViews(in view: UIView) -> [UIScrollView] {
+      guard !view.isHidden, view.alpha > 0 else { return [] }
+      let own = (view as? UIScrollView).map { [$0] } ?? []
+      return own + view.subviews.flatMap { scrollViews(in: $0) }
+    }
+    func visibleArea(_ scroll: UIScrollView) -> CGFloat {
+      let frame = scroll.convert(scroll.bounds, to: window).intersection(window.bounds)
+      return frame.isNull ? 0 : frame.width * frame.height
+    }
+    window.layoutIfNeeded()
+    return scrollViews(in: window)
+      .filter { scroll in
+        !(scroll is UITextView) && scroll.isScrollEnabled && visibleArea(scroll) > 0
+          && Self.bottomOffset(of: scroll) - scroll.contentOffset.y > Self.minimumOverflow
+      }
+      .max { visibleArea($0) < visibleArea($1) }
+  }
+
+  /// After a screen's first capture, scrolls its main scroll view by about one visible height at
+  /// a time, keeping a little of the previous part, and captures each part as `name-partN` until
+  /// the end is on screen or `maxParts` captures are taken.
+  private func captureParts(of name: String, in window: UIWindow, to folder: URL) async throws {
+    guard maxParts > 1, let scroll = overflowingScrollView(in: window) else { return }
+    var part = 1
+    while Self.bottomOffset(of: scroll) - scroll.contentOffset.y > Self.minimumOverflow {
+      guard part < maxParts else {
+        print("Screenshots: \(name) has more below its \(maxParts) parts, which isn't captured")
+        return
+      }
+      let inset = scroll.adjustedContentInset
+      let visible = scroll.bounds.height - inset.top - inset.bottom
+      let step = max(1, (visible * (1 - Self.partOverlap)).rounded(.down))
+      let start = scroll.contentOffset.y
+      try await settle(scroll, at: min(start + step, Self.bottomOffset(of: scroll)))
+      // Content that shrank as it laid out can leave nothing new to show.
+      guard scroll.contentOffset.y > start + 0.5 else { return }
+      part += 1
+      try await requestScreenshot("\(name)-part\(part)", in: folder)
+    }
+  }
+
+  /// Scrolls to an offset and waits until it stays there, since rows the Form sizes as they
+  /// appear can change its height, and so its end, after the scroll.
+  private func settle(_ scroll: UIScrollView, at offset: CGFloat) async throws {
+    var target = offset
+    let deadline = ContinuousClock.now + .seconds(3)
+    repeat {
+      scroll.layoutIfNeeded()
+      target = min(target, Self.bottomOffset(of: scroll))
+      scroll.setContentOffset(CGPoint(x: scroll.contentOffset.x, y: target), animated: false)
+      // Long enough for a large title to collapse and a fade at the edge to follow the scroll.
+      try await Task.sleep(for: .milliseconds(500))
+      scroll.layoutIfNeeded()
+      let stayed = abs(scroll.contentOffset.y - target) < 0.5
+      if stayed && target <= Self.bottomOffset(of: scroll) + 0.5 { return }
+    } while ContinuousClock.now < deadline
+    struct PartNotSettled: Error {}
+    XCTFail("The scrolled part didn't stay in place before capture")
+    throw PartNotSettled()
   }
 
   /// TipKit decides whether to show a tip asynchronously, so a tip invalidated just before its
