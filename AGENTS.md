@@ -156,6 +156,6 @@ Store accessibility evidence ([#147](https://github.com/lunchbox-labs/compasslet
 picks its own simulators and appearances, applies text sizes and Bold Text in the test, and turns
 on Increase Contrast and Reduce Transparency in the simulator, which the test confirms before
 capturing. `ACCESSIBILITY_SET` in `scripts/screenshots` lists it. A named iPhone that iOS 27
-supports but the Mac hasn't set up is created for the run and deleted afterwards. Use these captures for mock-ups;
-don't push other branches to produce them. Clients that can't download artifacts can set
-`log-images` and read the images from the job log.
+supports but the Mac hasn't set up is created for the run and deleted afterwards. Use these
+captures for mock-ups; don't push other branches to produce them. Clients that can't download
+artifacts can set `log-images` and read the images from the job log.
