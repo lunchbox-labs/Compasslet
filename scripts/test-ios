@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Usage: bash scripts/test-ios [xcodebuild test options...]
+# Options, such as -test-iterations 20 -run-tests-until-failure, are passed to xcodebuild.
+# ${@+"$@"} keeps an empty option list working under set -u in macOS's bash 3.2.
 set -euo pipefail
 # Pick an installed, available iOS 27+ iPhone; never silently test an older platform.
 destination="$(xcrun simctl list devices available --json | python3 -c '
@@ -20,4 +23,4 @@ result_directory="$(mktemp -d .build/test-results.XXXXXX)"
 bash scripts/simulator-xcodebuild -project Compass.xcodeproj -scheme Compass \
   -destination "platform=iOS Simulator,id=$destination" \
   -derivedDataPath .build/xcode -resultBundlePath "$result_directory/CompassTests.xcresult" \
-  CODE_SIGNING_ALLOWED=NO test
+  CODE_SIGNING_ALLOWED=NO ${@+"$@"} test

@@ -1,0 +1,52 @@
+name: Repeat Tests
+on:
+  # Run by hand, from the branch to test, to check whether the simulator tests are flaky. This
+  # never runs on pull requests or pushes, so it can't block a merge.
+  workflow_dispatch:
+    inputs:
+      iterations:
+        description: Most times to run the simulator tests, stopping at the first failure (2 to 50)
+        required: false
+        default: "20"
+permissions:
+  contents: read
+jobs:
+  repeat:
+    runs-on: xcode-27
+    timeout-minutes: 120
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      - name: Check the number of iterations
+        env:
+          ITERATIONS: ${{ inputs.iterations }}
+        run: |
+          n="$ITERATIONS"
+          if [[ ! "$n" =~ ^[0-9]{1,2}$ ]] || (( 10#$n < 2 || 10#$n > 50 )); then
+            echo "iterations must be a whole number from 2 to 50" >&2
+            exit 1
+          fi
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      # Each iteration relaunches the app, so no in-memory state carries over from the one before
+      # and a failure is one a single Check run could hit. The step times out before the job does,
+      # so a run that takes too long still counts as a failure and keeps its result bundle.
+      - name: Run the simulator tests until one fails
+        id: repeat
+        timeout-minutes: 110
+        env:
+          ITERATIONS: ${{ inputs.iterations }}
+        run: |
+          bash scripts/test-ios -test-iterations "$((10#$ITERATIONS))" -run-tests-until-failure \
+            -test-repetition-relaunch-enabled YES
+      # The result bundle shows which iteration failed and why. It sits under the hidden .build
+      # folder, so hidden files must be included or nothing is uploaded.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure() && steps.repeat.outcome == 'failure'
+        with:
+          name: repeat-tests-run-${{ github.run_number }}
+          path: .build/test-results.*/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
