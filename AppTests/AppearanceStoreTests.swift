@@ -216,6 +216,34 @@ struct AppearanceStoreTests {
     }
   }
 
+  @Test func lockScreenCardKeepsItsLineAtItsOwnHeight() throws {
+    // The system sizes the card to the height it reports, rounded to whole pixels, so a card a
+    // fraction shorter than that must still show the line it was measured with.
+    let sample = Date(timeIntervalSince1970: 100)
+    func card(_ mode: ActivityTimestampMode) -> some View {
+      var appearance = AppearanceValues()
+      appearance.lockScreenTimestamp = mode
+      let state = CompassActivityAttributes.ContentState(
+        bearing: 315, status: .usable, sampleTime: sample, expiry: nil, appearance: appearance)
+      return CompassActivityCard(state: state).environment(\.colorScheme, .light)
+    }
+    for textSize in [DynamicTypeSize.large, .accessibility5] {
+      for width in [298.0, 380, 418] {
+        let host = UIHostingController(
+          rootView: card(.time).environment(\.dynamicTypeSize, textSize))
+        let height = host.sizeThatFits(in: CGSize(width: width, height: 1000)).height
+        func render(_ mode: ActivityTimestampMode) throws -> Data {
+          let renderer = ImageRenderer(
+            content: card(mode).environment(\.dynamicTypeSize, textSize)
+              .frame(width: width, height: height - 0.5))
+          return try #require(renderer.uiImage?.pngData())
+        }
+        // A card that dropped its line would look the same whichever time it shows.
+        #expect(try render(.time) != render(.elapsed), "\(textSize) \(width)")
+      }
+    }
+  }
+
   @Test func carPlayCardStaysWithinItsSizeAtTheLargestTextSize() {
     let sample = Date(timeIntervalSince1970: 100)
     let host = UIHostingController(rootView: AnyView(EmptyView()))

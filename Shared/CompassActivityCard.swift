@@ -314,9 +314,11 @@ struct LockScreenHeight: Layout {
   func placeSubviews(
     in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()
   ) {
+    // Proposed the same height it was measured with, so the card keeps the layout it was sized
+    // for: its own height, once rounded to whole pixels, can be a fraction too short for it.
     subviews.first?.place(
       at: CGPoint(x: bounds.midX, y: bounds.midY), anchor: .center,
-      proposal: .init(width: bounds.width, height: min(bounds.height, Self.heights.upperBound)))
+      proposal: .init(width: bounds.width, height: Self.heights.upperBound))
   }
 }
 
