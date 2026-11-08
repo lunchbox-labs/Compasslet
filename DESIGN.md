@@ -83,11 +83,11 @@ These system-hosted surfaces have constraints beyond an ordinary iPhone screen.
 - CarPlay's small card has a fixed size. When the reading and Last Updated can't both fit at
   large text sizes, it shows the reading alone, and a status shrinks to fit rather than grow
   past the card.
-- CarPlay and the Apple Watch Smart Stack share the small card. At the largest text sizes its
-  reading may have room for only direction or degrees; the If Both Don’t Fit setting picks
-  which, and defaults to degrees. The Lock Screen and expanded Dynamic Island always fit both,
-  and the compact Dynamic Island shrinks its reading instead. The setting shows on the Global
-  and Live Activity appearance pages when the readout shows both.
+- At the largest text sizes, CarPlay's reading may have room for only direction or degrees;
+  the If Both Don’t Fit setting picks which, and defaults to degrees. The Lock Screen and
+  expanded Dynamic Island always fit both, and the compact Dynamic Island shrinks its reading
+  instead. The setting shows on the Global and Live Activity appearance pages when the readout
+  shows both.
 
 ## Docs site
 
