@@ -1,7 +1,9 @@
-Find your bearings with Compasslet. Check your direction on iPhone and see your direction while driving with CarPlay.
+Find your bearings with Compasslet. Check your direction on your phone, or see your direction while you're driving with CarPlay.
 
-On iPhone, choose a rotating compass dial or direction arrow. Adjust the labels, degrees and text size for a reading that suits you.
+Customized to your liking. Choose a rotating compass dial or direction arrow. Adjust the labels, degrees, and text size for a reading that best suits you.
 
-During a drive, a compact Live Activity keeps your travel direction in view on the Lock Screen and in the Dynamic Island, even through stops.
+While driving, open the Compasslet app to show a simple live activity indicating the direction of your drive. Customize and show both the direction, degrees, or both. When the drive ends, it'll close by itself.
+
+For full automation, create simple shortcuts that start and end the live activity when you connect and disconnect from CarPlay, or even control it directly with Siri by asking Siri to start or end Compasslet Live Activity.
 
 No account needed.
