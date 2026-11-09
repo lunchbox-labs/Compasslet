@@ -5,6 +5,7 @@ import importlib.util
 import io
 import os
 from pathlib import Path
+import plistlib
 import tempfile
 import sys
 import unittest
@@ -19,6 +20,40 @@ loader.exec_module(testflight)
 
 
 class PublishIdentityTests(unittest.TestCase):
+    def test_export_allows_app_store_submission_without_changing_signing_or_build_numbers(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            work = Path(temporary)
+            archive = work / 'Compass.xcarchive'
+            exported = work / 'export'
+            profiles = ['app-profile', 'activity-profile']
+            exports = []
+
+            def run(*args, operation, **kwargs):
+                self.assertEqual(operation, 'export archive')
+                self.assertEqual(args[:5], ('xcodebuild', '-exportArchive', '-archivePath', archive, '-exportPath'))
+                self.assertEqual(args[5], exported)
+                self.assertEqual(args[6], '-exportOptionsPlist')
+                exports.append(plistlib.loads(Path(args[7]).read_bytes()))
+
+            with patch.object(testflight, 'WORK', work), \
+                    patch.dict(os.environ, {'GITHUB_EVENT_NAME': 'workflow_dispatch'}), \
+                    patch.object(testflight, 'run', side_effect=run):
+                testflight.export_archive(archive, exported, 'TEAM123456', profiles)
+
+            self.assertEqual(len(exports), 1)
+            options = exports[0]
+            self.assertFalse(options.get('testFlightInternalTestingOnly', False))
+            self.assertEqual(options['method'], 'app-store-connect')
+            self.assertEqual(options['destination'], 'export')
+            self.assertEqual(options['teamID'], 'TEAM123456')
+            self.assertEqual(options['signingStyle'], 'manual')
+            self.assertEqual(options['signingCertificate'], 'Apple Distribution')
+            self.assertEqual(options['provisioningProfiles'], {
+                'dev.lunchbox-labs.carplay-compass': 'app-profile',
+                'dev.lunchbox-labs.carplay-compass.activity': 'activity-profile',
+            })
+            self.assertFalse(options['manageAppVersionAndBuildNumber'])
+
     def test_metadata_identity_is_exposed_only_after_successful_validation_and_upload(self):
         for failed_operation in ('Apple validation', 'upload', None):
             with self.subTest(failed_operation=failed_operation), tempfile.TemporaryDirectory() as temp:

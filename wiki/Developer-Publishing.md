@@ -6,6 +6,12 @@ not run it. Configure both environments to allow only `main`, with the required
 approvals, before running Publish; release tags do not need access. The workflow
 does not configure credentials or permissions.
 
+Uploads are eligible for both internal TestFlight testing and App Store submission.
+Publish does not submit to App Review or release the app; select the processed build
+and submit it separately in App Store Connect. A build previously uploaded as
+TestFlight Internal Only cannot be used for an App Store release; upload a new build
+without that restriction.
+
 ## GitHub Releases and screenshots
 
 After Apple approves a version, create its version tag and GitHub Release by hand.

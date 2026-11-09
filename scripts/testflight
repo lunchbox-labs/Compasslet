@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish manual internal builds from main; keep credential-tool output private."""
+"""Upload App Store-eligible builds from main; keep credential-tool output private."""
 import base64
 import json
 import os
@@ -198,20 +198,24 @@ def publish():
         '-derivedDataPath', WORK / 'derived', '-archivePath', archive, 'archive', cwd=source, operation='archive')
     marketing_version = uploaded_identity(archive, APP, build)
     STAGE = 'export'
-    options = WORK / 'ExportOptions.plist'
-    options.write_bytes(plistlib.dumps({'method': 'app-store-connect', 'destination': 'export',
-        'teamID': team, 'signingStyle': 'manual', 'signingCertificate': 'Apple Distribution',
-        'provisioningProfiles': dict(zip([APP, ACTIVITY], profiles)),
-        'testFlightInternalTestingOnly': event == 'workflow_dispatch', 'manageAppVersionAndBuildNumber': False}))
     exported = WORK / 'export'
-    run('xcodebuild', '-exportArchive', '-archivePath', archive, '-exportPath', exported,
-        '-exportOptionsPlist', options, operation='export archive')
+    export_archive(archive, exported, team, profiles)
     STAGE = 'Apple validation'
     ipas = list(exported.glob('*.ipa'))
     require(len(ipas) == 1, 'Expected one exported IPA.')
     auth_env = dict(os.environ, API_PRIVATE_KEYS_DIR=str(WORK))
     args = ['--file', ipas[0], '--type', 'ios', '--apiKey', key, '--apiIssuer', issuer]
     upload(args, auth_env, marketing_version, build)
+
+
+def export_archive(archive, exported, team, profiles):
+    options = WORK / 'ExportOptions.plist'
+    options.write_bytes(plistlib.dumps({'method': 'app-store-connect', 'destination': 'export',
+        'teamID': team, 'signingStyle': 'manual', 'signingCertificate': 'Apple Distribution',
+        'provisioningProfiles': dict(zip([APP, ACTIVITY], profiles)),
+        'manageAppVersionAndBuildNumber': False}))
+    run('xcodebuild', '-exportArchive', '-archivePath', archive, '-exportPath', exported,
+        '-exportOptionsPlist', options, operation='export archive')
 
 
 def upload(args, auth_env, marketing_version, build_number):
