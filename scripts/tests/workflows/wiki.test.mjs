@@ -28,12 +28,12 @@ for (const [eventName, ref, expected] of [
   });
 }
 
-test('pushes to main publish only when the wiki, its script or this workflow change', () => {
-  assert.deepEqual(workflow.on.push.paths, ['wiki/**', 'scripts/sync-wiki', '.github/workflows/wiki.yml']);
+test('pushes to main publish only when the wiki or this workflow change', () => {
+  assert.deepEqual(workflow.on.push.paths, ['wiki/**', '.github/workflows/wiki.yml']);
 });
 
 test('only the sync job can write, and an in-progress sync is never cancelled', () => {
-  assert.deepEqual(workflow.permissions, { contents: 'read' });
+  assert.deepEqual(workflow.permissions, {});
   assert.deepEqual(workflow.jobs.sync.permissions, { contents: 'write' });
   assert.equal(workflow.concurrency['cancel-in-progress'], false);
 });

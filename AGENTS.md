@@ -133,8 +133,8 @@ replaced by the next sync, so make them in the folder instead.
 
 Each file name is a page name. Link between pages with the page name and no `.md`, as in
 `[Publishing](Developer-Publishing)`, so links work on the wiki. `_Sidebar.md` is the wiki's
-navigation; add a new page to it and to `Home.md`. `Home.md` must stay, since the sync refuses
-to publish a folder without it.
+navigation; add a new page to it and to `Home.md`. `scripts/tests/test_wiki_links.py` checks
+that `Home.md` exists and that every link to a wiki page names a page in the folder.
 
 ## Screenshots
 
