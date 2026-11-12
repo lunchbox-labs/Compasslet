@@ -12,6 +12,9 @@ public struct CompassAngle: Sendable, Equatable {
     self.degrees = normalized == 360 ? 0 : normalized
   }
 
+  /// The whole degrees a reading shows, 0 to 359; an angle that rounds up to 360 shows 0.
+  public var roundedDegrees: Int { Int(degrees.rounded()) % 360 }
+
   /// Returns the shortest signed rotation to another angle; exact half-turns are +180.
   public func shortestDelta(to other: Self) -> Double {
     let delta = other.degrees - degrees

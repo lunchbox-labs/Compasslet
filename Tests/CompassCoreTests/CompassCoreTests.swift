@@ -17,6 +17,16 @@ import CompassCore
   #expect(south.shortestDelta(to: north) == 180)
 }
 
+@Test func roundedDegreesStayWithinOneTurn() {
+  #expect(CompassAngle(degrees: 0)?.roundedDegrees == 0)
+  #expect(CompassAngle(degrees: 0.4)?.roundedDegrees == 0)
+  #expect(CompassAngle(degrees: 0.5)?.roundedDegrees == 1)
+  #expect(CompassAngle(degrees: 359.4)?.roundedDegrees == 359)
+  #expect(CompassAngle(degrees: 359.5)?.roundedDegrees == 0)
+  #expect(CompassAngle(degrees: 359.999)?.roundedDegrees == 0)
+  #expect(CompassAngle(degrees: -0.4)?.roundedDegrees == 0)
+}
+
 private let instant = Date(timeIntervalSince1970: 100)
 private func sample(
   _ degrees: Double = 0, source: CompassSource = .deviceHeading,

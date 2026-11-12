@@ -10,7 +10,6 @@ import SwiftUI
 struct CompassDial: View {
   let bearing: Double?
   let appearance: AppearanceValues
-  var showsReadout = true
   var unavailableSymbol = "safari"
   @Environment(\.colorSchemeContrast) private var contrast
   @Environment(\.colorScheme) private var colorScheme
@@ -84,12 +83,6 @@ struct CompassDial: View {
             Image(systemName: "triangle.fill")
               .font(.system(size: diameter * 0.075)).foregroundStyle(.tint)
               .rotationEffect(.degrees(180)).offset(y: -radius)
-            if showsReadout {
-              CompassReadout(
-                bearing: bearing, appearance: appearance, degreesFirst: true, compact: true
-              )
-              .frame(width: diameter * (outside ? 0.78 : 0.56))
-            }
           } else {
             Image(systemName: "location.north.fill")
               .font(
@@ -129,47 +122,5 @@ private struct NorthMarker: Shape {
     path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
     path.closeSubpath()
     return path
-  }
-}
-
-struct CompassReadout: View {
-  let bearing: Double
-  let appearance: AppearanceValues
-  var degreesFirst = false
-  var compact = false
-  /// Presentations with fixed bounds, such as the Dynamic Island, pass a lower limit.
-  var maximumTextSize: DynamicTypeSize = .accessibility5
-  @Environment(\.dynamicTypeSize) private var systemTextSize
-
-  private var cardinal: String { CompassPoint(degrees: bearing)?.abbreviation ?? "—" }
-
-  var body: some View {
-    VStack(spacing: compact ? 0 : 2) {
-      if degreesFirst {
-        degrees
-        direction
-      } else {
-        direction
-        degrees
-      }
-    }
-    .multilineTextAlignment(.center)
-    .lineLimit(1)
-    .minimumScaleFactor(0.85)
-    .contentTransition(.identity)
-    .dynamicTypeSize(min(appearance.readoutTextSize(system: systemTextSize), maximumTextSize))
-  }
-
-  @ViewBuilder private var direction: some View {
-    if appearance.showDirection {
-      Text(cardinal).font((compact ? Font.headline : Font.largeTitle).weight(.semibold))
-    }
-  }
-
-  @ViewBuilder private var degrees: some View {
-    if appearance.showDegrees {
-      Text("\(Int(bearing.rounded()) % 360)°")
-        .font(compact ? .title3 : .title2).monospacedDigit()
-    }
   }
 }
