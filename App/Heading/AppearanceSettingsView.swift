@@ -26,9 +26,7 @@ struct AppearanceDetailView: View {
   let surface: AppearanceSurface?
   private let store = AppearanceStore.shared
 
-  private var value: AppearanceValues {
-    surface.map { store.preferences.effective(for: $0) } ?? store.preferences.global
-  }
+  private var value: AppearanceValues { store.preferences.values(for: surface) }
   private var followsGlobal: Bool {
     surface.map { store.preferences.usesGlobal(for: $0) } ?? false
   }
@@ -220,10 +218,7 @@ struct AppearanceReadoutControl: View {
   let store: AppearanceStore
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-  var selection: ReadoutMode? {
-    let value = surface.map { store.preferences.effective(for: $0) } ?? store.preferences.global
-    return value.readoutMode
-  }
+  var selection: ReadoutMode? { store.preferences.values(for: surface).readoutMode }
 
   var body: some View {
     if let selection, !dynamicTypeSize.isAccessibilitySize {
@@ -267,13 +262,9 @@ struct AppearanceReadoutControl: View {
 
   func select(_ mode: ReadoutMode) {
     store.update { preferences in
-      var changed = surface.map { preferences.effective(for: $0) } ?? preferences.global
+      var changed = preferences.values(for: surface)
       changed.setReadoutMode(mode)
-      if let surface {
-        preferences.setOverride(changed, for: surface)
-      } else {
-        preferences.setGlobal(changed)
-      }
+      preferences.setValues(changed, for: surface)
     }
   }
 }
@@ -340,9 +331,7 @@ struct AppearanceOptionEditor: View {
   let option: AppearanceOption
   let store: AppearanceStore
 
-  var value: AppearanceValues {
-    surface.map { store.preferences.effective(for: $0) } ?? store.preferences.global
-  }
+  var value: AppearanceValues { store.preferences.values(for: surface) }
 
   var body: some View {
     Form {
@@ -554,21 +543,12 @@ private extension AppearanceStore {
   func binding<Value>(
     _ keyPath: WritableKeyPath<AppearanceValues, Value>, for surface: AppearanceSurface?
   ) -> Binding<Value> {
-    func current() -> AppearanceValues {
-      surface.map { preferences.effective(for: $0) } ?? preferences.global
-    }
-    return Binding(
-      get: { current()[keyPath: keyPath] },
+    Binding(
+      get: { self.preferences.values(for: surface)[keyPath: keyPath] },
       set: { newValue in
-        var changed = current()
+        var changed = self.preferences.values(for: surface)
         changed[keyPath: keyPath] = newValue
-        self.update { preferences in
-          if let surface {
-            preferences.setOverride(changed, for: surface)
-          } else {
-            preferences.setGlobal(changed)
-          }
-        }
+        self.update { $0.setValues(changed, for: surface) }
       })
   }
 }

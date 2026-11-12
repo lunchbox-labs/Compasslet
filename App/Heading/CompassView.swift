@@ -52,18 +52,14 @@ struct CompassView: View {
     _settingsOnScreen = State(initialValue: showingSettings)
   }
 
-  private var storedAppearance: AppearanceValues {
-    appearanceStore.preferences.effective(for: .phone)
-  }
   /// Reduce Motion replaces the rotating dial with steady text unless Appearance keeps the dial.
-  private var steadyReading: Bool {
-    reduceMotion && storedAppearance.reducedMotionDial == .steadyReadout
+  private var presentation: PhoneCompassPresentation {
+    PhoneCompassPresentation(
+      appearance: appearanceStore.preferences.effective(for: .phone), reduceMotion: reduceMotion)
   }
-  private var appearance: AppearanceValues {
-    steadyReading ? storedAppearance.requiringReadout() : storedAppearance
-  }
+  private var appearance: AppearanceValues { presentation.appearance }
   /// Only a rotating dial shown under Reduce Motion steps; steady text keeps smoothed headings.
-  private var stepsHeading: Bool { reduceMotion && !steadyReading }
+  private var stepsHeading: Bool { reduceMotion && presentation.showsDial }
   /// The readout's text size, from the system's and the Appearance setting.
   private var readoutTextSize: DynamicTypeSize {
     appearance.readoutTextSize(system: dynamicTypeSize)
@@ -326,7 +322,7 @@ struct CompassView: View {
         // The readout already speaks its accuracy. With both center readouts hidden,
         // this line becomes the single VoiceOver stop for the heading instead.
         HeadingAccuracy(compass: compass, hiddenFromVoiceOver: appearance.hasReadout)
-        if steadyReading {
+        if !presentation.showsDial {
           Text("Dial hidden while Reduce Motion is on")
             .font(.caption2).foregroundStyle(.secondary)
         }
@@ -422,7 +418,7 @@ struct CompassView: View {
 
   // The dial repeats the readout visually; VoiceOver gets one heading stop from the text.
   @ViewBuilder private func dial(size: CGFloat) -> some View {
-    if !steadyReading {
+    if presentation.showsDial {
       HeadingDial(compass: compass, appearance: appearance)
         .frame(width: max(0, size), height: max(0, size))
         .accessibilityHidden(true)
