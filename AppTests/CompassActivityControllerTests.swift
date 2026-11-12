@@ -1001,6 +1001,100 @@ struct CompassActivityControllerTests {
     await drive.endDrive()
   }
 
+  @Test func onlyAnActivityThatShowsRunsTheDiagnosticsClock() async throws {
+    let system = TestActivitySystem()
+    let observed = ClockObservations()
+    let controller = CompassActivityController(
+      system: system, refreshInterval: { 15 }, observeDiagnostics: { observed.values.append($0) })
+    // Nothing shows before a start or after a failed one, so a renewal doesn't run the clock.
+    controller.renew()
+    system.fail = true
+    await #expect(throws: CompassActivityController.Failure.self) { try await controller.start() }
+    controller.renew()
+    #expect(observed.values.isEmpty)
+    system.fail = false
+    try await controller.start()
+    #expect(observed.values == [true])
+    // Each renewal keeps it running, though it writes nothing new to the activity.
+    let writes = system.handle.updates.count
+    controller.renew()
+    controller.renew()
+    await controller.waitForPendingOperations()
+    #expect(system.handle.updates.count == writes)
+    #expect(observed.values == [true, true, true])
+    // A dismissal pauses it, and nothing runs it again until a new activity shows.
+    system.handle.onDismiss?()
+    controller.renew()
+    #expect(observed.values == [true, true, true, false])
+    system.handle = TestActivityHandle()
+    try await controller.start()
+    #expect(observed.values == [true, true, true, false, true])
+    await controller.end().value
+    #expect(observed.values == [true, true, true, false, true, false])
+  }
+
+  @Test func anEndThatOvertakesTheRequestNeverRunsTheDiagnosticsClock() async throws {
+    let system = TestActivitySystem()
+    system.suspend = true
+    let observed = ClockObservations()
+    let controller = CompassActivityController(
+      system: system, observeDiagnostics: { observed.values.append($0) })
+    let startup = Task { try await controller.start() }
+    while system.resume == nil { await Task.yield() }
+    let ending = controller.end()
+    system.resume?.resume()
+    await #expect(throws: CompassActivityController.Failure.self) { try await startup.value }
+    await ending.value
+    controller.renew()
+    #expect(observed.values == [false])
+  }
+
+  @Test func aDriveRecordsEachActivitySessionWithItsActiveTime() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+      UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = try CompassDiagnostics(directory: directory)
+    try store.setEnabled(true)
+    let system = TestActivitySystem()
+    let clock = TestDriveClock(now: Date(timeIntervalSince1970: 100))
+    let start = clock.now
+    // At the lowest update frequency, with no readings, nothing is written after the start, so
+    // only the heartbeat's renewals keep the clock running.
+    let activity = CompassActivityController(
+      system: system, now: { clock.now }, refreshInterval: { 15 },
+      observeDiagnostics: { active in
+        let seconds = clock.now.timeIntervalSince1970
+        _ = try? store.observe(.activity, active: active, wall: seconds, uptime: seconds)
+      })
+    let drive = DriveSessionController(
+      sensor: TestTravelSensor(), activity: activity, clock: clock)
+    await drive.carPlayActivated()
+    clock.run(until: start + 5.5)
+    // The user dismisses the activity, and starts it again during the drive.
+    system.handle.onDismiss?()
+    await drive.waitForPendingOperations()
+    clock.run(until: start + 8)
+    system.handle = TestActivityHandle()
+    await drive.startLiveActivity()
+    #expect(drive.compactStatus == .active)
+    clock.run(until: start + 12.5)
+    await drive.endDrive()
+    let snapshot = try store.snapshot()
+    let events = snapshot.events.filter { $0.surface == .activity }
+    #expect(events.map(\.kind) == [.started, .paused, .started, .paused])
+    #expect(events.map(\.activeSeconds) == [0, 5.5, 5.5, 10])
+    try #require(events.count == 4)
+    #expect(events[0].session == events[1].session)
+    #expect(events[2].session == events[3].session)
+    #expect(events[1].session != events[2].session)
+    #expect(snapshot.surfaces.first { $0.surface == .activity }?.activeSeconds == 10)
+  }
+}
+
+/// What a controller has told diagnostics about its activity, in order.
+@MainActor private final class ClockObservations {
+  var values: [Bool] = []
 }
 
 /// A usable travel presentation recorded at `time`.

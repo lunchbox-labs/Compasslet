@@ -1194,7 +1194,7 @@ final class DriveSessionControllerTests: XCTestCase {
     await controller.endDrive()
   }
 
-  func testHeartbeatRenewsOnlyAShowingActivity() async {
+  func testHeartbeatRenewsOnlyARunningActivity() async {
     let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
     let beat = DriveSessionController.heartbeatInterval
     time += beat
@@ -1217,6 +1217,22 @@ final class DriveSessionControllerTests: XCTestCase {
     time += beat
     tick()
     XCTAssertEqual(activity.renewals, 1)
+  }
+
+  func testHeartbeatRenewsAStartingActivity() async {
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    activity.pauseStart = true
+    let activation = Task { await controller.carPlayActivated() }
+    while activity.startContinuation == nil { await Task.yield() }
+    XCTAssertEqual(controller.compactStatus, .starting)
+    // A starting activity may already show, so the renewal keeps its diagnostics clock running.
+    time += DriveSessionController.heartbeatInterval
+    tick()
+    XCTAssertEqual(activity.renewals, 1)
+    activity.startContinuation?.resume()
+    await activation.value
+    XCTAssertEqual(controller.compactStatus, .active)
+    await controller.endDrive()
   }
 
   func testReportsALiveActivityLeftFromAnEarlierLaunch() {

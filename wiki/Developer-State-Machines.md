@@ -8,12 +8,15 @@ transition they touch. File and line references are to commit
 symbol if lines have moved. [Development](Developer-Development#reading-policies) gives the
 reading policies these machines enforce.
 
-Open failure states are listed here and under their machine, each tracked as an issue. One is
+Open failure states are listed here and under their machine, each tracked as an issue. Two are
 open:
 
 - [#336](https://github.com/lunchbox-labs/compasslet/issues/336): the CarPlay dial can keep the
   wrong light or dark style on an idle scene, as the
   [CarPlay update gate](#carplay-update-gate) section describes.
+- [#343](https://github.com/lunchbox-labs/compasslet/issues/343): diagnostics can split one Live
+  Activity session in two when a beat wakes late, as the [Diagnostics](#diagnostics) section
+  describes.
 
 The three found while mapping these machines are fixed:
 
@@ -182,13 +185,13 @@ Time comes from an injected `DriveClock` (`SystemDriveClock` in the app). Two ki
 run while a drive does, both in process, so they only advance while the process runs:
 
 - The heartbeat (`heartbeatInterval`, `beat`) runs once a second. It re-reads the car audio
-  route, refreshes setup, enforces the eight-hour limit, observes the `activity` diagnostics
-  surface (which counts a gap over 2 s as a new session), lets an active Live Activity write a
-  reading held by a lower update frequency or renew its stale date once it has gone 60 s without
-  a write, and checks every limit again. The update frequency never changes the heartbeat. Each
-  beat sets the next one an interval after it ran (`scheduleHeartbeat`), so beats are never
-  under 1 s apart, which diagnostics would skip, and a late beat brings no burst of catch-up
-  beats.
+  route, refreshes setup, enforces the eight-hour limit, calls `renew()` on a starting or active
+  Live Activity, which keeps its diagnostics clock running (see [Live Activity
+  lifecycle](#live-activity-lifecycle)) and writes a reading held by a lower update frequency or
+  renews the stale date once it has gone 60 s without a write, and checks every limit again. The
+  update frequency never changes the heartbeat. Each beat sets the next one an interval after it
+  ran (`scheduleHeartbeat`), so beats are never under 1 s apart, which diagnostics would skip,
+  and a late beat brings no burst of catch-up beats.
 - One deadline timer (`armDeadline`, `deadlineCame`) fires at the first moment past the
   earliest of the car's absence limit, the not-in-use limit and the reading's 5 s lifetime, so
   each takes effect on time rather than at the next heartbeat. A change that moves a limit later,
@@ -282,13 +285,23 @@ first drive, phone activation or intent. `end()` also ends every surviving activ
 ended, not as not running (`hasLiveActivity`).
 
 Every write sets a stale date 5 minutes ahead (`staleInterval`, `stamped`). While the drive's
-status is `active`, each heartbeat calls `renew()`, which writes a held reading whose refresh
-interval has passed (see [Live Activity content](#live-activity-content)), and otherwise
-rewrites the last content once nothing has been written for 60 seconds. When the process is
-terminated during a drive (force quit, crash or memory pressure), nothing renews the activity,
-so the system marks it stale within 5 minutes and the card shows travel as unavailable instead
-of the last direction. It stays until the app next launches, the End shortcut runs, or
-ActivityKit's own limit ends it.
+status is `starting` or `active`, each heartbeat calls `renew()`, which does nothing until the
+controller holds an activity, then writes a held reading whose refresh interval has passed (see
+[Live Activity content](#live-activity-content)), and otherwise rewrites the last content once
+nothing has been written for 60 seconds. When the process is terminated during a drive (force
+quit, crash or memory pressure), nothing renews the activity, so the system marks it stale
+within 5 minutes and the card shows travel as unavailable instead of the last direction. It
+stays until the app next launches, the End shortcut runs, or ActivityKit's own limit ends it.
+
+The controller is the only writer of the `activity` [diagnostics](#diagnostics) clock
+(`CompassActivityController.observeDiagnostics` in
+`App/LiveActivity/CompassActivityController.swift`), so the clock follows `handle`, whether an
+activity exists, rather than the drive's status. It observes the surface active once a request
+returns an activity and on each `renew()`, so the clock keeps running between writes, which a
+lower update frequency or a stop makes further apart than its 2 s gap. It observes it inactive
+on a dismissal (`dismissed`) and on every `end()`, including the one a drive's end queues. A
+request that fails or that an end overtakes never observes it active, and a Live Activity
+started again during a drive starts a new diagnostics session.
 
 ## Live Activity content
 
@@ -552,3 +565,12 @@ It first deletes the old SQLite store's `Diagnostics` folder from the App Group 
 that log can no longer be cleared from Settings. If the folder or its files can't be read then,
 diagnostics stay unavailable until relaunch. The export is a temporary file removed when its
 share sheet closes or Debug Mode is turned off.
+
+`CompassActivityController` is the only writer of the `activity` clock, so the clock follows
+whether the app holds an activity (see [Live Activity lifecycle](#live-activity-lifecycle)).
+
+Open failure state ([#343](https://github.com/lunchbox-labs/compasslet/issues/343)): a repeat
+within 1 s is dropped without moving the clock, so if the first beat after a request lands
+under 1 s after it and the next beat wakes late, the next call comes over 2 s after the last
+accepted one. That starts a new `activity` session with no `paused` before it and loses about
+2 s of active time.

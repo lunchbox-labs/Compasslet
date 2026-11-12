@@ -62,6 +62,10 @@ final class CompassActivityController: CompassActivityPresenting {
   /// unless a newer write, a return to the direction shown or a clear replaces it first, so a turn
   /// just before a stop still reaches the card.
   private var heldReading: CompassActivityAttributes.ContentState?
+  /// Tells diagnostics whether an activity shows. The controller is the only writer of the
+  /// `activity` surface's active-time clock, because it holds the activity: the clock runs from a
+  /// successful request, through each renewal, until a dismissal or an end.
+  private let observeDiagnostics: @MainActor (Bool) -> Void
 
   var canStartActivities: Bool { system.enabled }
   var hasActivities: Bool { system.hasActivities }
@@ -79,11 +83,15 @@ final class CompassActivityController: CompassActivityPresenting {
     appearanceStore: AppearanceStore = .shared,
     refreshInterval: @escaping @MainActor () -> TimeInterval = {
       CompassActivityController.changedReadingInterval
+    },
+    observeDiagnostics: @escaping @MainActor (Bool) -> Void = { active in
+      _ = try? CompassDiagnostics.shared?.observe(.activity, active: active)
     }
   ) {
     self.system = system
     self.now = now
     self.refreshInterval = refreshInterval
+    self.observeDiagnostics = observeDiagnostics
     let initial = appearanceStore.preferences.effective(for: .activity)
     appearance = initial
     let changes = Observations { @MainActor in
@@ -135,7 +143,7 @@ final class CompassActivityController: CompassActivityPresenting {
       }
       handle = created
       lastContent = initial
-      try? CompassDiagnostics.shared?.observe(.activity, active: true)
+      observeDiagnostics(true)
       starting = false
       created.onDismiss = { [weak self] in self?.dismissed(token) }
       if initial.appearance != appearance { await rewrite(on: created) }
@@ -155,7 +163,7 @@ final class CompassActivityController: CompassActivityPresenting {
     generation = UUID()
     handle = nil
     lastContent = nil
-    try? CompassDiagnostics.shared?.observe(.activity, active: false)
+    observeDiagnostics(false)
     lastUsableWrite = nil
     lastWrite = nil
     retainedBearing = nil
@@ -304,6 +312,9 @@ final class CompassActivityController: CompassActivityPresenting {
   /// long stop with nothing new to show doesn't make the activity stale.
   func renew() {
     guard handle != nil else { return }
+    // Each renewal keeps the diagnostics clock running, since writes alone can be further apart
+    // than its 2 s gap, as at a lower update frequency or through a stop.
+    observeDiagnostics(true)
     let date = now()
     if heldReading != nil, refreshIntervalHasPassed(at: date) {
       queueDrain()
@@ -354,7 +365,7 @@ final class CompassActivityController: CompassActivityPresenting {
     let owned = handle
     handle = nil
     lastContent = nil
-    try? CompassDiagnostics.shared?.observe(.activity, active: false)
+    observeDiagnostics(false)
     owned?.onDismiss = nil
     let system = system
     return enqueue {
