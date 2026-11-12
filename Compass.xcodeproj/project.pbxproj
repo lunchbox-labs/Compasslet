@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A64DCE328A7D9AD9AC1666EC /* ChangeSignalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09AAAE017647FDAE371E21C5 /* ChangeSignalTests.swift */; };
+		25ADC9DE2475197810F86FB0 /* SetupStatusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78E8F7DF1DA199233119AA4F /* SetupStatusTests.swift */; };
+		FA5DA1F36AFFCE5D7935FF2D /* ChangeSignal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CD6596854CBB7F7BF0A47AB /* ChangeSignal.swift */; };
+		605E0D7F022D50FF323D21AC /* SetupStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7CB47ABC0B5A97169BB792F /* SetupStatus.swift */; };
 		A5BEEE9D3A6E97EDC26FBCB5 /* OnboardingStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D91B4E0D371503B99ECD765 /* OnboardingStateTests.swift */; };
 		91541F5E1181E1B51374D9D6 /* LiveActivityShortcutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3C7D38FA0A3F689C02EB557 /* LiveActivityShortcutTests.swift */; };
 		3228C34B241C23C096F897A0 /* WelcomeTourOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB4E2DDE294BB7C0D864F26C /* WelcomeTourOverlay.swift */; };
@@ -92,6 +96,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		09AAAE017647FDAE371E21C5 /* ChangeSignalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeSignalTests.swift; sourceTree = "<group>"; };
+		78E8F7DF1DA199233119AA4F /* SetupStatusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupStatusTests.swift; sourceTree = "<group>"; };
+		5CD6596854CBB7F7BF0A47AB /* ChangeSignal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeSignal.swift; sourceTree = "<group>"; };
+		E7CB47ABC0B5A97169BB792F /* SetupStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupStatus.swift; sourceTree = "<group>"; };
 		8D91B4E0D371503B99ECD765 /* OnboardingStateTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OnboardingStateTests.swift; sourceTree = "<group>"; };
 		E3C7D38FA0A3F689C02EB557 /* LiveActivityShortcutTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LiveActivityShortcutTests.swift; sourceTree = "<group>"; };
 		DB4E2DDE294BB7C0D864F26C /* WelcomeTourOverlay.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WelcomeTourOverlay.swift; sourceTree = "<group>"; };
@@ -217,7 +225,9 @@
 			isa = PBXGroup;
 			children = (
 				CA4D10A0000000000000A001 /* CarAudioRouteMonitor.swift */,
+				5CD6596854CBB7F7BF0A47AB /* ChangeSignal.swift */,
 				F3323475E7B406064067E6C2 /* DriveSessionController.swift */,
+				E7CB47ABC0B5A97169BB792F /* SetupStatus.swift */,
 				4B8C91614F79675159741862 /* TravelLocationSensor.swift */,
 			);
 			path = Driving;
@@ -313,6 +323,8 @@
 				9A3C5E7F1B2D4F6081A3C5E7 /* RenderedPixels.swift */,
 				8D91B4E0D371503B99ECD765 /* OnboardingStateTests.swift */,
 				E3C7D38FA0A3F689C02EB557 /* LiveActivityShortcutTests.swift */,
+				78E8F7DF1DA199233119AA4F /* SetupStatusTests.swift */,
+				09AAAE017647FDAE371E21C5 /* ChangeSignalTests.swift */,
 			);
 			name = AppTests;
 			path = AppTests;
@@ -474,6 +486,8 @@
 				F294782D8B40F45F001D1942 /* DriveSessionControllerTests.swift in Sources */,
 				A5BEEE9D3A6E97EDC26FBCB5 /* OnboardingStateTests.swift in Sources */,
 				91541F5E1181E1B51374D9D6 /* LiveActivityShortcutTests.swift in Sources */,
+				25ADC9DE2475197810F86FB0 /* SetupStatusTests.swift in Sources */,
+				A64DCE328A7D9AD9AC1666EC /* ChangeSignalTests.swift in Sources */,
 				29D6B7B8A0067DFD42EA7CB5 /* CompassActivityControllerTests.swift in Sources */,
 				7D2734D738F62A57FBC0C728 /* CarPlayPresentationTests.swift in Sources */,
 				774742633DD35133F9D14ED8 /* CompassDiagnosticsTests.swift in Sources */,
@@ -506,6 +520,8 @@
 				7DAFBB08145E36C20B9711CD /* PhoneLocationController.swift in Sources */,
 				F48727869BD5AB3FA5D5F667 /* CompassSettingsView.swift in Sources */,
 				B37CF85048BCC053467427CB /* DriveSessionController.swift in Sources */,
+				605E0D7F022D50FF323D21AC /* SetupStatus.swift in Sources */,
+				FA5DA1F36AFFCE5D7935FF2D /* ChangeSignal.swift in Sources */,
 				CA4D10A0000000000000A002 /* CarAudioRouteMonitor.swift in Sources */,
 				35807C85FCA4AFD3E7A5EE80 /* CompassActivityPresenting.swift in Sources */,
 				020F1378FBC3CA202F0BD64E /* TravelLocationSensor.swift in Sources */,

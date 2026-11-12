@@ -49,7 +49,9 @@ active.
 ## Location eligibility
 
 `DriveSessionController.refreshSetupStatus()` (`App/Driving/DriveSessionController.swift:336`)
-derives `setupStatus` from Core Location on every call, checked in this order:
+sets `setupStatus` on every call from `SetupStatus.init(sensor:)`
+(`App/Driving/SetupStatus.swift`), which derives it from Core Location, checked in this order
+(`SetupStatusTests` covers each check and the order):
 
 ```mermaid
 stateDiagram-v2
@@ -303,10 +305,12 @@ stateDiagram-v2
 ```
 
 `needsForegroundStart` (`DriveSessionController.swift`) is the `Waiting` state. It waits for
-the drive to change (`nextChange`, woken by `signalChange` on each sensor event, CarPlay
-connection and drive end), for the second after a reading, or for the timeout, rather than
-polling. A cancelled wait reports that no foreground start is needed. Its result is the only
-consumer of `locationNeedsForeground`.
+the drive to change (`ChangeSignal.wait(until:)` in `App/Driving/ChangeSignal.swift`, woken by
+the controller's `changes.signal()` on each sensor event, CarPlay connection and drive end), for
+the second after a reading, or for the timeout, rather than polling. `ChangeSignalTests` covers
+the signal on its own: a wait ends at the next signal, its deadline or its task's cancellation,
+and leaves no waiter behind. A cancelled wait reports that no foreground start is needed. Its
+result is the only consumer of `locationNeedsForeground`.
 
 Any `notInUse` report while Compasslet isn't active on CarPlay starts a wait
 (`DriveSession.notInUseSince`, in `receive`). During `Waiting` the intent ends the drive first;
