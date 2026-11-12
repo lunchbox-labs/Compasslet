@@ -36,11 +36,15 @@ VERSION = re.compile(r'[0-9]+(?:\.[0-9]+){0,2}')
 BUILD_NUMBER = re.compile(r'[1-9][0-9]{0,3}\.[1-9][0-9]?')
 # Apple has approved the version and is holding it for a manual release.
 AWAITING_RELEASE = 'PENDING_DEVELOPER_RELEASE'
-APPROVED = {AWAITING_RELEASE, 'PENDING_APPLE_RELEASE', 'PROCESSING_FOR_DISTRIBUTION',
-            'READY_FOR_DISTRIBUTION'}
 RELEASED = {'PROCESSING_FOR_DISTRIBUTION', 'READY_FOR_DISTRIBUTION'}
-SUBMITTED = {'WAITING_FOR_REVIEW', 'IN_REVIEW', 'PENDING_DEVELOPER_RELEASE',
-             'PENDING_APPLE_RELEASE', 'PROCESSING_FOR_DISTRIBUTION', 'READY_FOR_DISTRIBUTION'}
+# In a submission that hasn't been sent to Apple yet; nothing on the version can be edited.
+IN_DRAFT = 'READY_FOR_REVIEW'
+SUBMITTED = {'WAITING_FOR_EXPORT_COMPLIANCE', 'WAITING_FOR_REVIEW', 'IN_REVIEW', 'ACCEPTED',
+             'PENDING_DEVELOPER_RELEASE', 'PENDING_APPLE_RELEASE', 'PROCESSING_FOR_DISTRIBUTION',
+             'READY_FOR_DISTRIBUTION'}
+SCREENSHOT_SET_LIMIT = 10
+# Contact details stay in App Store Connect; these catch an email address or a phone number.
+CONTACT_DETAILS = re.compile(r'[^\s@]+@[^\s@]+\.[A-Za-z]{2,}|\+?\d(?:[\s().-]*\d){8,}')
 OPEN_SUBMISSIONS = 'READY_FOR_REVIEW,WAITING_FOR_REVIEW,IN_REVIEW,UNRESOLVED_ISSUES,CANCELING'
 PNG_SIGNATURE = b'\x89PNG\r\n\x1a\n'
 COLOUR_CHUNKS = {b'sRGB', b'iCCP', b'gAMA', b'cHRM', b'pHYs'}
@@ -65,6 +69,8 @@ def read_review_notes(root=APP_STORE):
         raise MetadataError('Cannot read the App Review notes.') from None
     require(value and len(value) <= REVIEW_NOTES_LIMIT and '\x00' not in value,
             'Empty, invalid or overlong App Review notes: ' + REVIEW_NOTES)
+    require(not CONTACT_DETAILS.search(value),
+            'The App Review notes look like they hold contact details; keep those in App Store Connect.')
     return value
 
 
@@ -261,8 +267,14 @@ def sync_screenshots(client, localization_id, locale, shots, report, ready, atte
                 'appStoreVersionLocalizations', localization_id)}}})
         set_id = identifier(created.get('data', {}).get('id'))
     # Replace the whole set so it holds exactly the supplied images; other sizes are untouched.
-    for record in existing:
-        client.request('DELETE', '/v1/appScreenshots/' + identifier(record.get('id')))
+    # The old images go once the new ones are in, unless the set has no room for both.
+    def remove_existing():
+        for record in existing:
+            client.request('DELETE', '/v1/appScreenshots/' + identifier(record.get('id')))
+
+    if len(existing) + len(shots) > SCREENSHOT_SET_LIMIT:
+        remove_existing()
+        existing = []
     uploaded = []
     for name, payload, checksum in shots:
         reserved = client.request('POST', '/v1/appScreenshots', payload={'data': {
@@ -286,6 +298,7 @@ def sync_screenshots(client, localization_id, locale, shots, report, ready, atte
                 sleep(15)
         else:
             raise MetadataError('Apple is still processing a listing screenshot; check App Store Connect.')
+    remove_existing()
     client.request('PATCH', '/v1/appScreenshotSets/' + set_id + '/relationships/appScreenshots',
                    payload={'data': [{'type': 'appScreenshots', 'id': i} for i in uploaded]})
     report('UPDATED listing screenshots ' + locale + ': ' + ', '.join(n for n, _, _ in shots))
@@ -354,10 +367,26 @@ def submit(client, app_id, version, build_id, report):
             'type': 'reviewSubmissionItems', 'relationships': {
                 'reviewSubmission': resource('reviewSubmissions', submission_id),
                 'appStoreVersion': resource('appStoreVersions', version_id)}}})
+    send_for_review(client, submission_id, version['attributes']['versionString'], report)
+
+
+def send_for_review(client, submission_id, marketing_version, report):
     client.request('PATCH', '/v1/reviewSubmissions/' + submission_id, payload={'data': {
         'type': 'reviewSubmissions', 'id': submission_id, 'attributes': {'submitted': True}}})
-    report('SUBMITTED version ' + version['attributes']['versionString']
+    report('SUBMITTED version ' + marketing_version
            + ' for App Review; release it with the Release workflow once Apple approves it.')
+
+
+def resume_draft(client, app_id, version, linked, build_number, report):
+    """A version already in an unsent submission, as after a run that stopped partway."""
+    marketing_version = version['attributes']['versionString']
+    require(linked and linked[1] == build_number, 'Version ' + marketing_version
+            + ' is in a draft submission with another build; remove it from the submission in '
+            'App Store Connect, then run again.')
+    submission_id, has_item = open_submission(client, app_id, identifier(version['id']))
+    require(submission_id and has_item, 'Version ' + marketing_version
+            + ' is waiting in a submission this run cannot find; check App Store Connect.')
+    send_for_review(client, submission_id, marketing_version, report)
 
 
 def review(client, marketing_version, build_number, notes, shots, wants_submit, locales,
@@ -365,6 +394,9 @@ def review(client, marketing_version, build_number, notes, shots, wants_submit, 
     """Notes, then screenshots, then submission, each only while the version stays editable."""
     app_id = find_app(client)
     version, linked = find_version(client, app_id, marketing_version)
+    if version and wants_submit and state(version) == IN_DRAFT:
+        resume_draft(client, app_id, version, linked, build_number, report)
+        return
     if version and not editable(version):
         if wants_submit and state(version) in SUBMITTED and linked and linked[1] == build_number:
             report('ALREADY SUBMITTED version ' + marketing_version + ' with build ' + build_number + '.')
@@ -408,7 +440,7 @@ def review(client, marketing_version, build_number, notes, shots, wants_submit, 
 
 
 def approved(client, marketing_version, releasing):
-    """The version's approved build number; when releasing, Apple must be holding it for release."""
+    """The version's build number: approved and held for release, or already live when not releasing."""
     app_id = find_app(client)
     version, linked = find_version(client, app_id, marketing_version)
     require(version, 'No iOS App Store version ' + marketing_version + '.')
@@ -416,8 +448,9 @@ def approved(client, marketing_version, releasing):
         require(state(version) == AWAITING_RELEASE, 'Version ' + marketing_version + ' is '
                 + str(state(version)) + ', not approved and waiting for release.')
     else:
-        require(state(version) in APPROVED, 'Version ' + marketing_version + ' is '
-                + str(state(version)) + ', not approved.')
+        # Tagging a version that isn't live yet would block its App Store release later.
+        require(state(version) in RELEASED, 'Version ' + marketing_version + ' is '
+                + str(state(version)) + ', not on the App Store; turn app-store-release on.')
     require(linked and isinstance(linked[1], str) and BUILD_NUMBER.fullmatch(linked[1]),
             'The approved version has no build from the Publish workflow.')
     return linked[1]

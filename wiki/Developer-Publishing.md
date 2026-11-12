@@ -19,7 +19,9 @@ Before running Publish:
 
 1. In App Store Connect, create the iOS version (it must match `MARKETING_VERSION`),
    its locales and the App Review contact details. The workflows never create these.
-2. Merge the release copy, `app-store/review-notes.txt` and the version bump into `main`.
+2. Merge the version bump and any release copy changes into `main`, including
+   `app-store/review-notes.txt` for the App Review notes. Without that file the notes in
+   App Store Connect are left as they are.
 
 Run Publish with `submit` on (the default). It:
 
@@ -43,7 +45,8 @@ then re-run only the failed jobs to retry with the same build; re-running the wh
 workflow uploads another build. Once a version is submitted with a build, running
 the same attempt again reports `ALREADY SUBMITTED` and changes nothing. If Apple
 sends the version back, fix it and run Publish again: the new build replaces the old
-one in the returned submission, which is submitted again. Publish stops without
+one in the returned submission, which is submitted again. A run that stopped after
+adding the version to a submission finishes sending it. Publish stops without
 submitting while another iOS submission is waiting for or in review.
 
 ## Releasing a version
@@ -53,7 +56,8 @@ Release. Run Release from `main` before bumping `MARKETING_VERSION` for the next
 version, since it releases the version that `main` names. It:
 
 1. finds that version's approved build and the Publish run and commit it came from,
-   and stops if the version isn't approved or its tag already exists elsewhere;
+   and stops if the version isn't approved, its GitHub Release is already published or
+   its tag is on another commit;
 2. captures every screen at that commit in light and dark on the largest and
    smallest iPhones, top of each screen only (input `screenshots`, on by default);
 3. releases the version on the App Store (input `app-store-release`, on by default);
@@ -62,13 +66,15 @@ version, since it releases the version that `main` names. It:
    `v<version>` and publishes the release.
 
 Turn `app-store-release` off for a version that is already live, such as 1.0, to tag
-it and publish its GitHub Release only. Only the job that tags and publishes can write
+it and publish its GitHub Release only. With it off, Release stops unless the version is
+already on the App Store. Only the job that tags and publishes can write
 to the repository, using the workflow's own token.
 
 Release never moves or replaces a tag or a published release. If a run stops after the
 App Store release, re-run its failed jobs, or run Release again with
 `app-store-release` off. A tag already on the build's commit is reused and an
-unpublished draft from the earlier run is replaced.
+unpublished draft from the earlier run is replaced. Release stops at a draft for the tag
+that it didn't make, so publish or delete that draft first.
 
 Published releases are [immutable](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases):
 assets cannot be added, replaced or deleted after publication, so Release attaches
@@ -79,7 +85,7 @@ every image before publishing.
 Publish captures the compass in light and dark on iPhone 17 (the `listing` set of the
 [Screenshots workflow](https://github.com/lunchbox-labs/compasslet/actions/workflows/screenshots.yml))
 and makes those two images the version's iPhone 6.3" screenshots in each locale in
-`app-store/`. Screenshots for other sizes are left as they are. Running Screenshots
+`app-store/`, removing the old ones once the new ones are in. Screenshots for other sizes are left as they are. Running Screenshots
 manually with `set` set to `listing` shows the images before a submission.
 
 Apple's [screenshot specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/)
@@ -151,7 +157,8 @@ build that should use them. Publish uses the uploaded commit, not newer edits on
 
 `app-store/review-notes.txt` holds the App Review notes, which aren't localized
 (4,000 characters). The review contact's name, email and phone stay in App Store
-Connect and never go in the repository.
+Connect and never go in the repository; Publish stops if the notes hold an email address
+or phone number.
 
 Missing files leave fields unchanged; blank or overlong files fail validation.
 The TestFlight description also affects existing beta builds. Release notes and

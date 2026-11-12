@@ -100,6 +100,7 @@ class FakeAppStore:
         self.items = {}
         self.writes = []
         self.counter = 0
+        self.fail_submit = False
 
     def add_listing(self, names_and_checksums):
         self.sets.append(resource('appScreenshotSets', 'set1', screenshotDisplayType='APP_IPHONE_61'))
@@ -226,10 +227,14 @@ class FakeAppStore:
         if (method, path) == ('POST', '/v1/reviewSubmissionItems'):
             submission = body['relationships']['reviewSubmission']['data']['id']
             self.items[submission].append(body['relationships']['appStoreVersion']['data']['id'])
+            self.version['attributes']['appVersionState'] = 'READY_FOR_REVIEW'
             return {'data': {'type': 'reviewSubmissionItems', 'id': 'item1'}}
         if method == 'PATCH' and path.startswith('/v1/reviewSubmissions/'):
             submission = next(s for s in self.submissions if s['id'] == path.split('/')[3])
             assert body['attributes'] == {'submitted': True} and self.items[submission['id']]
+            if self.fail_submit:
+                self.fail_submit = False
+                raise OSError('connection lost')
             submission['attributes']['state'] = 'WAITING_FOR_REVIEW'
             self.version['attributes']['appVersionState'] = 'WAITING_FOR_REVIEW'
             return {'data': submission}
@@ -282,9 +287,10 @@ class ProjectAndNotesTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.assertIsNone(app_store.read_review_notes(root))
-            (root / 'review-notes.txt').write_text('  Open the app from CarPlay.\n')
-            self.assertEqual(app_store.read_review_notes(root), 'Open the app from CarPlay.')
-            for value in ('\n', 'x' * 4001):
+            (root / 'review-notes.txt').write_text('  Open the app from CarPlay on 2026-11-12, build 33.1.\n')
+            self.assertEqual(app_store.read_review_notes(root), 'Open the app from CarPlay on 2026-11-12, build 33.1.')
+            for value in ('\n', 'x' * 4001, 'Questions? Write to reviewer@example.com.',
+                          'Call +1 (555) 010-0199 for a demo.'):
                 (root / 'review-notes.txt').write_text(value)
                 with self.subTest(length=len(value)), self.assertRaises(metadata.MetadataError):
                     app_store.read_review_notes(root)
@@ -336,8 +342,19 @@ class ReviewTests(unittest.TestCase):
         writes = [(m, p) for m, p, _ in self.apple.writes]
         self.assertLess(writes.index(('PATCH', '/v1/appStoreReviewDetails/review1')),
                         writes.index(('POST', '/v1/appScreenshots')))
+        # The old image goes only once the new ones are in.
+        uploaded = max(i for i, (m, p) in enumerate(writes) if m == 'PATCH' and p.startswith('/v1/appScreenshots/'))
+        self.assertGreater(writes.index(('DELETE', '/v1/appScreenshots/old1')), uploaded)
         self.assertEqual(writes[-1][0], 'PATCH')
         self.assertTrue(writes[-1][1].startswith('/v1/reviewSubmissions/'))
+
+    def test_a_full_set_is_emptied_before_the_upload(self):
+        self.apple.add_listing([('old' + str(n) + '.png', 'cc') for n in range(9)])
+        self.review(submit=False)
+        writes = [(m, p) for m, p, _ in self.apple.writes]
+        last_delete = max(i for i, (m, _) in enumerate(writes) if m == 'DELETE')
+        self.assertLess(last_delete, writes.index(('POST', '/v1/appScreenshots')))
+        self.assertEqual(self.listing(), [(name, checksum) for name, _, checksum in self.shots])
 
     def test_a_missing_listing_set_is_created(self):
         self.review(submit=False, shots=self.shots)
@@ -358,14 +375,38 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(self.apple.review['attributes']['notes'], 'Old notes')
         self.assertEqual(self.apple.writes, [])
 
-    def test_a_draft_submission_holding_this_version_is_reused(self):
+    def test_a_run_that_stopped_before_sending_the_submission_finishes_it(self):
+        self.apple.fail_submit = True
+        with self.assertRaises(metadata.MetadataError):
+            self.review()
+        self.assertEqual(self.apple.version['attributes']['appVersionState'], 'READY_FOR_REVIEW')
+        self.apple.writes.clear()
+        self.review()
+        self.assertEqual([(m, p.split('/')[2]) for m, p, _ in self.apple.writes],
+                         [('PATCH', 'reviewSubmissions')])
+        self.assertEqual(self.apple.submissions[0]['attributes']['state'], 'WAITING_FOR_REVIEW')
+        self.assertEqual(len(self.apple.submissions), 1)
+
+    def test_an_empty_draft_submission_is_reused(self):
         draft = resource('reviewSubmissions', 'draft1', platform='IOS', state='READY_FOR_REVIEW')
         self.apple.submissions.append(draft)
-        self.apple.items['draft1'] = ['version1']
+        self.apple.items['draft1'] = []
         self.review()
         self.assertEqual(len(self.apple.submissions), 1)
         self.assertEqual(self.apple.items['draft1'], ['version1'])
         self.assertEqual(draft['attributes']['state'], 'WAITING_FOR_REVIEW')
+
+    def test_a_version_waiting_in_a_draft_with_another_build_is_not_touched(self):
+        self.apple.version['attributes']['appVersionState'] = 'READY_FOR_REVIEW'
+        self.apple.linked_build = 'build0'
+        self.apple.submissions.append(resource('reviewSubmissions', 'draft1', platform='IOS',
+                                               state='READY_FOR_REVIEW'))
+        self.apple.items['draft1'] = ['version1']
+        with self.assertRaises(metadata.MetadataError):
+            self.review()
+        self.assertEqual(self.apple.writes, [])
+        self.review(shots=[], submit=False)
+        self.assertEqual(self.apple.writes, [])
 
     def test_a_submission_apple_sent_back_is_resubmitted_with_the_new_build(self):
         self.apple.version['attributes']['appVersionState'] = 'REJECTED'
@@ -451,12 +492,15 @@ class ReleaseTests(unittest.TestCase):
                 with self.assertRaises(metadata.MetadataError):
                     app_store.approved(self.client, '1.1', True)
 
-    def test_a_live_version_can_be_tagged_without_releasing_it_again(self):
-        self.apple.version['attributes']['appVersionState'] = 'READY_FOR_DISTRIBUTION'
-        self.assertEqual(app_store.approved(self.client, '1.1', False), '34.1')
-        self.apple.version['attributes']['appVersionState'] = 'IN_REVIEW'
-        with self.assertRaises(metadata.MetadataError):
-            app_store.approved(self.client, '1.1', False)
+    def test_without_releasing_only_a_live_version_can_be_tagged(self):
+        for version_state in ('READY_FOR_DISTRIBUTION', 'PROCESSING_FOR_DISTRIBUTION'):
+            self.apple.version['attributes']['appVersionState'] = version_state
+            self.assertEqual(app_store.approved(self.client, '1.1', False), '34.1')
+        for version_state in ('IN_REVIEW', 'PENDING_DEVELOPER_RELEASE', 'PENDING_APPLE_RELEASE'):
+            with self.subTest(state=version_state):
+                self.apple.version['attributes']['appVersionState'] = version_state
+                with self.assertRaises(metadata.MetadataError):
+                    app_store.approved(self.client, '1.1', False)
 
     def test_builds_not_made_by_publish_are_refused(self):
         self.apple.version['attributes']['appVersionState'] = 'READY_FOR_DISTRIBUTION'

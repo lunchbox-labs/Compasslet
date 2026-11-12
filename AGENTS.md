@@ -154,7 +154,7 @@ run summary.
 For custom captures, use Actions → Screenshots → Run workflow. Set `ref` to a branch, tag, commit
 or pull request number (empty uses the run's branch), choose `devices` and `appearances`, and
 narrow it with `filter` when only a few screens matter. Each run keeps its images for 7 days as a
-`screenshots-run-<number>` artifact.
+`screenshots-run-<number>` artifact, with `-attempt-<n>` added for a re-run.
 
 A screen whose content runs past the display, as many do at the accessibility text sizes, is
 captured in parts. After the usual capture, the test scrolls the screen's largest scroll view

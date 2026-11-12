@@ -201,13 +201,39 @@ class PublishTests(unittest.TestCase):
         self.assertFalse(self.fake.releases[0]['draft'])
 
     def test_a_stopped_run_is_finished_from_a_fresh_draft(self):
-        self.fake.releases.append({'id': 77, 'tag_name': 'v1.0', 'draft': True})
+        self.fake.releases.append({'id': 77, 'tag_name': 'v1.0', 'draft': True,
+                                   'name': 'Compasslet 1.0', 'target_commitish': BUILD_SHA})
         self.fake.releases.append({'id': 78, 'tag_name': 'v0.9', 'draft': True})
         self.fake.tags['v1.0'] = BUILD_SHA
         self.publish()
         self.assertEqual(sorted(r['id'] for r in self.fake.releases), [1, 78])
         self.assertNotIn(('POST', 'api.github.com', '/repos/' + REPO + '/git/refs'), self.fake.calls)
         self.assertFalse(next(r for r in self.fake.releases if r['id'] == 1)['draft'])
+
+    def test_a_draft_someone_else_wrote_is_left_alone(self):
+        for draft in ({'name': 'Compasslet 1.0', 'target_commitish': 'main'},
+                      {'name': 'Big launch', 'target_commitish': BUILD_SHA}):
+            with self.subTest(draft=draft):
+                self.fake = FakeGitHub()
+                self.github = github_release.GitHub('test-token', REPO, opener=self.fake)
+                self.fake.releases.append(dict(draft, id=77, tag_name='v1.0', draft=True))
+                with self.assertRaises(metadata.MetadataError):
+                    self.publish()
+                self.assertEqual([c for c in self.fake.calls if c[0] != 'GET'], [])
+
+    def test_a_tag_made_elsewhere_during_the_run_stops_publication(self):
+        upload = self.fake.route
+
+        def route(method, host, path, query, body, request):
+            if host == 'uploads.github.com':
+                self.fake.tags['v1.0'] = OTHER_SHA
+            return upload(method, host, path, query, body, request)
+
+        self.fake.route = route
+        with self.assertRaises(metadata.MetadataError):
+            self.publish()
+        self.assertTrue(self.fake.releases[0]['draft'])
+        self.assertEqual(self.fake.tags, {'v1.0': OTHER_SHA})
 
     def test_a_published_release_is_never_replaced(self):
         self.fake.tags['v1.0'] = BUILD_SHA

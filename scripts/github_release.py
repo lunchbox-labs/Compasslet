@@ -120,9 +120,9 @@ def tagged_commit(github, tag):
 
 def check_unreleased(github, tag, commit):
     """Refuse a published release or a tag elsewhere; a tag on this commit resumes a stopped run."""
+    # This finds only published releases; drafts answer 404.
     published = github.request('GET', '/releases/tags/' + quote(tag), missing_ok=True)
-    require(published is None or published.get('draft') is True,
-            'GitHub Release ' + tag + ' is already published.')
+    require(published is None, 'GitHub Release ' + tag + ' is already published.')
     existing = tagged_commit(github, tag)
     require(existing in (None, commit), 'Tag ' + tag + ' already points at another commit.')
     return existing is not None
@@ -152,18 +152,24 @@ def assets(directory):
 
 def publish(github, version, tag, commit, files, report=print):
     check_unreleased(github, tag, commit)
-    # A draft from an earlier run that stopped partway is this workflow's own; start it afresh.
+    name = 'Compasslet ' + version
+    drafts = []
     for page in range(1, RUN_PAGES + 1):
         releases = github.request('GET', '/releases', params={'per_page': 100, 'page': page})
         require(isinstance(releases, list), 'Invalid release listing.')
-        for leftover in releases:
-            if leftover.get('draft') is True and leftover.get('tag_name') == tag:
-                github.request('DELETE', '/releases/' + str(int(leftover['id'])))
-                report('Removed an unpublished draft of ' + tag + ' from an earlier run.')
+        drafts += [r for r in releases if r.get('draft') is True and r.get('tag_name') == tag]
         if len(releases) < 100:
             break
+    # A draft an earlier run left when it stopped partway is started afresh; any other draft
+    # for the tag is someone's own and is left for them to sort out.
+    require(all(d.get('name') == name and d.get('target_commitish') == commit for d in drafts),
+            'A draft GitHub Release for ' + tag + ' was not made by this workflow; publish or '
+            'delete it first.')
+    for leftover in drafts:
+        github.request('DELETE', '/releases/' + str(int(leftover['id'])))
+        report('Removed an unpublished draft of ' + tag + ' from an earlier run.')
     draft = github.request('POST', '/releases', payload={
-        'tag_name': tag, 'target_commitish': commit, 'name': 'Compasslet ' + version,
+        'tag_name': tag, 'target_commitish': commit, 'name': name,
         'draft': True, 'generate_release_notes': True})
     release_id = int(draft['id'])
     upload = urlsplit((draft.get('upload_url') or '').split('{', 1)[0])
@@ -173,9 +179,12 @@ def publish(github, version, tag, commit, files, report=print):
         github.request('POST', upload.geturl(), params={'name': path.name},
                        data=path.read_bytes(), content_type='image/png')
     report('Attached ' + str(len(files)) + ' screenshots to the draft.')
-    if tagged_commit(github, tag) is None:
+    existing = tagged_commit(github, tag)
+    if existing is None:
         github.request('POST', '/git/refs', payload={'ref': 'refs/tags/' + tag, 'sha': commit})
         report('Tagged ' + commit + ' as ' + tag + '.')
+    else:
+        require(existing == commit, 'Tag ' + tag + ' appeared on another commit; the draft was not published.')
     published = github.request('PATCH', '/releases/' + str(release_id), payload={'draft': False})
     require(published.get('draft') is False and published.get('tag_name') == tag,
             'GitHub did not publish release ' + tag + '.')

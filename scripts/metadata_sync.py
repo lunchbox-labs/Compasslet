@@ -379,7 +379,7 @@ def sync(client, copy, bundle_id, marketing_version, build_number, report=print,
             continue
         client.patch(kind, resource_id, changes)
         report('UPDATED ' + label + ': ' + ', '.join(sorted(changes)))
-    report('Metadata sync finished. Review explicit SKIP messages; no submission or distribution was requested.')
+    report('Metadata sync finished. Review explicit SKIP messages.')
 
 
 ROOT = Path(__file__).resolve().parents[1]
