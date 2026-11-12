@@ -1,4 +1,5 @@
 """Execute the workflow's inline shell steps without a simulator or GitHub token."""
+import json
 import os
 import re
 import runpy
@@ -70,42 +71,71 @@ class ScreenshotWorkflowTests(unittest.TestCase):
     def test_source_report_uses_actual_checked_out_commit(self):
         revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
         with tempfile.TemporaryDirectory() as directory:
-            summary = Path(directory) / 'summary'
+            summary, output = Path(directory) / 'summary', Path(directory) / 'output'
             result = subprocess.run(
                 ['bash', '-e', '-c', shell_step('Report the captured source')], cwd=ROOT,
-                env=dict(os.environ, GITHUB_STEP_SUMMARY=str(summary)),
+                env=dict(os.environ, GITHUB_STEP_SUMMARY=str(summary), GITHUB_OUTPUT=str(output)),
                 capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn(revision, result.stdout)
             self.assertIn(revision, summary.read_text())
+            # The capture jobs check out this output, so they capture the commit just built.
+            self.assertEqual(output.read_text(), 'revision=' + revision + '\n')
 
-    def capture_arguments(self, capture_set):
+    def recorded_arguments(self, step, **environment):
         with tempfile.TemporaryDirectory() as directory:
             bin_directory = Path(directory) / 'bin'
             bin_directory.mkdir()
             record = Path(directory) / 'arguments'
+            output = Path(directory) / 'output'
+            output.touch()
             fake = bin_directory / 'python3'
-            fake.write_text('#!/bin/bash\nprintf "%s\\n" "$@" > "$RECORD"\n')
+            fake.write_text('#!/bin/bash\nprintf "%s\\n" "$@" > "$RECORD"\necho \'[]\'\n')
             fake.chmod(0o755)
             result = subprocess.run(
-                ['bash', '-e', '-c', shell_step('Capture the screens')],
+                ['bash', '-e', '-c', shell_step(step)],
                 env=dict(os.environ, PATH=str(bin_directory) + os.pathsep + os.environ['PATH'],
-                         RECORD=str(record), CAPTURE_SET=capture_set, DEVICES='largest',
-                         APPEARANCES='dark', SCREEN_FILTER='tour; exit 3', MAX_PARTS='3',
-                         RUNNER_TEMP=directory),
+                         RECORD=str(record), RUNNER_TEMP=directory, GITHUB_OUTPUT=str(output),
+                         **environment),
                 capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             return record.read_text().splitlines()[1:]
 
-    def test_each_set_leaves_devices_and_appearances_to_the_script(self):
+    def capture_arguments(self, capture_set, device='largest'):
+        return self.recorded_arguments(
+            'Capture the screens', CAPTURE_SET=capture_set, DEVICE=device, APPEARANCES='dark',
+            SCREEN_FILTER='tour; exit 3', MAX_PARTS='3')
+
+    def device_arguments(self, capture_set):
+        return self.recorded_arguments(
+            'List the simulators to capture', CAPTURE_SET=capture_set, DEVICES='largest',
+            SCREEN_FILTER='tour; exit 3')
+
+    def test_each_set_leaves_appearances_to_the_script_and_captures_one_device(self):
         for capture_set in SETS:
             with self.subTest(capture_set=capture_set):
-                arguments = self.capture_arguments(capture_set)
+                arguments = self.capture_arguments(capture_set, device='iPhone 17')
                 self.assertEqual(arguments[:3], ['capture', '--set', capture_set])
-                self.assertNotIn('--devices', arguments)
+                self.assertEqual(arguments[arguments.index('--devices') + 1], 'iPhone 17')
                 self.assertNotIn('--appearances', arguments)
+                self.assertIn('--prebuilt', arguments)
                 self.assertEqual(arguments[arguments.index('--filter') + 1], 'tour; exit 3')
                 self.assertEqual(arguments[arguments.index('--max-parts') + 1], '3')
+
+    def test_each_set_lists_its_own_devices(self):
+        for capture_set in SETS:
+            with self.subTest(capture_set=capture_set):
+                arguments = self.device_arguments(capture_set)
+                self.assertEqual(arguments[:3], ['devices', '--set', capture_set])
+                self.assertNotIn('--devices', arguments)
+                self.assertEqual(arguments[arguments.index('--filter') + 1], 'tour; exit 3')
+
+    def test_every_screen_lists_the_requested_devices(self):
+        for capture_set in ('', 'every screen'):
+            with self.subTest(capture_set=capture_set):
+                arguments = self.device_arguments(capture_set)
+                self.assertNotIn('--set', arguments)
+                self.assertEqual(arguments[arguments.index('--devices') + 1], 'largest')
 
     def test_the_workflow_offers_every_set_the_script_has(self):
         workflow = (ROOT / '.github/workflows/screenshots.yml').read_text()
@@ -121,9 +151,55 @@ class ScreenshotWorkflowTests(unittest.TestCase):
             with self.subTest(capture_set=capture_set):
                 arguments = self.capture_arguments(capture_set)
                 self.assertNotIn('--set', arguments)
+                self.assertIn('--prebuilt', arguments)
                 self.assertEqual(arguments[arguments.index('--devices') + 1], 'largest')
                 self.assertEqual(arguments[arguments.index('--appearances') + 1], 'dark')
                 self.assertEqual(arguments[arguments.index('--max-parts') + 1], '3')
+
+    def collect(self, devices, parts):
+        """Runs the collect step over part folders, each a label and its files."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for label, files in parts.items():
+                part = root / 'parts' / ('screenshots-part-5-' + label)
+                part.mkdir(parents=True)
+                for name, content in files.items():
+                    (part / name).write_text(content)
+            result = subprocess.run(
+                ['bash', '-e', '-c', shell_step('Combine the simulators\' captures')],
+                env=dict(os.environ, RUNNER_TEMP=directory, PREFIX='screenshots-part-5-',
+                         DEVICES=json.dumps(devices)),
+                capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            output = root / 'screenshots'
+            images = sorted(path.name for path in output.iterdir())
+            return (json.loads((output / 'screenshots.json').read_text()), images,
+                    result.stdout)
+
+    def test_collect_joins_each_simulators_images_and_manifest_in_listed_order(self):
+        devices = [{'devices': 'smallest', 'label': 'smallest'},
+                   {'devices': 'largest', 'label': 'largest'}]
+        manifest, images, _ = self.collect(devices, {
+            'largest': {'largest-light-compass.png': 'L',
+                        'screenshots.json': json.dumps([{'file': 'largest-light-compass.png'}])},
+            'smallest': {'smallest-light-compass.png': 'S',
+                         'screenshots.json': json.dumps([{'file': 'smallest-light-compass.png'}])},
+        })
+        self.assertEqual([entry['file'] for entry in manifest],
+                         ['smallest-light-compass.png', 'largest-light-compass.png'])
+        self.assertEqual(images, ['largest-light-compass.png', 'screenshots.json',
+                                  'smallest-light-compass.png'])
+
+    def test_collect_keeps_what_it_has_and_names_a_simulator_that_uploaded_nothing(self):
+        devices = [{'devices': 'iPhone 17', 'label': 'iphone-17'},
+                   {'devices': 'iPhone Duo', 'label': 'iphone-duo'}]
+        manifest, images, stdout = self.collect(devices, {
+            'iphone-17': {'iphone-17-light-compass.png': 'x',
+                          'screenshots.json': json.dumps([{'file': 'iphone-17-light-compass.png'}])},
+        })
+        self.assertEqual(len(manifest), 1)
+        self.assertIn('iphone-17-light-compass.png', images)
+        self.assertIn('Nothing was uploaded for iPhone Duo', stdout)
 
 
 if __name__ == '__main__':

@@ -147,11 +147,19 @@ Add the `screenshots` label to capture the current PR head, using the largest an
 simulators in light and dark. While the label remains, each push or reopening requests another
 capture; a push containing several commits captures only the resulting PR head. Adding unrelated
 labels does not request a capture. Remove `screenshots` to stop future automatic captures.
-Without it, the capture job is skipped on PR updates. A newer capture request for a PR cancels
-its capture still in progress, since only the newest head needs screenshots; removing the label or
-adding an unrelated one does not cancel it. Manual runs never cancel each other or PR captures.
-Each run checks out the head commit recorded in its event and reports that exact commit in the
-run summary.
+Without it, the build job, and so every capture job, is skipped on PR updates. A newer capture
+request for a PR cancels its run still in progress, since only the newest head needs screenshots;
+removing the label or adding an unrelated one does not cancel it. Manual runs never cancel each
+other or PR captures. Each run checks out the head commit recorded in its event and reports that
+exact commit in the run summary.
+
+A run builds the app and its tests once (`scripts/screenshots build`), lists the simulators to
+capture (`scripts/screenshots devices`, which resolves `largest` and `smallest` and drops a
+request for a simulator another request already picks), then runs one capture job per simulator
+from that build (`capture --prebuilt`), all on the same commit. Each simulator's job captures
+every appearance it needs. A collect job gathers every simulator's images and `screenshots.json`
+into the run's one artifact, keeping what a failed simulator saved and naming one that uploaded
+nothing.
 
 For custom captures, use Actions → Screenshots → Run workflow. Set `ref` to a branch, tag, commit
 or pull request number (empty uses the run's branch), choose `devices` and `appearances`, and
