@@ -209,6 +209,18 @@ final class ScreenshotTests: XCTestCase {
     },
     Screen(name: "settings-appearance-rotation") { ScreenshotTests.editor(.rotation) },
     Screen(name: "settings-appearance-reduce-motion") { ScreenshotTests.editor(.reduceMotion) },
+    Screen(name: "settings-live-activity") { ScreenshotTests.liveActivitySettings() },
+    Screen(name: "settings-live-activity-largest-text") {
+      AnyView(
+        ScreenshotTests.liveActivitySettings().environment(\.dynamicTypeSize, .accessibility5))
+    },
+    // Choices other than the standard ones, with the lowest update frequency and no auto-stop.
+    Screen(name: "settings-live-activity-never") {
+      ScreenshotTests.liveActivitySettings {
+        $0.updateFrequency = .everyFifteenSeconds
+        $0.autoStop = .never
+      }
+    },
     Screen(name: "live-activity") { AnyView(LiveActivityScreen()) },
     Screen(name: "live-activity-hidden-time") { AnyView(LiveActivityScreen(mode: .hidden)) },
     Screen(name: "live-activity-elapsed-time") { AnyView(LiveActivityScreen(mode: .elapsed)) },
@@ -671,6 +683,15 @@ final class ScreenshotTests: XCTestCase {
     try FileManager.default.createDirectory(
       at: sampleDiagnosticsExport.deletingLastPathComponent(), withIntermediateDirectories: true)
     try Data("{\"entries\":[]}\n".utf8).write(to: sampleDiagnosticsExport, options: .atomic)
+  }
+
+  /// The Live Activity settings with their own unsaved choices, standard unless `change` sets them.
+  private static func liveActivitySettings(
+    _ change: (inout LiveActivityPreferences) -> Void = { _ in }
+  ) -> AnyView {
+    let store = LiveActivitySettingsStore(defaults: nil)
+    store.update(change)
+    return AnyView(NavigationStack { LiveActivitySettingsView(store: store) })
   }
 
   private static func editor(_ option: AppearanceOption) -> AnyView {

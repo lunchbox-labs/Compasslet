@@ -34,9 +34,9 @@ active.
 | [Location eligibility](#location-eligibility) | `DriveSessionController.setupStatus` | No (read from Core Location) |
 | [Location permission request](#location-permission-request) | `DriveSessionController.requestedPermission` | No |
 | [Drive session](#drive-session) | `DriveSessionController.state` | No |
-| [Car presence and the absence limit](#car-presence-and-the-absence-limit) | `DriveSessionController` | No |
+| [Car presence and the absence limit](#car-presence-and-the-absence-limit) | `DriveSession.car`, `DriveSessionController` | No (the auto-stop choice does, in `UserDefaults`) |
 | [Live Activity lifecycle](#live-activity-lifecycle) | `DriveSession.liveActivity`, `CompassActivityController` | The system activity does |
-| [Live Activity content](#live-activity-content) | `CompassActivityController` | The last content state does |
+| [Live Activity content](#live-activity-content) | `CompassActivityController` | The last content state and the update frequency choice do |
 | [Background start intent](#background-start-intent) | `StartLiveActivityIntent` | No |
 | [CarPlay scene](#carplay-scene) | `CarPlaySceneDelegate`, `CarPlayLifecycleBridge` | No |
 | [CarPlay update gate](#carplay-update-gate) | `CarPlayUpdateGate` | No |
@@ -105,7 +105,7 @@ A drive is the period in which travel location runs. `DriveSessionController.sta
 `liveActivityFailed` whether the last start ended because its Live Activity couldn't start,
 or `driving` with one `DriveSession` object.
 The session holds everything that belongs to one drive: `startedAt`, the course filter, the
-last reading, `hasReceivedReading`, `locationNeedsForeground`, `carAbsentSince`,
+last reading, `hasReceivedReading`, `locationNeedsForeground`, `car` (its car presence),
 `notInUseSince`, the background time held for that wait, its heartbeat and deadline timers, and
 the drive's Live Activity status. Every sensor callback, timer and Live Activity callback holds
 the session it was made for and does nothing once `session === current` fails, so nothing from
@@ -151,7 +151,8 @@ deadline timer and starts the Live Activity.
 
 - setup leaving `ready`, from a refresh, a sensor event or `authorizationLost`;
 - eight hours since `startedAt`, or a clock that moved backwards (`driveLimit`, `beat`);
-- the car absence limit (`endsAtLimit`, see below);
+- the car's absence: the start window for a drive started away from the car, or the
+  auto-stop delay once the car has left (`endsAtLimit`, see below);
 - location reporting `notInUse` while Compasslet isn't active on CarPlay, with no newer
   reading within 15 s (`notInUseLimit`, `endsAtLimit`; see
   [Background start intent](#background-start-intent));
@@ -176,16 +177,19 @@ run while a drive does, both in process, so they only advance while the process 
 
 - The heartbeat (`heartbeatInterval`, `beat`) runs once a second. It re-reads the car audio
   route, refreshes setup, enforces the eight-hour limit, observes the `activity` diagnostics
-  surface (which counts a gap over 2 s as a new session), lets an active Live Activity renew
-  its stale date once it has gone 60 s without a write, and checks every limit again. Each
+  surface (which counts a gap over 2 s as a new session), lets an active Live Activity write a
+  reading held by a lower update frequency or renew its stale date once it has gone 60 s without
+  a write, and checks every limit again. The update frequency never changes the heartbeat. Each
   beat sets the next one an interval after it ran (`scheduleHeartbeat`), so beats are never
   under 1 s apart, which diagnostics would skip, and a late beat brings no burst of catch-up
   beats.
 - One deadline timer (`armDeadline`, `deadlineCame`) fires at the first moment past the
-  earliest of the absence limit, the not-in-use limit and the reading's 5 s lifetime, so each
-  takes effect on time rather than at the next heartbeat. A change that moves a limit later
-  leaves the earlier timer, which sets the next one when it fires; a clock already before a
-  limit's start makes it due at once.
+  earliest of the car's absence limit, the not-in-use limit and the reading's 5 s lifetime, so
+  each takes effect on time rather than at the next heartbeat. A change that moves a limit later,
+  such as a longer auto-stop chosen during the wait, leaves the earlier timer, which sets the
+  next one when it fires; a shorter one chosen during the wait takes effect at the next
+  heartbeat, which sets the timer again. A clock already before a limit's start makes it due at
+  once.
 
 ## Car presence and the absence limit
 
@@ -198,14 +202,39 @@ audio route.
 stateDiagram-v2
     direction LR
     [*] --> Present: drive starts with CarPlay or car audio
-    [*] --> Absent: drive starts with neither
-    Present --> Absent: CarPlay disconnects without car audio, or car audio drops without CarPlay
-    Absent --> Present: CarPlay connects or car audio returns
-    Absent --> Ended: 60 s absent (carPlayAbsenceLimit)
+    [*] --> Awaited: drive starts with neither
+    Awaited --> Present: CarPlay connects or car audio returns
+    Awaited --> Ended: 60 s without the car (carPlayAbsenceLimit)
+    Present --> Left: CarPlay disconnects without car audio, or car audio drops without CarPlay
+    Left --> Present: CarPlay connects or car audio returns
+    Left --> Ended: auto-stop delay passes while the Live Activity runs (never, with Never)
+    Left --> Ended: 60 s while the Live Activity is dismissed or couldn't start
 ```
 
-`Absent` is `DriveSession.carAbsentSince != nil`. The deadline timer ends the drive at the first
-moment past 60 s, and every heartbeat checks it too.
+The states are `DriveSession.car`, a `CarPresence`: `present`, `awaited(since:)` or
+`left(since:)`. `carAbsence(of:)` gives each its limit. A drive started away from the car, as
+from Shortcuts, always gets the 60 s start window (`carPlayAbsenceLimit`), whatever auto-stop
+is set to. Once the car has shown and left, the limit is the auto-stop delay
+(`LiveActivityAutoStop`: 1, 5 or 15 minutes, or never) while the drive's Live Activity is
+`starting` or `active` (`LiveActivityStatus.isRunning`), which `DriveSessionController` reads
+through its `autoStop` closure each time it checks or sets a limit, so a change in Settings
+applies to a wait already running. A drive whose Live Activity is `dismissed` or `unavailable`
+would show nothing once the car has gone, so it keeps the 60 s limit whatever auto-stop is set
+to; starting the Live Activity again during the wait, as from Shortcuts, brings the auto-stop
+delay back at the next heartbeat or deadline. The standard choice, 1 minute, is the same 60 s
+as before the setting existed. With Never and a running Live Activity, nothing ends the drive
+for the car's absence: it runs until it is ended, its Live Activity is dismissed (which ends a
+drive without CarPlay at once), setup leaves `ready` or the eight-hour `driveLimit` passes.
+The deadline timer ends the drive at the first moment past the limit, and every heartbeat
+checks it too.
+
+The choice is stored with the update frequency as `LiveActivityPreferences` (in
+`Sources/CompassCore/LiveActivityPreferences.swift`) by `LiveActivitySettingsStore`
+(`App/LiveActivity/LiveActivitySettingsStore.swift`), as JSON in the app group's defaults
+beside the appearance. Nothing is saved until a choice changes, and a missing or unknown value
+reads as the standard one, so no migration is needed. The update frequency is saved under the
+key `refreshRate`, its name in early test builds, and their withdrawn 30 s choice reads as Every
+Second.
 
 ## Live Activity lifecycle
 
@@ -247,11 +276,13 @@ first drive, phone activation or intent. `end()` also ends every surviving activ
 ended, not as not running (`hasLiveActivity`).
 
 Every write sets a stale date 5 minutes ahead (`staleInterval`, `stamped`). While the drive's
-status is `active`, each heartbeat calls `renew()`, which rewrites the last content once
-nothing has been written for 60 seconds. When the process is terminated during a drive (force
-quit, crash or memory pressure), nothing renews the activity, so the system marks it stale
-within 5 minutes and the card shows travel as unavailable instead of the last direction. It
-stays until the app next launches, the End shortcut runs, or ActivityKit's own limit ends it.
+status is `active`, each heartbeat calls `renew()`, which writes a held reading whose refresh
+interval has passed (see [Live Activity content](#live-activity-content)), and otherwise
+rewrites the last content once nothing has been written for 60 seconds. When the process is
+terminated during a drive (force quit, crash or memory pressure), nothing renews the activity,
+so the system marks it stale within 5 minutes and the card shows travel as unavailable instead
+of the last direction. It stays until the app next launches, the End shortcut runs, or
+ActivityKit's own limit ends it.
 
 ## Live Activity content
 
@@ -266,13 +297,30 @@ reaches the card:
 
 - a usable reading is written only when it is a current travel bearing
   (`CompassSample.isCurrent(at:)` in `Sources/CompassCore/TravelCourse.swift`: the vehicle's
-  course against true north, a heading in 0..<360, and 0 to 5 s old), and only when its rounded
-  degrees or cardinal point change, at most once a second (`changedReadingInterval`). The
-  CarPlay screen (`CarPlayPresentation.init`) shows a bearing by the same rule;
+  course against true north, a heading in 0..<360, and 0 to 5 s old) when it is handed over
+  (a held reading is the one deliberate exception, below), and only when its rounded
+  degrees or cardinal point change, at most once per refresh interval. The interval comes from
+  the update frequency setting (`LiveActivityUpdateFrequency`, read through the controller's
+  `refreshInterval` closure at each write): every second by default
+  (`changedReadingInterval`), or every 5 or 15 seconds. The CarPlay screen
+  (`CarPlayPresentation.init`) shows a bearing by the same rule, with its own gate;
+- at the standard rate, a changed reading that comes within the interval is passed over, as
+  before the setting existed. At a slower rate it is held (`heldReading`) and written, with
+  its own sample time, once the interval has passed, by the drain after the drive's next
+  `renew()`. A newer changed reading replaces it, and a reading back at the direction shown, a
+  write without a bearing, a clear, a dismissal or an end drops it, so a turn just before a
+  stop still reaches the card. This is a deliberate exception to the 5 s rule: the reading was
+  current when it was handed over, and is written up to an interval after it was recorded,
+  with that sample time, so the card dates it correctly. A held reading recorded longer ago
+  than the interval plus the 5 s lifetime, as when the renewal comes late, is passed over
+  (`isRecentEnough`);
+- at a slower rate, a changed reading while no bearing is shown, as after a clear, is written
+  at once rather than waiting out the interval since the last bearing. The standard rate keeps
+  its limit there, as before the setting existed;
 - while a reading is retained (`retainedBearing`), slow, unreliable or unavailable input, or a
-  bearing that aged past 5 s in the queue (`CompassSample.hasExpired(at:)`), leaves the card
-  unchanged, so the last direction and its sample time stay visible through stops. A usable
-  sample that was never current, such as one dated after the clock, clears it;
+  handed-over bearing that aged past 5 s in the queue (`CompassSample.hasExpired(at:)`), leaves
+  the card unchanged, so the last direction and its sample time stay visible through stops. A
+  usable sample that was never current, such as one dated after the clock, clears it;
 - `invalidateReading()` after a location interruption clears the retained reading and shows
   unavailable;
 - `waiting` is always written.

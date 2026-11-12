@@ -19,8 +19,10 @@ the app on an available iOS 27+ iPhone simulator:
 bash scripts/test-ios
 ```
 
-The `CompassCore` package and formatting checks need Swift 6.4.1 and its bundled
-swift-format 6.4.1; CI runs them on Linux in the `swift:6.4.1` container:
+The `CompassCore` package and formatting checks need Swift 6.4 (any patch release) and its
+bundled swift-format; CI runs them on Linux in the `swift:6.4` container, which tracks the latest
+6.4 patch release. If CI's style check disagrees with a local run, update to the latest 6.4 patch
+release:
 
 ```sh
 bash scripts/swift-style check   # or format, to apply the formatting

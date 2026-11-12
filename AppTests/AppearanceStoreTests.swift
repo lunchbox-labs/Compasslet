@@ -772,6 +772,33 @@ struct AppearanceStoreTests {
     let titles = ReadoutTextSize.allCases.map(\.title)
     #expect(Set(titles).count == titles.count)
   }
+
+  @Test func liveActivitySettingsStartStandardAndPersistOnlyAChange() throws {
+    let name = "live-activity-settings-tests-\(UUID())"
+    let defaults = try #require(UserDefaults(suiteName: name))
+    defer { defaults.removePersistentDomain(forName: name) }
+    let store = LiveActivitySettingsStore(defaults: defaults)
+    #expect(store.preferences == LiveActivityPreferences())
+    // Nothing is saved until a choice changes, so a later standard still applies until then.
+    store.update { _ in }
+    #expect(defaults.object(forKey: "liveActivitySettings") == nil)
+    store.update {
+      $0.updateFrequency = .everyFifteenSeconds
+      $0.autoStop = .never
+    }
+    #expect(store.preferences.updateFrequency == .everyFifteenSeconds)
+    // A relaunch reads the saved choices.
+    let reopened = LiveActivitySettingsStore(defaults: defaults)
+    #expect(reopened.preferences == store.preferences)
+    #expect(reopened.preferences.autoStop == .never)
+    // Every choice reads differently, and the standard ones are the first listed.
+    let rates = LiveActivityUpdateFrequency.allCases.map(\.title)
+    let stops = LiveActivityAutoStop.allCases.map(\.title)
+    #expect(Set(rates).count == rates.count)
+    #expect(Set(stops).count == stops.count)
+    #expect(LiveActivityUpdateFrequency.allCases.first == LiveActivityPreferences().updateFrequency)
+    #expect(LiveActivityAutoStop.allCases.first == LiveActivityPreferences().autoStop)
+  }
 }
 
 /// Lays `view` out every 10 ms until `condition` holds or `timeout` passes.
