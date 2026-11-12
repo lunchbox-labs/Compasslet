@@ -897,22 +897,23 @@ struct CompassActivityControllerTests {
     let system = TestActivitySystem()
     let start = Date(timeIntervalSince1970: 100)
     var time = start
-    var interval: TimeInterval = 15
+    let settings = LiveActivitySettingsStore(defaults: nil)
+    settings.update { $0.refreshRate = .everyFifteenSeconds }
     let controller = CompassActivityController(
-      system: system, now: { time }, refreshInterval: { interval })
+      system: system, now: { time }, refreshInterval: { settings.preferences.refreshRate.interval })
     try await controller.start()
     await controller.showAndWait(travel(42, at: time))
     time = start + 2
     await controller.showAndWait(travel(90, at: time))
     #expect(system.handle.updates.map(\.bearing) == [42])
     // Back to the standard rate: the held reading is written at the next beat.
-    interval = CompassActivityController.changedReadingInterval
+    settings.update { $0.refreshRate = .everySecond }
     time = start + 3
     controller.renew()
     await controller.waitForPendingOperations()
     #expect(system.handle.updates.map(\.bearing) == [42, 90])
     // A slower rate limits the next change from the last write.
-    interval = 5
+    settings.update { $0.refreshRate = .everyFiveSeconds }
     time = start + 6
     await controller.showAndWait(travel(180, at: time))
     #expect(system.handle.updates.map(\.bearing) == [42, 90])
