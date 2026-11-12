@@ -5,8 +5,9 @@ import Synchronization
 /// Local timing evidence only. An event never proves that CarPlay painted a frame.
 ///
 /// Only the app's own process writes it: from the main actor on drive heartbeats and CarPlay
-/// renders, and from Live Activity updates off it. Every call runs under one lock and returns
-/// once written, so a session's start, pause and total land in the order the calls were made.
+/// passes and ticks, and from Live Activity updates off it. Every call runs under one lock and
+/// returns once written, so a session's start, pause and total land in the order the calls were
+/// made.
 /// The store is two files in the app's Application Support: `settings.json` holds the switch,
 /// each surface's clock and the next sequence number, and `events.jsonl` holds one event per
 /// line, appended as it is recorded.
@@ -218,7 +219,8 @@ final class CompassDiagnostics: Observable, Sendable {
     }
   }
 
-  /// Called by existing lifecycle ticks, not by an extra timer. Gaps are not assumed active.
+  /// Called by existing lifecycle ticks, and by CarPlay's one-second tick only while Debug Mode is
+  /// on, a drive runs and Compasslet is in front on CarPlay. Gaps are not assumed active.
   func observe(
     _ surface: Surface, active: Bool,
     wall: Double = Date().timeIntervalSince1970,

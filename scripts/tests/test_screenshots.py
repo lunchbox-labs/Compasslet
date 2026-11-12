@@ -1,4 +1,6 @@
 """Exercise simulator selection and screenshot answers of the screenshot script."""
+import contextlib
+import io
 import json
 import os
 import plistlib
@@ -93,6 +95,17 @@ class DeviceSelectionTests(unittest.TestCase):
     def test_exact_names_are_labelled_by_name_and_duplicates_are_dropped(self):
         selected = MODULE["select_devices"](["iPhone 17 Pro", "iPhone 17 Pro"], self.phones())
         self.assertEqual([item["label"] for item in selected], ["iphone-17-pro"])
+
+    def test_planning_drops_an_exact_name_its_alias_already_picks(self):
+        devices = {RUNTIME_27: [self.device("iPhone 17 Pro Max", "max"),
+                                self.device("iPhone 17e", "e")]}
+        answers = {"devicetypes": {"devicetypes": self.types},
+                   "devices": {"devices": devices}}
+        with patch.dict(MODULE["plan_devices"].__globals__,
+                        {"simctl_json": lambda kind, *rest: answers[kind]}):
+            planned = MODULE["plan_devices"](["largest", "smallest", "iPhone 17 Pro Max"])
+        self.assertEqual(planned, [{"devices": "largest", "label": "largest"},
+                                   {"devices": "smallest", "label": "smallest"}])
 
     def test_an_unknown_name_lists_the_available_simulators(self):
         with self.assertRaises(SystemExit) as raised:
@@ -261,8 +274,9 @@ class CaptureSetTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             MODULE["passes_for"]("accessibility", "no-such-screen")
 
-    def test_a_set_refuses_its_own_devices_and_appearances(self):
-        for option in (["--devices", "largest"], ["--appearances", "dark"]):
+    def test_a_set_refuses_appearances_and_devices_outside_it(self):
+        for option in (["--devices", "largest"], ["--devices", "iPhone 17,iPhone Typo"],
+                       ["--devices", ","], ["--appearances", "dark"]):
             with self.subTest(option=option), tempfile.TemporaryDirectory() as output, \
                     patch("subprocess.run") as run:
                 with self.assertRaises(SystemExit):
@@ -581,6 +595,75 @@ class CaptureRunTests(unittest.TestCase):
                                 "iPhone SE (3rd generation),iPhone Typo", "--output", output])
         self.assertIn("iPhone Typo", str(raised.exception))
         self.assertEqual(simulators.index("create"), [])
+
+
+class SplitCaptureTests(unittest.TestCase):
+    """The devices, build and --prebuilt commands that let several machines share one build."""
+
+    def run_main(self, simulators, *arguments):
+        stdout = io.StringIO()
+        with patch("subprocess.run", side_effect=simulators), \
+                contextlib.redirect_stdout(stdout), patch("sys.stderr"):
+            MODULE["main"](list(arguments))
+        return stdout.getvalue()
+
+    def test_devices_lists_each_simulator_once_and_creates_none(self):
+        simulators = FakeSimulators()
+        printed = self.run_main(simulators, "devices", "--devices",
+                                "iPhone 17,iPhone SE (3rd generation),iPhone 17")
+        self.assertEqual(json.loads(printed), [
+            {"devices": "iPhone 17", "label": "iphone-17"},
+            {"devices": "iPhone SE (3rd generation)", "label": "iphone-se-3rd-generation"}])
+        self.assertEqual(simulators.index("create"), [])
+
+    def test_devices_refuses_a_name_no_runtime_supports(self):
+        with self.assertRaises(SystemExit) as raised:
+            self.run_main(FakeSimulators(), "devices", "--devices", "iPhone 17,iPhone Typo")
+        self.assertIn("iPhone Typo", str(raised.exception))
+
+    def test_devices_for_a_set_lists_the_simulators_its_filtered_passes_use(self):
+        simulators = FakeSimulators()
+        printed = self.run_main(simulators, "devices", "--set", "accessibility", "--filter",
+                                "live-activity")
+        listed = [entry["devices"] for entry in json.loads(printed)]
+        expected = list(dict.fromkeys(item.device for item in
+                                      MODULE["passes_for"]("accessibility", "live-activity")))
+        self.assertEqual(listed, expected)
+        self.assertEqual(simulators.commands, [])
+
+    def test_a_set_narrowed_to_one_simulator_runs_only_its_passes(self):
+        arguments = MODULE["main"].__globals__["argparse"].Namespace(
+            set="accessibility", devices="iPhone 17", appearances=None, filter="")
+        passes, requested, _, _ = MODULE["capture_plan"](arguments)
+        self.assertEqual(requested, ["iPhone 17"])
+        self.assertTrue(passes)
+        self.assertTrue(all(item.device == "iPhone 17" for item in passes))
+
+    def test_build_only_builds_for_testing(self):
+        simulators = FakeSimulators()
+        with tempfile.TemporaryDirectory() as derived:
+            self.run_main(simulators, "build", "--derived-data", derived)
+        self.assertEqual([command[-1] for command in simulators.commands], ["build-for-testing"])
+
+    def test_prebuilt_capture_skips_the_build_and_uses_the_existing_products(self):
+        simulators = FakeSimulators(requests=("compass",))
+        with tempfile.TemporaryDirectory() as derived, tempfile.TemporaryDirectory() as output:
+            (Path(derived) / MODULE["APP_PRODUCT"]).mkdir(parents=True)
+            self.run_main(simulators, "capture", "--devices", "iPhone 17", "--appearances",
+                          "light", "--prebuilt", "--derived-data", derived, "--output", output)
+            manifest = json.loads((Path(output) / "screenshots.json").read_text())
+        self.assertEqual(simulators.index("build-for-testing"), [])
+        self.assertEqual(len(simulators.index("test-without-building")), 1)
+        self.assertEqual([entry["file"] for entry in manifest], ["iphone-17-light-compass.png"])
+
+    def test_prebuilt_capture_without_a_build_stops_before_any_simulator_boots(self):
+        simulators = FakeSimulators()
+        with tempfile.TemporaryDirectory() as derived, tempfile.TemporaryDirectory() as output:
+            with self.assertRaises(SystemExit) as raised:
+                self.run_main(simulators, "capture", "--devices", "iPhone 17", "--prebuilt",
+                              "--derived-data", derived, "--output", output)
+        self.assertIn("--prebuilt found no app", str(raised.exception))
+        self.assertEqual(simulators.index("boot"), [])
 
 
 if __name__ == "__main__":

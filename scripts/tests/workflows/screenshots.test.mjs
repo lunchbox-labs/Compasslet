@@ -5,7 +5,7 @@ import { data, Evaluator, Lexer, Parser } from '@actions/expressions';
 import { parse } from 'yaml';
 
 const workflow = parse(readFileSync(new URL('../../../.github/workflows/screenshots.yml', import.meta.url), 'utf8'));
-const condition = new Parser(new Lexer(workflow.jobs.capture.if).lex().tokens, ['github'], []).parse();
+const condition = new Parser(new Lexer(workflow.jobs.build.if).lex().tokens, ['github'], []).parse();
 
 function requestsCapture(eventName, event = {}) {
   if (!Object.hasOwn(workflow.on, eventName)) return false;
@@ -83,20 +83,26 @@ function render(value, github) {
 }
 
 let runs = 0;
-function capture(eventName, number) {
+function run(eventName, event = {}) {
   const github = {
     event_name: eventName,
     run_id: String(++runs),
-    event: eventName === 'pull_request' ? { pull_request: { number } } : {},
+    event: eventName === 'pull_request' ? { pull_request: { number: 7 }, ...event } : event,
   };
-  const { concurrency } = workflow.jobs.capture;
+  const { concurrency } = workflow;
   return {
     group: render(concurrency.group, github),
     cancels: render(concurrency['cancel-in-progress'], github) === 'true',
   };
 }
 
-test('a newer capture for a pull request cancels its capture in progress', () => {
+function capture(eventName, number) {
+  return run(eventName, eventName === 'pull_request'
+    ? { action: 'synchronize', pull_request: { number, labels: [{ name: 'screenshots' }] } }
+    : {});
+}
+
+test('a newer capture for a pull request cancels its run in progress', () => {
   const older = capture('pull_request', 7);
   const newer = capture('pull_request', 7);
   assert.equal(newer.group, older.group);
@@ -115,7 +121,29 @@ test('manual captures never cancel or replace another run', () => {
   }
 });
 
-test('concurrency is on the capture job, not the workflow, so skipped runs never enter the group', () => {
-  assert.equal(workflow.concurrency, undefined);
-  assert.ok(workflow.jobs.capture.concurrency);
+// The workflow-level group stands in for job-level concurrency, so a run that captures nothing
+// must never share a pull request's group, or it would cancel the capture in progress.
+test('only a run that requests a capture enters its pull request group', () => {
+  const capturing = capture('pull_request', 7).group;
+  const events = [];
+  for (const action of ['opened', 'synchronize', 'reopened', 'labeled', 'unlabeled']) {
+    for (const labels of [[], ['bug'], ['screenshots-extra'], ['screenshots'], ['bug', 'screenshots']]) {
+      for (const label of [undefined, 'screenshots', 'bug']) {
+        events.push(pullRequest(action, labels, label));
+      }
+    }
+  }
+  for (const event of events.filter(item => workflow.on.pull_request.types.includes(item.action))) {
+    const event7 = { ...event, pull_request: { ...event.pull_request, number: 7 } };
+    assert.equal(run('pull_request', event7).group === capturing,
+      requestsCapture('pull_request', event7), JSON.stringify(event7));
+  }
+});
+
+test('the capture jobs share one build and the collect job waits for every capture', () => {
+  assert.deepEqual(workflow.jobs.capture.needs, 'build');
+  assert.equal(workflow.jobs.capture.strategy['fail-fast'], false);
+  assert.deepEqual(workflow.jobs.collect.needs, ['build', 'capture']);
+  assert.equal(workflow.jobs.capture.concurrency, undefined);
+  assert.equal(workflow.jobs.build.concurrency, undefined);
 });

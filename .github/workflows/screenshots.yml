@@ -36,28 +36,34 @@ on:
         default: false
 permissions:
   contents: read
+# A newer capture request for a labeled pull request (a push, a reopen or re-adding the label)
+# cancels that pull request's older run, every job in it, since only its newest head needs
+# screenshots. Every other run, including each manual run and each run that captures nothing,
+# such as one for an unrelated label, gets a group of its own, so it never cancels or replaces
+# another run. The condition here must match the build job's if.
+concurrency:
+  group: >-
+    screenshots-${{ github.event_name == 'pull_request' &&
+    contains(github.event.pull_request.labels.*.name, 'screenshots') &&
+    (github.event.action != 'labeled' || github.event.label.name == 'screenshots') &&
+    format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
-  capture:
+  # Builds the app and its tests once, for every capture job to share, and lists one capture
+  # job per simulator.
+  build:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' &&
        contains(github.event.pull_request.labels.*.name, 'screenshots') &&
        (github.event.action != 'labeled' || github.event.label.name == 'screenshots'))
-    # A newer capture request for a labeled pull request (a push, a reopen or re-adding the label)
-    # cancels that pull request's older capture, since only its newest head needs screenshots.
-    # Manual runs each get a group of their own and never cancel or replace another run. This is
-    # on the job, not the workflow, so a run whose capture is skipped, such as one for an
-    # unrelated label, can't cancel a capture in progress.
-    concurrency:
-      group: screenshots-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
-      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     runs-on: xcode-27
-    # The accessibility set took about 42 minutes on hosted runners before screens were captured
-    # in parts, mostly simulator boots and captures. Up to nine parts per screen hasn't been timed
-    # yet, so this leaves room for those parts and for a slow runner.
-    timeout-minutes: 120
+    timeout-minutes: 30
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    outputs:
+      revision: ${{ steps.source.outputs.revision }}
+      devices: ${{ steps.devices.outputs.devices }}
     steps:
       - name: Choose what to check out
         id: target
@@ -81,41 +87,187 @@ jobs:
         with:
           ref: ${{ steps.target.outputs.ref }}
           persist-credentials: false
+      # The capture jobs check out this exact commit, so a branch that moves during the run
+      # can't give them source that differs from the build.
       - name: Report the captured source
+        id: source
         run: |
           revision=$(git rev-parse HEAD)
           echo "Capturing commit $revision"
           echo "Capturing commit \`$revision\`." >> "$GITHUB_STEP_SUMMARY"
-      - name: Capture the screens
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+      # Lists the simulators before building, so a request for one that doesn't exist fails
+      # without a build.
+      - name: List the simulators to capture
+        id: devices
         env:
           CAPTURE_SET: ${{ inputs.set }}
           DEVICES: ${{ inputs.devices || 'largest,smallest' }}
+          SCREEN_FILTER: ${{ inputs.filter }}
+        run: |
+          if [[ -n "$CAPTURE_SET" && "$CAPTURE_SET" != "every screen" ]]; then
+            devices=$(python3 scripts/screenshots devices --set "$CAPTURE_SET" --filter "$SCREEN_FILTER")
+          else
+            devices=$(python3 scripts/screenshots devices --devices "$DEVICES" --filter "$SCREEN_FILTER")
+          fi
+          echo "devices=$devices" >> "$GITHUB_OUTPUT"
+      - name: Build the app and its tests
+        run: python3 scripts/screenshots build --derived-data "$RUNNER_TEMP/xcode"
+      # Upload doesn't keep file modes, so the products go in a tarball to keep the app's
+      # executables runnable.
+      - name: Pack the build
+        run: tar -cf "$RUNNER_TEMP/products.tar" -C "$RUNNER_TEMP/xcode" Build/Products
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: screenshots-build-${{ github.run_number }}
+          path: ${{ runner.temp }}/products.tar
+          if-no-files-found: error
+          # Kept as long as the run's images, so a failed capture can be re-run from this build.
+          retention-days: 7
+          # Re-running every job builds again under the same name.
+          overwrite: true
+  # One job per simulator, all from the one build. Appearances stay together in a simulator's
+  # job, since switching appearance on a booted simulator is quick.
+  capture:
+    needs: build
+    name: capture (${{ matrix.devices }})
+    runs-on: xcode-27
+    strategy:
+      # Each simulator's images are worth keeping when another simulator's capture fails.
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.build.outputs.devices) }}
+    # The accessibility set took about 42 minutes on hosted runners before screens were captured
+    # in parts, mostly simulator boots and captures, all in one job. Up to nine parts per screen
+    # hasn't been timed yet, so this leaves room for those parts and for a slow runner.
+    timeout-minutes: 120
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      # The images go in a folder named for the simulator, so the collect job finds each
+      # simulator's images in its own folder however many captures uploaded. A job that fails
+      # before capturing still uploads an empty list, which replaces an earlier attempt's images.
+      - name: Start an empty capture
+        env:
+          LABEL: ${{ matrix.label }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/capture/$LABEL"
+          echo "[]" > "$RUNNER_TEMP/capture/$LABEL/screenshots.json"
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.build.outputs.revision }}
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: screenshots-build-${{ github.run_number }}
+          path: ${{ runner.temp }}
+      - name: Unpack the build
+        run: |
+          mkdir -p "$RUNNER_TEMP/xcode"
+          tar -xf "$RUNNER_TEMP/products.tar" -C "$RUNNER_TEMP/xcode"
+      - name: Capture the screens
+        env:
+          CAPTURE_SET: ${{ inputs.set }}
+          DEVICE: ${{ matrix.devices }}
+          LABEL: ${{ matrix.label }}
           APPEARANCES: ${{ inputs.appearances == 'light' && 'light' || inputs.appearances == 'dark' && 'dark' || 'light,dark' }}
           SCREEN_FILTER: ${{ inputs.filter }}
           MAX_PARTS: ${{ inputs.max-parts || '9' }}
         run: |
           if [[ -n "$CAPTURE_SET" && "$CAPTURE_SET" != "every screen" ]]; then
-            python3 scripts/screenshots capture --set "$CAPTURE_SET" --filter "$SCREEN_FILTER" \
-              --max-parts "$MAX_PARTS" --output "$RUNNER_TEMP/screenshots"
+            python3 scripts/screenshots capture --set "$CAPTURE_SET" --devices "$DEVICE" \
+              --filter "$SCREEN_FILTER" --max-parts "$MAX_PARTS" --prebuilt \
+              --derived-data "$RUNNER_TEMP/xcode" --output "$RUNNER_TEMP/capture/$LABEL"
           else
-            python3 scripts/screenshots capture --devices "$DEVICES" \
+            python3 scripts/screenshots capture --devices "$DEVICE" \
               --appearances "$APPEARANCES" --filter "$SCREEN_FILTER" \
-              --max-parts "$MAX_PARTS" --output "$RUNNER_TEMP/screenshots"
+              --max-parts "$MAX_PARTS" --prebuilt \
+              --derived-data "$RUNNER_TEMP/xcode" --output "$RUNNER_TEMP/capture/$LABEL"
           fi
-      # A failed run still uploads what it captured, to show what went wrong.
+      # A failed capture still uploads what it captured, to show what went wrong.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() }}
+        with:
+          name: screenshots-part-${{ github.run_number }}-${{ matrix.label }}
+          path: ${{ runner.temp }}/capture
+          if-no-files-found: error
+          # Kept as long as the run's images, so a re-run of another simulator can collect these.
+          retention-days: 7
+          # A re-run of a failed capture replaces its own images and keeps the other
+          # simulators' images from the earlier attempt for the collect job.
+          overwrite: true
+  # Gathers every simulator's images and screenshots.json into the run's one artifact, in the
+  # order the simulators were listed, including what a failed capture saved.
+  collect:
+    needs: [build, capture]
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: screenshots-part-${{ github.run_number }}-*
+          path: ${{ runner.temp }}/parts
+          # Each artifact holds one folder named for its simulator.
+          merge-multiple: true
+      # Fails, uploading nothing, when no simulator captured anything, so a re-run can't replace
+      # the run's images with an empty list.
+      - name: Combine the simulators' captures
+        id: combine
+        env:
+          DEVICES: ${{ needs.build.outputs.devices }}
+        run: |
+          python3 - "$RUNNER_TEMP/parts" "$RUNNER_TEMP/screenshots" <<'PYTHON'
+          import json, os, shutil, sys
+          from pathlib import Path
+          parts, output = Path(sys.argv[1]), Path(sys.argv[2])
+          output.mkdir(parents=True)
+          manifest, missing = [], []
+          devices = json.loads(os.environ["DEVICES"])
+          for device in devices:
+              part = parts / device["label"]
+              listed = part / "screenshots.json"
+              entries = json.loads(listed.read_text(encoding="utf-8")) if listed.exists() else []
+              # A capture that failed before saving anything uploads an empty list.
+              if not entries:
+                  missing.append(device["devices"])
+                  continue
+              for image in sorted(part.iterdir()):
+                  if image.name != "screenshots.json":
+                      shutil.copy2(image, output / image.name)
+              manifest += entries
+          print("Collected " + str(len(manifest)) + " screenshots")
+          for name in missing:
+              print("::error::Nothing was captured on " + name)
+          if not manifest:
+              sys.exit("No simulator captured anything")
+          (output / "screenshots.json").write_text(json.dumps(manifest, indent=2) + "\n",
+                                                   encoding="utf-8")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as file:
+              file.write("missing=" + ", ".join(missing) + "\n")
+          PYTHON
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: screenshots-run-${{ github.run_number }}
           path: ${{ runner.temp }}/screenshots
           if-no-files-found: error
           retention-days: 7
+          # A re-run collects again under the same name.
+          overwrite: true
       - name: Print the images as base64
         if: inputs.log-images
         run: |
           for image in "$RUNNER_TEMP"/screenshots/*.png; do
             echo "SCREENSHOT-BEGIN $(basename "$image")"
-            base64 -i "$image" | tr -d '\n' | fold -w 4000
+            base64 < "$image" | tr -d '\n' | fold -w 4000
             echo
             echo "SCREENSHOT-END $(basename "$image")"
           done
+      # After the upload, so the other simulators' images are kept.
+      - name: Fail when a simulator captured nothing
+        if: steps.combine.outputs.missing != ''
+        env:
+          MISSING: ${{ steps.combine.outputs.missing }}
+        run: |
+          echo "Nothing was captured on $MISSING" >&2
+          exit 1
