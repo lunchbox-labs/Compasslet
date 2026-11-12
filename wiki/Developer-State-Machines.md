@@ -329,7 +329,8 @@ reaches the card:
   stop still reaches the card. This is a deliberate exception to the 5 s rule: the reading was
   current when it was handed over, and is written up to an interval after it was recorded,
   with that sample time, so the card dates it correctly. A held reading recorded longer ago
-  than the interval plus the 5 s lifetime, as when the renewal comes late, is passed over
+  than the interval plus the 5 s lifetime, as when the renewal comes late, or dated after
+  the clock, as when the clock was set back since, is passed over
   (`isRecentEnough`);
 - at a slower rate, a changed reading while no bearing is shown, as after a clear, is written
   at once rather than waiting out the interval since the last bearing. The standard rate keeps

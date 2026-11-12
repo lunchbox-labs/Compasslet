@@ -235,13 +235,14 @@ final class CompassActivityController: CompassActivityPresenting {
   /// Whether a held reading is still worth writing: recorded no longer ago than the refresh
   /// interval and a reading's lifetime. A held reading is written up to an interval after it was
   /// recorded, past the lifetime a handed-over reading has, but one held longer, as when the
-  /// renewal came late, is passed over.
+  /// renewal came late, or one dated after `date`, is passed over.
   private func isRecentEnough(
     _ held: CompassActivityAttributes.ContentState, at date: Date
   ) -> Bool {
     guard let sampleTime = held.sampleTime else { return false }
+    // One recorded after `date`, as when the clock was set back since, would be dated ahead of it.
     let age = date.timeIntervalSince(sampleTime)
-    return age <= refreshInterval() + CompassSample.travelLifetime
+    return (0...(refreshInterval() + CompassSample.travelLifetime)).contains(age)
   }
 
   private func write(

@@ -847,6 +847,29 @@ struct CompassActivityControllerTests {
     }
   }
 
+  @Test func aReadingHeldBeforeAClockSetBackIsPassedOver() async throws {
+    let system = TestActivitySystem()
+    let start = Date(timeIntervalSince1970: 100)
+    var time = start
+    let controller = CompassActivityController(
+      system: system, now: { time }, refreshInterval: { 15 })
+    try await controller.start()
+    await controller.showAndWait(travel(42, at: time))
+    time = start + 1
+    await controller.showAndWait(travel(90, at: time))
+    // The held reading is now dated after the clock, so the renewal doesn't write it.
+    time = start - 30
+    controller.renew()
+    await controller.waitForPendingOperations()
+    #expect(system.handle.updates.map(\.bearing) == [42])
+    // It is gone, not waiting: a later renewal has nothing to write either.
+    time = start + 16
+    controller.renew()
+    await controller.waitForPendingOperations()
+    #expect(system.handle.updates.map(\.bearing) == [42])
+    await controller.end().value
+  }
+
   @Test func aLowerUpdateFrequencyWritesTheNewestChangeOnceItsIntervalEnds() async throws {
     let system = TestActivitySystem()
     let start = Date(timeIntervalSince1970: 100)
