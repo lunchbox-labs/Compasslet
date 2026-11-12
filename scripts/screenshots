@@ -447,13 +447,24 @@ def set_system_setting(udid, setting, on):
     run(SYSTEM_SETTINGS[setting](udid, on))
 
 
-def prepare_device(udid, app):
+def boot(udid):
     subprocess.run(["xcrun", "simctl", "boot", udid], check=False)
     run(["xcrun", "simctl", "bootstatus", udid, "-b"])
     run(["xcrun", "simctl", "status_bar", udid, "override", "--time", "9:41",
          "--dataNetwork", "wifi", "--wifiMode", "active", "--wifiBars", "3",
          "--cellularMode", "active", "--cellularBars", "4",
          "--batteryState", "charged", "--batteryLevel", "100"])
+
+
+def prepare_device(udid, app):
+    try:
+        boot(udid)
+    except subprocess.CalledProcessError:
+        # The iPhone Duo runtime has been seen to report itself booted and then shut down
+        # before it took the status bar, so a simulator that drops out gets one more boot.
+        print("The simulator stopped while starting, so it's booted again", file=sys.stderr)
+        quietly(["xcrun", "simctl", "shutdown", udid])
+        boot(udid)
     # Granting location first keeps the host app's permission prompt off the screenshots.
     run(["xcrun", "simctl", "install", udid, str(app)])
     run(["xcrun", "simctl", "privacy", udid, "grant", "location", BUNDLE_IDENTIFIER])

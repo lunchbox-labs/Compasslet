@@ -265,8 +265,10 @@ class CreatableDeviceTests(unittest.TestCase):
 class FakeSimulators:
     """Answers the simctl and xcodebuild commands capture() runs, and records each one."""
 
-    def __init__(self, test_result=0, requests=(), displays=1, inner_lights=True):
+    def __init__(self, test_result=0, requests=(), displays=1, inner_lights=True,
+                 failed_boots=0):
         self.test_result, self.requests = test_result, requests
+        self.failed_boots = failed_boots
         self.displays, self.inner_lights = displays, inner_lights
         self.devices = [{"udid": "17-id", "name": "iPhone 17", "isAvailable": True,
                          "deviceTypeIdentifier": "type.17"}]
@@ -300,6 +302,11 @@ class FakeSimulators:
             stdout = "se-id\n"
         elif arguments[0].endswith("simulator-hinge"):
             self.hinge = int(arguments[2])
+        elif arguments[:3] == ["xcrun", "simctl", "status_bar"] and self.failed_boots:
+            self.failed_boots -= 1
+            if options.get("check"):
+                raise subprocess.CalledProcessError(1, arguments)
+            return subprocess.CompletedProcess(arguments, 1, "", "")
         elif arguments[:4] == ["xcrun", "simctl", "io", arguments[3]]:
             if self.displays > 1 and not any(part.startswith("--display=") for part in arguments):
                 return subprocess.CompletedProcess(arguments, 22, "", TWO_DISPLAYS)
@@ -468,6 +475,22 @@ class CaptureRunTests(unittest.TestCase):
         self.assertEqual([entry["display"] for entry in manifest], ["outer"])
         self.assertFalse(any(command[0].endswith("simulator-hinge")
                              for command in fake.commands))
+
+    def test_a_simulator_that_stops_while_starting_is_booted_once_more(self):
+        simulators = FakeSimulators(requests=("settings-ax3",), failed_boots=1)
+        with patch("sys.stderr"):
+            error, manifest = self.capture(simulators)
+        self.assertIsNone(error)
+        self.assertEqual(len(simulators.index("simctl", "boot")), 2)
+        self.assertLess(simulators.index("shutdown")[0], simulators.index("simctl", "boot")[1])
+        self.assertEqual(len(manifest), 1)
+
+    def test_a_simulator_that_stops_twice_while_starting_ends_the_run(self):
+        simulators = FakeSimulators(requests=("settings-ax3",), failed_boots=2)
+        with patch("sys.stderr"), self.assertRaises(subprocess.CalledProcessError):
+            self.capture(simulators)
+        self.assertEqual(simulators.index("test-without-building"), [])
+        self.assertEqual(simulators.commands[-1], ["xcrun", "simctl", "delete", "se-id"])
 
     def test_no_simulator_is_created_when_any_requested_name_cant_be(self):
         simulators = FakeSimulators()
