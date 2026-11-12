@@ -178,8 +178,11 @@ captures for mock-ups; don't push other branches to produce them. Clients that c
 artifacts can set `log-images` and read the images from the job log.
 
 Choose the `listing` set for the App Store listing screenshots: the `compass` screen in light and
-dark on iPhone 17. Apple's screenshot specifications list one required iPhone size, iPhone with
-Dynamic Island (medium display), which iPhone 17 is. `LISTING_SET` in `scripts/screenshots` lists
+dark on iPhone 17. Publish captures this set at the commit it uploads and replaces the version's
+listing screenshots with it; Release captures every screen at the released commit for its GitHub
+Release. Both call this workflow, so its inputs and the `artifact` output must stay in step.
+Apple's screenshot specifications list one required iPhone size, iPhone with Dynamic Island
+(medium display), which iPhone 17 is. `LISTING_SET` in `scripts/screenshots` lists
 it. The app is iPhone only, so the listing has no iPad screenshots
 ([#309](https://github.com/lunchbox-labs/compasslet/issues/309)). Apple Watch
 ([#304](https://github.com/lunchbox-labs/compasslet/issues/304)) and iPhone Duo

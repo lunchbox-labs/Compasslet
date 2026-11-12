@@ -1,5 +1,6 @@
 """Update only supplied localization copy; never submit, distribute or create resources."""
 import base64
+import contextlib
 import json
 import os
 import signal
@@ -192,7 +193,8 @@ class Client:
             with self.opener.open(request, timeout=30) as response:
                 data = response.read(2_000_001)
             require(len(data) <= 2_000_000, 'Metadata API response exceeded the size limit.')
-            value = json.loads(data)
+            # A DELETE answers 204 with no body.
+            value = json.loads(data) if data else {}
             require(isinstance(value, dict), 'Invalid metadata API response.')
             return value
         except HTTPError as error:
@@ -381,6 +383,7 @@ def sync(client, copy, bundle_id, marketing_version, build_number, report=print,
 
 
 ROOT = Path(__file__).resolve().parents[1]
+BUNDLE_ID = 'dev.lunchbox-labs.carplay-compass'
 
 
 def workflow_identity():
@@ -409,36 +412,57 @@ def workflow_identity():
     return version, build
 
 
-def main():
+@contextlib.contextmanager
+def api_client():
+    """The App Manager team key's client; the decoded key exists only inside this block."""
+    encoded = os.environ.pop('ASC_METADATA_API_PRIVATE_KEY_BASE64', '')
+    require(bool(encoded), 'Missing ASC_METADATA_API_PRIVATE_KEY_BASE64 in the release environment.')
+    try:
+        private = base64.b64decode(''.join(encoded.split()), validate=True)
+    except ValueError:
+        raise MetadataError('Invalid metadata private key encoding.') from None
+    require(private.startswith(b'-----BEGIN PRIVATE KEY-----'), 'Invalid metadata private key encoding.')
+    with tempfile.TemporaryDirectory(prefix='compass-metadata-') as temporary:
+        path = Path(temporary) / 'AuthKey.p8'
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, 'wb') as output:
+            output.write(private)
+        token = Token(os.environ.get('ASC_METADATA_API_KEY_ID'),
+                      os.environ.get('ASC_API_ISSUER_ID'), path)
+        yield Client(token)
+
+
+def run_safely(action, failure):
+    """Run action, printing only fixed diagnostics, and return the process exit status."""
     # Convert ordinary termination into unwinding so the private tempfile is removed.
     def interrupted(*_):
         raise KeyboardInterrupt
 
     previous = signal.signal(signal.SIGTERM, interrupted)
     try:
-        version, build = workflow_identity()
-        copy = read_copy(ROOT / 'app-store')
-        require(bool(copy), 'No repository metadata fields supplied.')
-        encoded = os.environ.pop('ASC_METADATA_API_PRIVATE_KEY_BASE64', '')
-        require(bool(encoded), 'Missing ASC_METADATA_API_PRIVATE_KEY_BASE64 in app-store-metadata.')
-        private = base64.b64decode(''.join(encoded.split()), validate=True)
-        require(private.startswith(b'-----BEGIN PRIVATE KEY-----'), 'Invalid metadata private key encoding.')
-        with tempfile.TemporaryDirectory(prefix='compass-metadata-') as temporary:
-            path = Path(temporary) / 'AuthKey.p8'
-            descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-            with os.fdopen(descriptor, 'wb') as output:
-                output.write(private)
-            token = Token(os.environ.get('ASC_METADATA_API_KEY_ID'),
-                          os.environ.get('ASC_API_ISSUER_ID'), path)
-            sync(Client(token), copy, 'dev.lunchbox-labs.carplay-compass', version, build)
+        action()
         return 0
     except (Exception, KeyboardInterrupt) as error:
-        detail = str(error) if isinstance(error, MetadataError) else 'Check metadata inputs and configuration.'
-        print('Metadata sync failed: ' + detail
-              + ' The build upload remains accepted; earlier metadata updates may have succeeded.', file=sys.stderr)
+        detail = str(error) if isinstance(error, MetadataError) else 'Check the inputs and configuration.'
+        print(failure + ': ' + detail, file=sys.stderr)
         return 1
     finally:
         signal.signal(signal.SIGTERM, previous)
+
+
+def main():
+    def sync_repository_copy():
+        version, build = workflow_identity()
+        copy = read_copy(ROOT / 'app-store')
+        require(bool(copy), 'No repository metadata fields supplied.')
+        with api_client() as client:
+            sync(client, copy, BUNDLE_ID, version, build)
+
+    status = run_safely(sync_repository_copy, 'Metadata sync failed')
+    if status:
+        print('The build upload remains accepted; earlier metadata updates may have succeeded.',
+              file=sys.stderr)
+    return status
 
 
 if __name__ == '__main__':

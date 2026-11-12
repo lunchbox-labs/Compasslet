@@ -34,6 +34,35 @@ on:
         description: Also print the images into the log as base64, for clients that can't download artifacts
         type: boolean
         default: false
+  # Publish captures the listing set and Release every screen, at the commit they build or tag.
+  # The inputs match the manual ones; a choice there is the same text here.
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: true
+      set:
+        type: string
+        default: every screen
+      devices:
+        type: string
+        default: largest,smallest
+      appearances:
+        type: string
+        default: light and dark
+      filter:
+        type: string
+        default: ""
+      max-parts:
+        type: string
+        default: "9"
+      log-images:
+        type: boolean
+        default: false
+    outputs:
+      artifact:
+        description: The artifact holding the images
+        value: ${{ jobs.capture.outputs.artifact }}
 permissions:
   contents: read
 jobs:
@@ -52,12 +81,17 @@ jobs:
       group: screenshots-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     runs-on: xcode-27
+    outputs:
+      artifact: ${{ env.ARTIFACT }}
     # The accessibility set took about 42 minutes on hosted runners before screens were captured
     # in parts, mostly simulator boots and captures. Up to nine parts per screen hasn't been timed
     # yet, so this leaves room for those parts and for a slow runner.
     timeout-minutes: 120
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+      # A re-run of the capture gets a name of its own, since an artifact name can't be reused
+      # in one run.
+      ARTIFACT: screenshots-run-${{ github.run_number }}${{ github.run_attempt != '1' && format('-attempt-{0}', github.run_attempt) || '' }}
     steps:
       - name: Choose what to check out
         id: target
@@ -106,7 +140,7 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() }}
         with:
-          name: screenshots-run-${{ github.run_number }}
+          name: ${{ env.ARTIFACT }}
           path: ${{ runner.temp }}/screenshots
           if-no-files-found: error
           retention-days: 7
