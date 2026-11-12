@@ -18,7 +18,9 @@ protocol CompassActivityPresenting: AnyObject {
   /// The clear stays pending until it is written, and a presentation handed over before it is
   /// never written after it.
   func invalidateReading()
-  /// Keeps a running drive's activity from going stale when it has had nothing new to show.
+  /// Keeps a running drive's activity from going stale when it has had nothing new to show, and
+  /// keeps its diagnostics clock running. A drive calls it on each heartbeat while its activity is
+  /// starting or showing.
   func renew()
   /// Ends all owned activities, including surviving activities before the first drive, once the
   /// work queued before it has finished.
