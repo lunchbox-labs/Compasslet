@@ -502,3 +502,9 @@ share sheet closes or Debug Mode is turned off.
 
 `CompassActivityController` is the only writer of the `activity` clock, so the clock follows
 whether the app holds an activity (see [Live Activity lifecycle](#live-activity-lifecycle)).
+
+Open failure state ([#343](https://github.com/lunchbox-labs/compasslet/issues/343)): a repeat
+within 1 s is dropped without moving the clock, so if the first beat after a request lands
+under 1 s after it and the next beat wakes late, the next call comes over 2 s after the last
+accepted one. That starts a new `activity` session with no `paused` before it and loses about
+2 s of active time.
