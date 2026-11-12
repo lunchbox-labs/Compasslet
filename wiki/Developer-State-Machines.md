@@ -70,9 +70,9 @@ activation, on a manual start, on each drive heartbeat, on each sensor event, an
 `authorizationChanged` while no drive runs (`observeAuthorization`). Any state other than
 `ready` ends a running drive (`phoneBecameActive`, `beat` and `receive`).
 `beginDrive` sets `unavailable` directly when the sensor refuses to start, leaves the drive
-plainly idle and clears the sensor callback without restoring
-the authorization observer. The next refresh replaces the status. This can't happen in
-practice, because the sensor checks the same conditions the refresh checked just before.
+plainly idle and restores the authorization observer (`observeAuthorization`), so the next
+refresh or permission change replaces the status. This can't happen in practice, because the
+sensor checks the same conditions the refresh checked just before.
 
 ## Location permission request
 
@@ -447,6 +447,9 @@ shown angle.
 changes only when a reading appears or clears, and `status` is set only when it changes. The
 phone screen's layout reads those two, so only the dial, readout and accuracy views in
 `App/Heading/CompassView.swift`, which read `sample`, redraw at the heading rate.
+Within the dial, the rim's ticks don't depend on the bearing (`DialTicks` in
+`Shared/CompassDial.swift`): the dial rotates them as one layer, so a reading changes that
+rotation, the four labels and the pointer, and rebuilds no tick.
 
 ## Phone location and city
 

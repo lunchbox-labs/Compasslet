@@ -1481,6 +1481,22 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertEqual(activity.starts, 1)
   }
 
+  func testPermissionChangeAfterALocationStartFailureRefreshesSetup() async {
+    let sensor = Sensor(), activity = Activity()
+    sensor.fails = true
+    let controller = make(sensor, activity)
+    await controller.startLiveActivity()
+    XCTAssertEqual(controller.setupStatus, .unavailable)
+    // The failed start left no drive, so the idle controller still follows permission.
+    sensor.receive?(.authorizationChanged)
+    XCTAssertEqual(controller.setupStatus, .ready)
+    XCTAssertFalse(controller.isDriving)
+    sensor.authorization = .denied
+    sensor.receive?(.authorizationChanged)
+    XCTAssertEqual(controller.setupStatus, .denied)
+    XCTAssertEqual(sensor.starts, 0)
+  }
+
   func testInterruptionHandsOverAClearOnlyWhileTheActivityRuns() async {
     let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
     activity.pauseStart = true

@@ -314,7 +314,8 @@ final class DriveSessionController {
     }
     do { try sensor.start() } catch {
       sensor.stop()
-      sensor.receive = nil
+      // No drive follows, so a permission change must still refresh the status set here.
+      observeAuthorization()
       setupStatus = .unavailable
       state = .idle(liveActivityFailed: false)
       return
