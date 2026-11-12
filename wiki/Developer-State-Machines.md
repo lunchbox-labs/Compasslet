@@ -8,12 +8,15 @@ transition they touch. File and line references are to commit
 symbol if lines have moved. [Development](Developer-Development#reading-policies) gives the
 reading policies these machines enforce.
 
-Open failure states are listed here and under their machine, each tracked as an issue. One is
+Open failure states are listed here and under their machine, each tracked as an issue. Two are
 open:
 
 - [#336](https://github.com/lunchbox-labs/compasslet/issues/336): the CarPlay dial can keep the
   wrong light or dark style on an idle scene, as the
   [CarPlay update gate](#carplay-update-gate) section describes.
+- [#343](https://github.com/lunchbox-labs/compasslet/issues/343): diagnostics can split one Live
+  Activity session in two when a beat wakes late, as the [Diagnostics](#diagnostics) section
+  describes.
 
 The three found while mapping these machines are fixed:
 
@@ -183,12 +186,12 @@ run while a drive does, both in process, so they only advance while the process 
 
 - The heartbeat (`heartbeatInterval`, `beat`) runs once a second. It re-reads the car audio
   route, refreshes setup, enforces the eight-hour limit, calls `renew()` on a starting or active
-  Live Activity, which keeps its diagnostics clock running (see
-  [Live Activity lifecycle](#live-activity-lifecycle)) and writes a reading held by a lower
-  update frequency or renews the stale date once it has gone 60 s without a write, and checks
-  every limit again. The update frequency never changes the heartbeat. Each beat sets the next one an
-  interval after it ran (`scheduleHeartbeat`), so beats are never under 1 s apart, which
-  diagnostics would skip, and a late beat brings no burst of catch-up beats.
+  Live Activity, which keeps its diagnostics clock running (see [Live Activity
+  lifecycle](#live-activity-lifecycle)) and writes a reading held by a lower update frequency or
+  renews the stale date once it has gone 60 s without a write, and checks every limit again. The
+  update frequency never changes the heartbeat. Each beat sets the next one an interval after it
+  ran (`scheduleHeartbeat`), so beats are never under 1 s apart, which diagnostics would skip,
+  and a late beat brings no burst of catch-up beats.
 - One deadline timer (`armDeadline`, `deadlineCame`) fires at the first moment past the
   earliest of the car's absence limit, the not-in-use limit and the reading's 5 s lifetime, so
   each takes effect on time rather than at the next heartbeat. A change that moves a limit later,
