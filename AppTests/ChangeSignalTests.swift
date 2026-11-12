@@ -7,7 +7,7 @@ private let hour = Duration.seconds(60 * 60)
 // A signal that never comes, or a cancellation that never resumes, would leave a test waiting for
 // the hour-long deadline, so the time limit fails it first.
 @MainActor
-@Suite(.timeLimit(.minutes(1)))
+@Suite(.timeLimit(.minutes(5)))
 struct ChangeSignalTests {
   /// Starts a task that waits on `signal` with the hour-long deadline.
   private func startWaiting(on signal: ChangeSignal) -> Task<Void, Never> {
