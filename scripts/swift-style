@@ -11,7 +11,7 @@ if (( $# > 1 )); then
 fi
 
 cd "$(dirname "$0")/.."
-# Any 6.4 patch release formats the same way; formatting rules can change between minor releases.
+# Patch releases aren't expected to change formatting; minor releases can.
 expected_minor=6.4
 actual_version=$(swift-format --version)
 if [[ "$actual_version" != "$expected_minor" && "$actual_version" != "$expected_minor".* ]]; then
