@@ -183,9 +183,8 @@ the outer display as `-outer`, then open flat, saving the inner display as `-inn
 `scripts/screenshots` builds `scripts/simulator-hinge.m` and sends the hinge angle Device Hub's
 pose buttons send. That uses private CoreSimulator interfaces an Xcode update can break, so before
 each pass the script waits for that display to light up. A display that stays dark fails its pass
-by name and the other display's images are kept. Opened in portrait, the app may show on its side
-on the inner display, since the inner display is upright only with the device turned; check the
-`-inner` images before using them.
+by name and the other display's images are kept. Outer images are 1398x2034 and inner images,
+opened flat, are 2853x2007 with the app upright in its wide layout.
 
 Choose the `listing` set for the App Store listing screenshots: the `compass` screen in light and
 dark on iPhone 17 and on iPhone Duo, outer and inner. Apple's screenshot specifications list one
