@@ -9,9 +9,9 @@ struct LiveActivitySettingsView: View {
   var body: some View {
     Form {
       Section {
-        choices(LiveActivityRefreshRate.allCases, keyPath: \.refreshRate, title: \.title)
+        choices(LiveActivityUpdateFrequency.allCases, keyPath: \.updateFrequency, title: \.title)
       } header: {
-        Text("Refresh Rate")
+        Text("Update Frequency")
       } footer: {
         Text(
           "How often the Live Activity gets a new direction during a drive. iOS decides when the Lock Screen and CarPlay show each update. Compasslet’s own CarPlay screen isn’t affected."
@@ -57,13 +57,12 @@ struct LiveActivitySettingsView: View {
   }
 }
 
-extension LiveActivityRefreshRate {
+extension LiveActivityUpdateFrequency {
   var title: String {
     switch self {
     case .everySecond: "Every Second"
     case .everyFiveSeconds: "Every 5 Seconds"
     case .everyFifteenSeconds: "Every 15 Seconds"
-    case .everyThirtySeconds: "Every 30 Seconds"
     }
   }
 }
@@ -71,9 +70,9 @@ extension LiveActivityRefreshRate {
 extension LiveActivityAutoStop {
   var title: String {
     switch self {
-    case .afterOneMinute: "After 1 Minute"
-    case .afterFiveMinutes: "After 5 Minutes"
-    case .afterFifteenMinutes: "After 15 Minutes"
+    case .oneMinute: "1 Minute"
+    case .fiveMinutes: "5 Minutes"
+    case .fifteenMinutes: "15 Minutes"
     case .never: "Never"
     }
   }

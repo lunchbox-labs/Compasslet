@@ -36,7 +36,7 @@ active.
 | [Drive session](#drive-session) | `DriveSessionController.state` | No |
 | [Car presence and the absence limit](#car-presence-and-the-absence-limit) | `DriveSession.car`, `DriveSessionController` | No (the auto-stop choice does, in `UserDefaults`) |
 | [Live Activity lifecycle](#live-activity-lifecycle) | `DriveSession.liveActivity`, `CompassActivityController` | The system activity does |
-| [Live Activity content](#live-activity-content) | `CompassActivityController` | The last content state and the refresh rate choice do |
+| [Live Activity content](#live-activity-content) | `CompassActivityController` | The last content state and the update frequency choice do |
 | [Background start intent](#background-start-intent) | `StartLiveActivityIntent` | No |
 | [CarPlay scene](#carplay-scene) | `CarPlaySceneDelegate`, `CarPlayLifecycleBridge` | No |
 | [CarPlay update gate](#carplay-update-gate) | `CarPlayUpdateGate` | No |
@@ -176,8 +176,8 @@ run while a drive does, both in process, so they only advance while the process 
 - The heartbeat (`heartbeatInterval`, `beat`) runs once a second. It re-reads the car audio
   route, refreshes setup, enforces the eight-hour limit, observes the `activity` diagnostics
   surface (which counts a gap over 2 s as a new session), lets an active Live Activity write a
-  reading held by a slower refresh rate or renew its stale date once it has gone 60 s without
-  a write, and checks every limit again. The refresh rate never changes the heartbeat. Each
+  reading held by a lower update frequency or renew its stale date once it has gone 60 s without
+  a write, and checks every limit again. The update frequency never changes the heartbeat. Each
   beat sets the next one an interval after it ran (`scheduleHeartbeat`), so beats are never
   under 1 s apart, which diagnostics would skip, and a late beat brings no burst of catch-up
   beats.
@@ -226,11 +226,13 @@ drive without CarPlay at once), setup leaves `ready` or the eight-hour `driveLim
 The deadline timer ends the drive at the first moment past the limit, and every heartbeat
 checks it too.
 
-The choice is stored with the refresh rate as `LiveActivityPreferences` (in
+The choice is stored with the update frequency as `LiveActivityPreferences` (in
 `Sources/CompassCore/LiveActivityPreferences.swift`) by `LiveActivitySettingsStore`
 (`App/LiveActivity/LiveActivitySettingsStore.swift`), as JSON in the app group's defaults
 beside the appearance. Nothing is saved until a choice changes, and a missing or unknown value
-reads as the standard one, so no migration is needed.
+reads as the standard one, so no migration is needed. The update frequency is saved under the
+key `refreshRate`, its name in early test builds, and their withdrawn 30 s choice reads as Every
+Second.
 
 ## Live Activity lifecycle
 
@@ -296,9 +298,9 @@ reaches the card:
   course against true north, a heading in 0..<360, and 0 to 5 s old) when it is handed over
   (a held reading is the one deliberate exception, below), and only when its rounded
   degrees or cardinal point change, at most once per refresh interval. The interval comes from
-  the refresh rate setting (`LiveActivityRefreshRate`, read through the controller's
+  the update frequency setting (`LiveActivityUpdateFrequency`, read through the controller's
   `refreshInterval` closure at each write): every second by default
-  (`changedReadingInterval`), or every 5, 15 or 30 seconds. The CarPlay screen
+  (`changedReadingInterval`), or every 5 or 15 seconds. The CarPlay screen
   (`CarPlayPresentation.init`) shows a bearing by the same rule, with its own gate;
 - at the standard rate, a changed reading that comes within the interval is passed over, as
   before the setting existed. At a slower rate it is held (`heldReading`) and written, with

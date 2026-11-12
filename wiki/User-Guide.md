@@ -33,13 +33,12 @@ Open Compasslet on CarPlay again to start a new drive.
 
 In Compasslet's Settings › Live Activity:
 
-- **Refresh Rate** sets how often the Live Activity gets a new direction during a drive:
-  Every Second (the default), Every 5 Seconds, Every 15 Seconds or Every 30 Seconds. iOS
-  decides when the Lock Screen and CarPlay show each update. Compasslet's own CarPlay screen
-  isn't affected.
-- **Auto-Stop** sets how long a drive continues after CarPlay disconnects: After 1 Minute (the
-  default), After 5 Minutes, After 15 Minutes or Never. Until the drive ends, Compasslet keeps
-  using your location, which uses more battery. Drives always end after eight hours. If you
+- **Update Frequency** sets how often the Live Activity gets a new direction during a drive:
+  Every Second (the default), Every 5 Seconds or Every 15 Seconds. iOS decides when the Lock
+  Screen and CarPlay show each update. Compasslet's own CarPlay screen isn't affected.
+- **Auto-Stop** sets how long a drive continues after CarPlay disconnects: 1 Minute (the
+  default), 5 Minutes, 15 Minutes or Never. Until the drive ends, Compasslet keeps using your
+  location, which uses more battery. Drives always end after eight hours. If you
   dismissed the Live Activity, or it couldn't start, the drive ends a minute after CarPlay
   disconnects whatever Auto-Stop is set to, and a drive started from Shortcuts or Siri away
   from the car still ends after a minute unless CarPlay connects.

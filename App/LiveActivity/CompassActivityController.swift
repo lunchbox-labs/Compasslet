@@ -54,13 +54,13 @@ final class CompassActivityController: CompassActivityPresenting {
   private var pendingInvalidation = false
   /// Whether a drain of the pending clear and presentation is queued or running.
   private var drainQueued = false
-  /// The shortest time between two changed readings written, from the refresh rate. It is read at
-  /// each write, so a change applies at once.
+  /// The shortest time between two changed readings written, from the update frequency. It is
+  /// read at each write, so a change applies at once.
   private let refreshInterval: @MainActor () -> TimeInterval
-  /// At a refresh rate slower than the standard one, the newest changed reading that came too soon
-  /// after the last one written. A drive's renewal writes it once the interval has passed, unless a
-  /// newer write, a return to the direction shown or a clear replaces it first, so a turn just
-  /// before a stop still reaches the card.
+  /// At an update frequency lower than the standard one, the newest changed reading that came too
+  /// soon after the last one written. A drive's renewal writes it once the interval has passed,
+  /// unless a newer write, a return to the direction shown or a clear replaces it first, so a turn
+  /// just before a stop still reaches the card.
   private var heldReading: CompassActivityAttributes.ContentState?
 
   var canStartActivities: Bool { system.enabled }
@@ -167,8 +167,8 @@ final class CompassActivityController: CompassActivityPresenting {
 
   /// This is a sampled last-reading display, not a promise of live vehicle orientation.
   /// Unchanged readings get only the slow stale-date renewal; changed readings remain
-  /// rate-limited, to this standard interval unless a slower refresh rate is chosen.
-  static let changedReadingInterval = LiveActivityRefreshRate.everySecond.interval
+  /// rate-limited, to this standard interval unless a lower update frequency is chosen.
+  static let changedReadingInterval = LiveActivityUpdateFrequency.everySecond.interval
 
   func show(_ presentation: TravelPresentation) {
     pendingPresentation = presentation

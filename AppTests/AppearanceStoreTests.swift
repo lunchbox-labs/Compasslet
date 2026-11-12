@@ -783,20 +783,20 @@ struct AppearanceStoreTests {
     store.update { _ in }
     #expect(defaults.object(forKey: "liveActivitySettings") == nil)
     store.update {
-      $0.refreshRate = .everyThirtySeconds
+      $0.updateFrequency = .everyFifteenSeconds
       $0.autoStop = .never
     }
-    #expect(store.preferences.refreshRate == .everyThirtySeconds)
+    #expect(store.preferences.updateFrequency == .everyFifteenSeconds)
     // A relaunch reads the saved choices.
     let reopened = LiveActivitySettingsStore(defaults: defaults)
     #expect(reopened.preferences == store.preferences)
     #expect(reopened.preferences.autoStop == .never)
     // Every choice reads differently, and the standard ones are the first listed.
-    let rates = LiveActivityRefreshRate.allCases.map(\.title)
+    let rates = LiveActivityUpdateFrequency.allCases.map(\.title)
     let stops = LiveActivityAutoStop.allCases.map(\.title)
     #expect(Set(rates).count == rates.count)
     #expect(Set(stops).count == stops.count)
-    #expect(LiveActivityRefreshRate.allCases.first == LiveActivityPreferences().refreshRate)
+    #expect(LiveActivityUpdateFrequency.allCases.first == LiveActivityPreferences().updateFrequency)
     #expect(LiveActivityAutoStop.allCases.first == LiveActivityPreferences().autoStop)
   }
 }

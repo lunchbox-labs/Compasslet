@@ -810,7 +810,7 @@ struct CompassActivityControllerTests {
     await controller.end().value
   }
 
-  @Test func theStandardRefreshRatePassesOverAReadingThatComesTooSoon() async throws {
+  @Test func theStandardUpdateFrequencyPassesOverAReadingThatComesTooSoon() async throws {
     let system = TestActivitySystem()
     var time = Date(timeIntervalSince1970: 100)
     let controller = CompassActivityController(system: system, now: { time })
@@ -818,7 +818,7 @@ struct CompassActivityControllerTests {
     await controller.showAndWait(travel(42, at: time))
     time += 0.5
     await controller.showAndWait(travel(90, at: time))
-    // As before the refresh rate setting: nothing holds the reading for a later write.
+    // As before the update frequency setting: nothing holds the reading for a later write.
     time += 1
     controller.renew()
     await controller.waitForPendingOperations()
@@ -826,7 +826,7 @@ struct CompassActivityControllerTests {
     await controller.end().value
   }
 
-  @Test func aSlowerRefreshRateWritesTheNewestChangeOnceItsIntervalEnds() async throws {
+  @Test func aLowerUpdateFrequencyWritesTheNewestChangeOnceItsIntervalEnds() async throws {
     let system = TestActivitySystem()
     let start = Date(timeIntervalSince1970: 100)
     var time = start
@@ -915,7 +915,7 @@ struct CompassActivityControllerTests {
     await controller.end().value
   }
 
-  @Test func aSlowerRefreshRateShowsTheFirstDirectionAfterAClearAtOnce() async throws {
+  @Test func aLowerUpdateFrequencyShowsTheFirstDirectionAfterAClearAtOnce() async throws {
     let system = TestActivitySystem()
     let start = Date(timeIntervalSince1970: 100)
     var time = start
@@ -936,27 +936,28 @@ struct CompassActivityControllerTests {
     await controller.end().value
   }
 
-  @Test func aRefreshRateChangeAppliesToTheNextWrite() async throws {
+  @Test func aUpdateFrequencyChangeAppliesToTheNextWrite() async throws {
     let system = TestActivitySystem()
     let start = Date(timeIntervalSince1970: 100)
     var time = start
     let settings = LiveActivitySettingsStore(defaults: nil)
-    settings.update { $0.refreshRate = .everyFifteenSeconds }
+    settings.update { $0.updateFrequency = .everyFifteenSeconds }
     let controller = CompassActivityController(
-      system: system, now: { time }, refreshInterval: { settings.preferences.refreshRate.interval })
+      system: system, now: { time },
+      refreshInterval: { settings.preferences.updateFrequency.interval })
     try await controller.start()
     await controller.showAndWait(travel(42, at: time))
     time = start + 2
     await controller.showAndWait(travel(90, at: time))
     #expect(system.handle.updates.map(\.bearing) == [42])
     // Back to the standard rate: the held reading is written at the next beat.
-    settings.update { $0.refreshRate = .everySecond }
+    settings.update { $0.updateFrequency = .everySecond }
     time = start + 3
     controller.renew()
     await controller.waitForPendingOperations()
     #expect(system.handle.updates.map(\.bearing) == [42, 90])
     // A slower rate limits the next change from the last write.
-    settings.update { $0.refreshRate = .everyFiveSeconds }
+    settings.update { $0.updateFrequency = .everyFiveSeconds }
     time = start + 6
     await controller.showAndWait(travel(180, at: time))
     #expect(system.handle.updates.map(\.bearing) == [42, 90])
@@ -967,7 +968,7 @@ struct CompassActivityControllerTests {
     await controller.end().value
   }
 
-  @Test func aDriveAtASlowerRefreshRateShowsTheTurnBeforeAStop() async throws {
+  @Test func aDriveAtALowerUpdateFrequencyShowsTheTurnBeforeAStop() async throws {
     let system = TestActivitySystem()
     let clock = TestDriveClock(now: Date(timeIntervalSince1970: 100))
     let start = clock.now

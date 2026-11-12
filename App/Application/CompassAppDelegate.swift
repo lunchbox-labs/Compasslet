@@ -10,7 +10,7 @@ final class CompassAppDelegate: NSObject, UIApplicationDelegate {
     let drive = DriveSessionController(
       sensor: DeviceTravelLocationSensor(),
       activity: CompassActivityController(refreshInterval: {
-        settings.preferences.refreshRate.interval
+        settings.preferences.updateFrequency.interval
       }),
       carAudioRoute: { CarAudioRouteMonitor.isConnected },
       backgroundTime: { holdBackgroundTime() },

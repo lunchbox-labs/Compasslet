@@ -2,8 +2,8 @@ import CompassCore
 import Foundation
 import Observation
 
-/// The Live Activity's refresh rate and auto-stop choices, kept beside the appearance. Nothing is
-/// saved until a choice changes, so the standard values apply until then.
+/// The Live Activity's update frequency and auto-stop choices, kept beside the appearance. Nothing
+/// is saved until a choice changes, so the standard values apply until then.
 @MainActor @Observable
 final class LiveActivitySettingsStore {
   static let shared = LiveActivitySettingsStore()

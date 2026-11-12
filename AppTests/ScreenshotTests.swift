@@ -214,10 +214,10 @@ final class ScreenshotTests: XCTestCase {
       AnyView(
         ScreenshotTests.liveActivitySettings().environment(\.dynamicTypeSize, .accessibility5))
     },
-    // Choices other than the standard ones, with the slowest refresh rate and no auto-stop.
+    // Choices other than the standard ones, with the lowest update frequency and no auto-stop.
     Screen(name: "settings-live-activity-never") {
       ScreenshotTests.liveActivitySettings {
-        $0.refreshRate = .everyThirtySeconds
+        $0.updateFrequency = .everyFifteenSeconds
         $0.autoStop = .never
       }
     },

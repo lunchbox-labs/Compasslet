@@ -62,7 +62,7 @@ final class DriveSessionControllerTests: XCTestCase {
   }
   var carAudio = false
   /// The auto-stop choice the drive reads, the standard one unless a test changes it.
-  var autoStop = LiveActivityAutoStop.afterOneMinute
+  var autoStop = LiveActivityAutoStop.oneMinute
   var backgroundHolds = 0
   var backgroundReleases = 0
   func reading(_ course: Double = 90) -> TravelSensorEvent {
@@ -984,8 +984,8 @@ final class DriveSessionControllerTests: XCTestCase {
 
   func testAutoStopEndsTheDriveTheChosenTimeAfterTheCarLeaves() async {
     for (choice, delay) in [
-      (LiveActivityAutoStop.afterFiveMinutes, 5 * 60.0),
-      (.afterFifteenMinutes, 15 * 60),
+      (LiveActivityAutoStop.fiveMinutes, 5 * 60.0),
+      (.fifteenMinutes, 15 * 60),
     ] {
       for carAudioLeaves in [false, true] {
         autoStop = choice
@@ -1072,7 +1072,7 @@ final class DriveSessionControllerTests: XCTestCase {
   }
 
   func testAutoStopAppliesOnceTheCarHasShownAndLeft() async {
-    autoStop = .afterFiveMinutes
+    autoStop = .fiveMinutes
     let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
     let start = time
     await controller.startLiveActivity()
@@ -1087,7 +1087,7 @@ final class DriveSessionControllerTests: XCTestCase {
   }
 
   func testReconnectingDuringAnAutoStopWaitStartsItAgainNextTime() async {
-    autoStop = .afterFiveMinutes
+    autoStop = .fiveMinutes
     let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
     await controller.carPlayActivated()
     controller.carPlayResignedActive()
@@ -1106,7 +1106,7 @@ final class DriveSessionControllerTests: XCTestCase {
   }
 
   func testADriveWithoutItsLiveActivityEndsAMinuteAfterTheCarLeaves() async {
-    for choice in [LiveActivityAutoStop.afterFifteenMinutes, .never] {
+    for choice in [LiveActivityAutoStop.fifteenMinutes, .never] {
       for dismissed in [true, false] {
         autoStop = choice
         let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
@@ -1157,13 +1157,13 @@ final class DriveSessionControllerTests: XCTestCase {
     var left = time
     clock.run(until: left + 10 * 60)
     XCTAssertTrue(controller.isDriving)
-    autoStop = .afterFiveMinutes
+    autoStop = .fiveMinutes
     clock.run(until: time + DriveSessionController.heartbeatInterval)
     XCTAssertFalse(controller.isDriving)
     XCTAssertEqual(sensor.stops, 1)
 
     // Longer, with the standard minute's deadline already set: that deadline doesn't end it.
-    autoStop = .afterOneMinute
+    autoStop = .oneMinute
     sensor = Sensor()
     activity = Activity()
     controller = make(sensor, activity)
@@ -1172,14 +1172,14 @@ final class DriveSessionControllerTests: XCTestCase {
     controller.carPlayDisconnected()
     left = time
     clock.run(until: left + 30)
-    autoStop = .afterFifteenMinutes
+    autoStop = .fifteenMinutes
     clock.run(until: left + 15 * 60)
     XCTAssertTrue(controller.isDriving)
     clock.run(until: left + 15 * 60 + 0.1)
     XCTAssertFalse(controller.isDriving)
 
     // Never, during the standard minute: the drive keeps running.
-    autoStop = .afterOneMinute
+    autoStop = .oneMinute
     sensor = Sensor()
     activity = Activity()
     controller = make(sensor, activity)
