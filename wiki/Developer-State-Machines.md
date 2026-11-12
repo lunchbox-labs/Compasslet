@@ -341,16 +341,57 @@ stateDiagram-v2
 ```
 
 Activation starts a drive when setup is `ready`, no drive runs and the scene isn't suppressed.
-Connection alone doesn't start one. Disconnect is reached from either
-`sceneDidDisconnect` or `didDisconnectInterfaceController`; the second call finds no bridge.
+Connection alone doesn't start one. Connection also starts the template's
+[updates](#carplay-update-gate), which disconnect stops. Disconnect is reached from either
+`sceneDidDisconnect` or `didDisconnectInterfaceController`; the second call finds no bridge
+and no updates.
 
 ## CarPlay update gate
 
 `CarPlayUpdateGate` (`CarPlayPresentation.swift:57`) shows a new bearing at most every 10
-seconds. Changes without a bearing (status text, drive ended) pass at the next render, so a
-status can replace a bearing within the slot, and the next bearing then waits for the slot to
-end. `CarPlaySceneDelegate.render` runs every 250 ms while the scene is connected, which is
-the only way drive changes reach the template, so one shows about 250 ms after it happens.
+seconds (`CarPlayUpdateGate.slot`). Changes without a bearing (status text, drive ended) pass
+at once, so a status can replace a bearing within the slot, and the next bearing then waits for
+the slot to end. When it holds a value back, `heldUntil` reports when that slot ends; a value
+equal to the one showing isn't held, and leaves `heldUntil` nil.
+
+`CarPlayTemplateUpdates` (`App/CarPlay/CarPlayPresentation.swift`) feeds the gate for each
+connected scene. `CarPlaySceneDelegate` creates it on connect, passes the drive through once
+before setting the root template, and `start()` passes it once more and then follows an
+`Observations` sequence over what each pass reads from the drive: `presentation`,
+`setupStatus` and `isDriving`. Each change makes one pass; nothing runs while the drive is
+unchanged. A held bearing would otherwise wait for an unrelated change, so while the gate holds
+one, a single `DriveClock` timer is set for `heldUntil`, and its pass shows the value the drive
+has then.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> Following: didConnect, pass, start()
+    Following --> Following: drive change, value shown or already showing
+    Following --> Holding: drive change, gate holds a bearing, timer for heldUntil
+    Holding --> Holding: drive change held until the same end, timer kept
+    Holding --> Following: drive change shown or already showing, timer cancelled
+    Holding --> Following: timer at heldUntil, pass
+    Following --> [*]: disconnect, stop()
+    Holding --> [*]: disconnect, stop(), timer cancelled
+```
+
+`stop()` cancels the observation task and the timer, so neither outlives the scene, and
+`isolated deinit` does the same if the delegate drops it without stopping. The observation
+task holds the updates weakly and checks for cancellation after each wait, so a change
+already on its way when CarPlay disconnects makes no pass. A pass also depends on the time,
+because a bearing stops showing once its sample is more than 5 seconds old; the drive
+publishes an `unavailable` presentation when its reading expires (`expireReading`), and that
+change makes the pass that clears the bearing. Each pass also redraws the current content when
+the car's style or scale has changed (`CarPlayCompassTemplate.refresh(traits:)`), and
+`contentStyleDidChange` does the same when CarPlay reports a new light or dark style, since
+style comes from the car's trait collection rather than the drive.
+
+Passes also observe the `fullscreen` diagnostics surface, which counts a gap over 2 seconds as
+a new session. While Debug Mode is on, a drive runs and the scene is active,
+`CarPlaySceneDelegate.observeDiagnostics` sets one task to observe again a second later, so
+stretches with nothing new to show still count as active. It stops at the first observation
+with any of those false, and on resign and disconnect.
 
 ## Travel course filter
 
