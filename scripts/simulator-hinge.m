@@ -3,16 +3,42 @@
 // simctl has no fold command, and Device Hub's pose buttons need a window and Accessibility
 // access. This sends the message those buttons send: a vendor-defined HID event (usage page
 // 0xFF61, usage 0x5B) over XPC to dtuhidd inside the simulator, which reports the angle to
-// CoreMotion, so the system moves apps to the display the pose lights. The message format was
-// worked out by duo-fold-control (https://github.com/tosbaha/duo-fold-control). It relies on
-// private CoreSimulator and libxpc interfaces, so an Xcode update can break it; the screenshot
-// script checks the display lights up instead of trusting the exit status alone.
+// CoreMotion, so the system moves apps to the display the pose lights. It relies on private
+// CoreSimulator and libxpc interfaces, so an Xcode update can break it; the screenshot script
+// checks the display lights up instead of trusting the exit status alone.
 //
-// Usage: simulator-hinge <udid> <degrees>    0 is closed, 180 is open flat
+// Usage: DEVELOPER_DIR=<Xcode>/Contents/Developer simulator-hinge <udid> <degrees>
+//        0 is closed, 180 is open flat
 // Build: xcrun clang -fobjc-arc -framework Foundation -o simulator-hinge simulator-hinge.m
+//
+// Adapted from tools/duo-hinge.m in duo-fold-control
+// (https://github.com/tosbaha/duo-fold-control), under this license:
+//
+// MIT License
+//
+// Copyright (c) 2026 Mustafa Dur
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
 
 #import <Foundation/Foundation.h>
 #import <dlfcn.h>
+#import <math.h>
 #import <objc/message.h>
 #import <xpc/xpc.h>
 
@@ -77,26 +103,58 @@ static NSData *hingeEventData(double degrees) {
   return data;
 }
 
+// Whether object answers selector; names the missing private interface when it doesn't.
+static BOOL responds(id object, NSString *selector) {
+  if ([object respondsToSelector:NSSelectorFromString(selector)]) {
+    return YES;
+  }
+  NSString *owner = object == nil ? @"nil" : NSStringFromClass([object class]);
+  fprintf(stderr, "CoreSimulator has no %s on %s; this Xcode changed its private interface\n",
+          selector.UTF8String, owner.UTF8String);
+  return NO;
+}
+
 static id bootedDevice(NSString *udid) {
+  NSString *developerDirectory = NSProcessInfo.processInfo.environment[@"DEVELOPER_DIR"];
+  if (developerDirectory.length == 0) {
+    fprintf(stderr, "Set DEVELOPER_DIR to the Xcode developer directory the simulator uses\n");
+    return nil;
+  }
   if (!dlopen("/Library/Developer/PrivateFrameworks/CoreSimulator.framework/CoreSimulator",
               RTLD_NOW)) {
     fprintf(stderr, "Couldn't load CoreSimulator: %s\n", dlerror());
     return nil;
   }
-  NSString *developerDirectory = NSProcessInfo.processInfo.environment[@"DEVELOPER_DIR"]
-    ?: @"/Applications/Xcode.app/Contents/Developer";
+  Class serviceContext = NSClassFromString(@"SimServiceContext");
+  if (serviceContext == Nil) {
+    fprintf(stderr, "CoreSimulator has no SimServiceContext class\n");
+    return nil;
+  }
+  if (!responds(serviceContext, @"sharedServiceContextForDeveloperDir:error:")) {
+    return nil;
+  }
   NSError *error = nil;
   id context = ((id(*)(id, SEL, id, NSError **))objc_msgSend)(
-    NSClassFromString(@"SimServiceContext"),
-    NSSelectorFromString(@"sharedServiceContextForDeveloperDir:error:"), developerDirectory,
-    &error);
+    serviceContext, NSSelectorFromString(@"sharedServiceContextForDeveloperDir:error:"),
+    developerDirectory, &error);
+  if (context == nil || !responds(context, @"defaultDeviceSetWithError:")) {
+    fprintf(stderr, "Couldn't open CoreSimulator: %s\n", error.description.UTF8String);
+    return nil;
+  }
   id deviceSet = ((id(*)(id, SEL, NSError **))objc_msgSend)(
     context, NSSelectorFromString(@"defaultDeviceSetWithError:"), &error);
   if (deviceSet == nil) {
     fprintf(stderr, "Couldn't read the simulators: %s\n", error.description.UTF8String);
     return nil;
   }
-  for (id device in [deviceSet valueForKey:@"devices"]) {
+  if (!responds(deviceSet, @"devices")) {
+    return nil;
+  }
+  for (id device in ((id(*)(id, SEL))objc_msgSend)(deviceSet, NSSelectorFromString(@"devices"))) {
+    if (!responds(device, @"UDID") || !responds(device, @"state")
+        || !responds(device, @"lookup:error:")) {
+      return nil;
+    }
     if ([[[device valueForKey:@"UDID"] UUIDString] caseInsensitiveCompare:udid]
         != NSOrderedSame) {
       continue;
@@ -113,8 +171,10 @@ static id bootedDevice(NSString *udid) {
 
 int main(int argc, const char *argv[]) {
   @autoreleasepool {
-    double degrees = argc == 3 ? strtod(argv[2], NULL) : -1;
-    if (argc != 3 || degrees < 0 || degrees > 180) {
+    char *end = NULL;
+    double degrees = argc == 3 ? strtod(argv[2], &end) : NAN;
+    if (argc != 3 || end == argv[2] || *end != '\0' || !isfinite(degrees) || degrees < 0
+        || degrees > 180) {
       fprintf(stderr, "Usage: simulator-hinge <udid> <degrees from 0 to 180>\n");
       return 2;
     }

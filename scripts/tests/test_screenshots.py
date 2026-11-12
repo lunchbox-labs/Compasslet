@@ -22,18 +22,23 @@ TWO_DISPLAYS = ("An error was encountered processing the command (domain=NSPOSIX
                 "    --display=1  LCD (primary) 1398x2034\nInvalid argument\n")
 
 
-def bitmap(pixels, bits=32):
-    """A bottom-up BMP of one row with the given pixels, each a tuple of its channel values."""
-    row = b"".join(bytes(pixel) for pixel in pixels)
-    row += b"\0" * (-len(row) % 4)
-    header = bytearray(54)
+def bitmap(rows, bits=32, info_size=40, top_down=False, trailing=b""):
+    """A BMP of the given rows of pixels, each pixel a tuple of its channel values, with an
+    info header of info_size bytes and trailing bytes after the pixel array."""
+    rows = [rows] if isinstance(rows[0], tuple) else rows
+    offset = 14 + info_size
+    header = bytearray(offset)
     header[0:2] = b"BM"
-    header[10:14] = (54).to_bytes(4, "little")
-    header[14:18] = (40).to_bytes(4, "little")
-    header[18:22] = len(pixels).to_bytes(4, "little")
-    header[22:26] = (1).to_bytes(4, "little")
+    header[10:14] = offset.to_bytes(4, "little")
+    header[14:18] = info_size.to_bytes(4, "little")
+    header[18:22] = len(rows[0]).to_bytes(4, "little")
+    header[22:26] = (-len(rows) if top_down else len(rows)).to_bytes(4, "little", signed=True)
     header[28:30] = bits.to_bytes(2, "little")
-    return bytes(header) + row
+    pixels = b""
+    for row in rows:
+        data = b"".join(bytes(pixel) for pixel in row)
+        pixels += data + b"\0" * (-len(data) % 4)
+    return bytes(header) + pixels + trailing
 
 
 class DeviceSelectionTests(unittest.TestCase):
@@ -153,6 +158,35 @@ class DisplayTests(unittest.TestCase):
         self.assertTrue(MODULE["is_dark_bitmap"](bitmap([(0, 0, 0), (dark, 0, 0)], bits=24)))
         self.assertFalse(MODULE["is_dark_bitmap"](bitmap([(0, 0, 0), (0, 0, 200)], bits=24)))
 
+    def test_only_the_pixel_array_counts_toward_the_brightness(self):
+        black = [(0, 0, 0, 255), (0, 0, 0, 255), (0, 0, 0, 255)]
+        profile = b"\xff" * 64
+        self.assertTrue(MODULE["is_dark_bitmap"](bitmap(black, info_size=124, trailing=profile)))
+        self.assertTrue(MODULE["is_dark_bitmap"](bitmap([(0, 0, 0)] * 3, bits=24,
+                                                         trailing=profile)))
+        self.assertFalse(MODULE["is_dark_bitmap"](
+            bitmap([black, [(0, 0, 0, 255), (0, 120, 0, 255), (0, 0, 0, 255)]],
+                   info_size=124, trailing=b"\0" * 8)))
+
+    def test_top_down_bitmaps_are_read_row_by_row_too(self):
+        rows = [[(0, 0, 0)] * 3, [(0, 0, 0), (0, 0, 0), (200, 0, 0)]]
+        self.assertFalse(MODULE["is_dark_bitmap"](bitmap(rows, bits=24, top_down=True)))
+        self.assertTrue(MODULE["is_dark_bitmap"](bitmap(rows[:1] * 2, bits=24, top_down=True)))
+
+    def test_a_bitmap_that_cant_be_read_is_refused(self):
+        for data in (b"PNG", bitmap([(0, 0, 0)], bits=8),
+                     bitmap([(0, 0, 0, 0)] * 4)[:-4]):
+            with self.subTest(data=data[:4]), self.assertRaises(ValueError):
+                MODULE["is_dark_bitmap"](data)
+
+    def test_a_failed_screenshot_is_reported_as_one(self):
+        inner = MODULE["Display"]("inner", "3", 180)
+        with patch("subprocess.run", return_value=subprocess.CompletedProcess([], 1)), \
+                patch("sys.stderr") as stderr:
+            self.assertEqual(MODULE["display_state"]("id", inner), "failed")
+        written = "".join(call.args[0] for call in stderr.write.call_args_list)
+        self.assertIn("Couldn't take a screenshot of the inner display", written)
+
     def test_a_display_whose_brightness_cant_be_checked_counts_as_lit(self):
         def commands(arguments, **options):
             if arguments[0] == "sips":
@@ -266,9 +300,11 @@ class FakeSimulators:
     """Answers the simctl and xcodebuild commands capture() runs, and records each one."""
 
     def __init__(self, test_result=0, requests=(), displays=1, inner_lights=True,
-                 failed_boots=0):
+                 failed_boots=0, always_lit=False, hinge_hangs=False):
         self.test_result, self.requests = test_result, requests
-        self.failed_boots = failed_boots
+        self.failed_boots, self.always_lit = failed_boots, always_lit
+        self.hinge_hangs = hinge_hangs
+        self.hinge_environments = []
         self.displays, self.inner_lights = displays, inner_lights
         self.devices = [{"udid": "17-id", "name": "iPhone 17", "isAvailable": True,
                          "deviceTypeIdentifier": "type.17"}]
@@ -301,7 +337,12 @@ class FakeSimulators:
                                  "deviceTypeIdentifier": arguments[4]})
             stdout = "se-id\n"
         elif arguments[0].endswith("simulator-hinge"):
+            self.hinge_environments.append(options["env"])
+            if self.hinge_hangs:
+                raise subprocess.TimeoutExpired(arguments, options["timeout"])
             self.hinge = int(arguments[2])
+        elif arguments == ["xcode-select", "-p"]:
+            stdout = "/Applications/Xcode_27.1.app/Contents/Developer\n"
         elif arguments[:3] == ["xcrun", "simctl", "status_bar"] and self.failed_boots:
             self.failed_boots -= 1
             if options.get("check"):
@@ -313,7 +354,7 @@ class FakeSimulators:
             Path(arguments[-1]).write_bytes(b"lit" if self.lit(arguments)
                                             or self.displays == 1 else b"dark")
         elif arguments[0] == "sips":
-            lit = Path(arguments[7]).read_bytes() == b"lit"
+            lit = self.always_lit or Path(arguments[7]).read_bytes() == b"lit"
             Path(arguments[-1]).write_bytes(bitmap([(0, 200 if lit else 0, 0, 255)]))
         elif arguments[-1] == "test-without-building":
             self.environments.append(options["env"])
@@ -340,6 +381,10 @@ class CaptureRunTests(unittest.TestCase):
                                  system_settings=("increase-contrast",), tag="increase-contrast",
                                  undecided_location=True)
 
+    def setUp(self):
+        MODULE["HINGE_ANGLES"].clear()
+        self.addCleanup(MODULE["HINGE_ANGLES"].clear)
+
     def capture(self, simulators, *options, capture_pass=None):
         output = tempfile.TemporaryDirectory()
         self.addCleanup(output.cleanup)
@@ -347,6 +392,7 @@ class CaptureRunTests(unittest.TestCase):
         globals_ = MODULE["capture"].__globals__
         with patch.dict(globals_, {"SETS": {"test": (capture_pass or self.PASS,)},
                                    "DISPLAY_WAIT_SECONDS": 0, "DISPLAY_SETTLE_SECONDS": 0}), \
+                patch.dict(os.environ, {"DEVELOPER_DIR": ""}), \
                 patch("subprocess.run", side_effect=simulators):
             try:
                 MODULE["main"](["capture", "--set", "test", "--output", output.name, *options])
@@ -491,6 +537,40 @@ class CaptureRunTests(unittest.TestCase):
             self.capture(simulators)
         self.assertEqual(simulators.index("test-without-building"), [])
         self.assertEqual(simulators.commands[-1], ["xcrun", "simctl", "delete", "se-id"])
+
+    def test_the_hinge_tool_uses_the_selected_xcode_when_none_is_set(self):
+        simulators = FakeSimulators(requests=("settings-ax3",), displays=2)
+        self.capture(simulators)
+        self.assertTrue(simulators.hinge_environments)
+        self.assertTrue(all(environment["DEVELOPER_DIR"]
+                            == "/Applications/Xcode_27.1.app/Contents/Developer"
+                            for environment in simulators.hinge_environments))
+
+    def test_a_hinge_tool_that_hangs_fails_its_passes_and_the_run_still_ends(self):
+        simulators = FakeSimulators(requests=("settings-ax3",), displays=2, hinge_hangs=True)
+        with patch("sys.stderr") as stderr:
+            error, manifest = self.capture(simulators)
+        self.assertIsNotNone(error)
+        self.assertEqual((manifest, simulators.test_hinges), ([], []))
+        # Closing for the outer pass times out, so the open pass doesn't move the hinge, and
+        # closing again before shutting down times out too; the simulator still stops.
+        self.assertEqual(len(simulators.hinge_environments), 2)
+        self.assertGreater(simulators.index("shutdown")[-1],
+                           len(simulators.commands) - 3)
+        written = "".join(call.args[0] for call in stderr.write.call_args_list)
+        self.assertIn("didn't finish within 30 seconds", written)
+        self.assertIn("The hinge angle isn't known", written)
+        self.assertIn("Couldn't close the simulator", written)
+
+    def test_an_open_pass_fails_when_the_dark_check_cant_see_a_dark_display(self):
+        simulators = FakeSimulators(requests=("settings-ax3",), displays=2, always_lit=True)
+        with patch("sys.stderr") as stderr:
+            error, manifest = self.capture(simulators)
+        self.assertIsNotNone(error)
+        self.assertEqual(simulators.test_hinges, [0])
+        self.assertEqual([entry["display"] for entry in manifest], ["outer"])
+        written = "".join(call.args[0] for call in stderr.write.call_args_list)
+        self.assertIn("The dark check isn't working", written)
 
     def test_no_simulator_is_created_when_any_requested_name_cant_be(self):
         simulators = FakeSimulators()

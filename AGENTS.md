@@ -182,9 +182,12 @@ the outer display as `-outer`, then open flat, saving the inner display as `-inn
 `screenshots.json` entry records its `display`. `simctl` can't fold a simulator, so
 `scripts/screenshots` builds `scripts/simulator-hinge.m` and sends the hinge angle Device Hub's
 pose buttons send. That uses private CoreSimulator interfaces an Xcode update can break, so before
-each pass the script waits for that display to light up. A display that stays dark fails its pass
-by name and the other display's images are kept. Outer images are 1398x2034 and inner images,
-opened flat, are 2853x2007 with the app upright in its wide layout.
+each pass the script waits for that display to light up, after checking that the inner display
+reads dark while closed. A display that stays dark, or a dark check that can't see a dark display,
+fails its pass by name and the other display's images are kept. Outer images are 1398x2034 and
+inner images, opened flat, are 2853x2007 with the app upright in its wide layout. The `largest`
+and `smallest` aliases compare each iPhone's primary display, which on the `xcode-27` runners picks
+iPhone 18 Pro Max and iPhone 17e, not iPhone Duo; name iPhone Duo to capture it.
 
 Choose the `listing` set for the App Store listing screenshots: the `compass` screen in light and
 dark on iPhone 17 and on iPhone Duo, outer and inner. Apple's screenshot specifications list one
