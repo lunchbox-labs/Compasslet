@@ -44,7 +44,8 @@ SUBMITTED = {'WAITING_FOR_EXPORT_COMPLIANCE', 'WAITING_FOR_REVIEW', 'IN_REVIEW',
              'READY_FOR_DISTRIBUTION'}
 SCREENSHOT_SET_LIMIT = 10
 # Contact details stay in App Store Connect; these catch an email address or a phone number.
-CONTACT_DETAILS = re.compile(r'[^\s@]+@[^\s@]+\.[A-Za-z]{2,}|\+?\d(?:[\s().-]*\d){8,}')
+CONTACT_DETAILS = re.compile(r'[^\s@]+@[^\s@]+\.[A-Za-z]{2,}'
+                             r'|(?<![\d.-])\+?\(?\d{2,4}\)?[\s-]\d{3}[\s-]\d{4}(?!\d|\.\d)')
 OPEN_SUBMISSIONS = 'READY_FOR_REVIEW,WAITING_FOR_REVIEW,IN_REVIEW,UNRESOLVED_ISSUES,CANCELING'
 PNG_SIGNATURE = b'\x89PNG\r\n\x1a\n'
 COLOUR_CHUNKS = {b'sRGB', b'iCCP', b'gAMA', b'cHRM', b'pHYs'}
@@ -383,9 +384,15 @@ def resume_draft(client, app_id, version, linked, build_number, report):
     require(linked and linked[1] == build_number, 'Version ' + marketing_version
             + ' is in a draft submission with another build; remove it from the submission in '
             'App Store Connect, then run again.')
+    # Sending it with an automatic release would let Apple release it before Release runs.
+    require(version['attributes'].get('releaseType') == 'MANUAL', 'Version ' + marketing_version
+            + ' is in a draft submission without a manual release; set it to release manually '
+            'in App Store Connect, then run again.')
     submission_id, has_item = open_submission(client, app_id, identifier(version['id']))
     require(submission_id and has_item, 'Version ' + marketing_version
             + ' is waiting in a submission this run cannot find; check App Store Connect.')
+    report('SKIP App Review notes and listing screenshots: version ' + marketing_version
+           + ' is already in a draft submission, so they can no longer change.')
     send_for_review(client, submission_id, marketing_version, report)
 
 

@@ -287,10 +287,12 @@ class ProjectAndNotesTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.assertIsNone(app_store.read_review_notes(root))
-            (root / 'review-notes.txt').write_text('  Open the app from CarPlay on 2026-11-12, build 33.1.\n')
-            self.assertEqual(app_store.read_review_notes(root), 'Open the app from CarPlay on 2026-11-12, build 33.1.')
+            for value in ('Open the app from CarPlay on 2026-11-12 10:30, build 33.1.',
+                          'Test at 37.33490 -122.00902 facing north.'):
+                (root / 'review-notes.txt').write_text('  ' + value + '\n')
+                self.assertEqual(app_store.read_review_notes(root), value)
             for value in ('\n', 'x' * 4001, 'Questions? Write to reviewer@example.com.',
-                          'Call +1 (555) 010-0199 for a demo.'):
+                          'Call +1 (555) 010-0199 for a demo.', 'Phone 555 010 0199.'):
                 (root / 'review-notes.txt').write_text(value)
                 with self.subTest(length=len(value)), self.assertRaises(metadata.MetadataError):
                     app_store.read_review_notes(root)
@@ -395,6 +397,16 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(len(self.apple.submissions), 1)
         self.assertEqual(self.apple.items['draft1'], ['version1'])
         self.assertEqual(draft['attributes']['state'], 'WAITING_FOR_REVIEW')
+
+    def test_a_draft_without_a_manual_release_is_not_sent(self):
+        self.apple.version['attributes']['appVersionState'] = 'READY_FOR_REVIEW'
+        self.apple.linked_build = 'build1'
+        self.apple.submissions.append(resource('reviewSubmissions', 'draft1', platform='IOS',
+                                               state='READY_FOR_REVIEW'))
+        self.apple.items['draft1'] = ['version1']
+        with self.assertRaises(metadata.MetadataError):
+            self.review()
+        self.assertEqual(self.apple.writes, [])
 
     def test_a_version_waiting_in_a_draft_with_another_build_is_not_touched(self):
         self.apple.version['attributes']['appVersionState'] = 'READY_FOR_REVIEW'
