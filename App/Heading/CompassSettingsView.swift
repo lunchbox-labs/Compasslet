@@ -18,13 +18,15 @@ struct CompassSettingsView: View {
         }
         Section("Location") {
           LabeledContent("Location Enabled") {
-            Text(locationEnabled ? "Yes" : "No").foregroundStyle(.primary)
+            Text(drive.setupStatus.locationEnabledValue).foregroundStyle(.primary)
           }
-          Text(locationDetail).foregroundStyle(.primary)
+          Text(drive.setupStatus.settingsDetail).foregroundStyle(.primary)
           if drive.setupStatus == .permissionRequired {
             Button("Enable Location") { drive.askForLocationPermission() }
               .foregroundStyle(.tint)
-          } else if canOpenSettings, let url = URL(string: UIApplication.openSettingsURLString) {
+          } else if drive.setupStatus.canOpenSettings,
+            let url = URL(string: UIApplication.openSettingsURLString)
+          {
             Link("Open Settings", destination: url).foregroundStyle(.tint)
           }
         }
@@ -61,33 +63,6 @@ struct CompassSettingsView: View {
     }
     .task {
       closeFocused = true
-    }
-  }
-
-  private var locationEnabled: Bool {
-    drive.setupStatus == .ready || drive.setupStatus == .preciseLocationRequired
-  }
-
-  private var canOpenSettings: Bool {
-    switch drive.setupStatus {
-    case .denied, .servicesDisabled, .preciseLocationRequired: true
-    case .ready, .permissionRequired, .restricted, .unavailable: false
-    }
-  }
-
-  private var locationDetail: String {
-    switch drive.setupStatus {
-    case .ready:
-      "Precise location is enabled for phone coordinates, elevation, and CarPlay travel direction."
-    case .permissionRequired: "Location permission has not been granted yet."
-    case .denied:
-      "Allow location while using the app for phone location details and CarPlay travel direction."
-    case .restricted: "Location access is restricted by this device’s settings or management."
-    case .servicesDisabled:
-      "Location Services is off. Turn it on in iPhone Settings under Privacy & Security."
-    case .preciseLocationRequired:
-      "Location is allowed, but CarPlay travel direction needs Precise Location."
-    case .unavailable: "Travel direction is unavailable on this device."
     }
   }
 }

@@ -346,7 +346,7 @@ struct CompassView: View {
       if details {
         PhoneLocationReadout(location: location)
       }
-      if let notice = locationNotice {
+      if let notice = drive.setupStatus.notice {
         Button(notice) { locationNoticeTapped() }.font(.subheadline).frame(minHeight: 44)
       }
       if details, compass.hasSample, CompassDiagnostics.shared?.isEnabled == true {
@@ -369,15 +369,15 @@ struct CompassView: View {
         }
       } else {
         Button(action: { showingHeadingStatus = true }) {
-          Text(compactHeadingStatus).multilineTextAlignment(.center)
+          Text(compass.status.compactTitle).multilineTextAlignment(.center)
         }
         .frame(minHeight: 44)
         .accessibilityLabel(compass.status.title)
         .accessibilityHint("Shows heading status and available recovery actions")
       }
-      if let notice = locationNotice {
+      if let notice = drive.setupStatus.notice {
         Button(action: { locationNoticeTapped() }) {
-          Text(compactLocationStatus).multilineTextAlignment(.center)
+          Text(drive.setupStatus.compactNotice).multilineTextAlignment(.center)
         }
         .frame(minHeight: 44)
         .fixedSize(horizontal: false, vertical: true)
@@ -391,49 +391,12 @@ struct CompassView: View {
     .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
-  private var compactHeadingStatus: String {
-    switch compass.status {
-    case .inactive: "Compass paused"
-    case .waiting: "Finding north…"
-    case .live: "Magnetic north"
-    case .stale: "Heading stale"
-    case .calibration: "Calibrate compass"
-    case .unavailable: "Compass unavailable"
-    case .denied: "Heading access denied"
-    case .interrupted: "Heading interrupted"
-    }
-  }
-
-  private var compactLocationStatus: String {
-    switch drive.setupStatus {
-    case .ready: "Location Enabled"
-    case .permissionRequired: "Enable Location"
-    case .denied: "Location denied"
-    case .restricted: "Location restricted"
-    case .servicesDisabled: "Location Services off"
-    case .preciseLocationRequired: "Approximate location"
-    case .unavailable: "CarPlay unavailable"
-    }
-  }
-
   // The dial repeats the readout visually; VoiceOver gets one heading stop from the text.
   @ViewBuilder private func dial(size: CGFloat) -> some View {
     if presentation.showsDial {
       HeadingDial(compass: compass, appearance: appearance)
         .frame(width: max(0, size), height: max(0, size))
         .accessibilityHidden(true)
-    }
-  }
-
-  private var locationNotice: String? {
-    switch drive.setupStatus {
-    case .ready: nil
-    case .permissionRequired: "Enable Location"
-    case .denied: "Location access denied"
-    case .restricted: "Location access is restricted"
-    case .servicesDisabled: "Location Services is off"
-    case .preciseLocationRequired: "Approximate location · Enable Precise Location"
-    case .unavailable: "CarPlay travel direction unavailable"
     }
   }
 

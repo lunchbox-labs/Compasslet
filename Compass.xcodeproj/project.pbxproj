@@ -25,6 +25,7 @@
 		C51B637F5AF0FDFD2E498D3D /* ReadoutTextSize+DynamicType.swift in Sources */ = {isa = PBXBuildFile; fileRef = E444BD4051C64FCD9D2B2876 /* ReadoutTextSize+DynamicType.swift */; };
 		E66074E662AD7D0A92FB1EF3 /* ReadoutTextSize+DynamicType.swift in Sources */ = {isa = PBXBuildFile; fileRef = E444BD4051C64FCD9D2B2876 /* ReadoutTextSize+DynamicType.swift */; };
 		14E89346F4BEB1206AB95142 /* HeadingStatus+Phone.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82701719F862789BAC0BE6A0 /* HeadingStatus+Phone.swift */; };
+		63D7FB97F397C8CEA8BC4A80 /* SetupStatus+Phone.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54A8E436D4971946E9651A85 /* SetupStatus+Phone.swift */; };
 		14F6505531FA7B7C727EC52A /* PhoneLocationControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B44134007C500393E3DB2F22 /* PhoneLocationControllerTests.swift */; };
 		1C93D8F6DE7D02826C2F75D5 /* AppearanceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 517E687B4D6CA25B3C156124 /* AppearanceStore.swift */; };
 		23618A1923A31DB6A89C3DB2 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C4A9F4F65AD120DB8AF53BA7 /* Foundation.framework */; };
@@ -141,6 +142,7 @@
 		610060C3F3A54EBB9B3CFE8E /* HeadingControllerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HeadingControllerTests.swift; sourceTree = "<group>"; };
 		7BF0680E9674EB8E22601374 /* CarPlayPresentationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CarPlayPresentationTests.swift; sourceTree = "<group>"; };
 		82701719F862789BAC0BE6A0 /* HeadingStatus+Phone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HeadingStatus+Phone.swift"; sourceTree = "<group>"; };
+		54A8E436D4971946E9651A85 /* SetupStatus+Phone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SetupStatus+Phone.swift"; sourceTree = "<group>"; };
 		82EE439CAC4B29FCB2B2652C /* CompassView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompassView.swift; sourceTree = "<group>"; };
 		A1A46DD5AFEAE45BDDC8C05D /* HeadingController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HeadingController.swift; sourceTree = "<group>"; };
 		B1164CC266C944D46C5EAD7D /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -275,6 +277,7 @@
 				34543F74FCA9F2BB0A0BB32E /* AppearanceSettingsView.swift */,
 				4E2AB743B3BDE851424E4D36 /* LiveActivitySettingsView.swift */,
 				82701719F862789BAC0BE6A0 /* HeadingStatus+Phone.swift */,
+				54A8E436D4971946E9651A85 /* SetupStatus+Phone.swift */,
 			);
 			path = Heading;
 			sourceTree = "<group>";
@@ -548,6 +551,7 @@
 				6CDD9E0873AD960278BA7DA7 /* AppearanceSettingsView.swift in Sources */,
 				CEA035473B23389211293856 /* LiveActivitySettingsView.swift in Sources */,
 				14E89346F4BEB1206AB95142 /* HeadingStatus+Phone.swift in Sources */,
+				63D7FB97F397C8CEA8BC4A80 /* SetupStatus+Phone.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
