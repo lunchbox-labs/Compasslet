@@ -122,7 +122,8 @@ jobs:
           name: screenshots-build-${{ github.run_number }}
           path: ${{ runner.temp }}/products.tar
           if-no-files-found: error
-          retention-days: 1
+          # Kept as long as the run's images, so a failed capture can be re-run from this build.
+          retention-days: 7
           # Re-running every job builds again under the same name.
           overwrite: true
   # One job per simulator, all from the one build. Appearances stay together in a simulator's
@@ -143,6 +144,15 @@ jobs:
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
     steps:
+      # The images go in a folder named for the simulator, so the collect job finds each
+      # simulator's images in its own folder however many captures uploaded. A job that fails
+      # before capturing still uploads an empty list, which replaces an earlier attempt's images.
+      - name: Start an empty capture
+        env:
+          LABEL: ${{ matrix.label }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/capture/$LABEL"
+          echo "[]" > "$RUNNER_TEMP/capture/$LABEL/screenshots.json"
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ needs.build.outputs.revision }}
@@ -159,6 +169,7 @@ jobs:
         env:
           CAPTURE_SET: ${{ inputs.set }}
           DEVICE: ${{ matrix.devices }}
+          LABEL: ${{ matrix.label }}
           APPEARANCES: ${{ inputs.appearances == 'light' && 'light' || inputs.appearances == 'dark' && 'dark' || 'light,dark' }}
           SCREEN_FILTER: ${{ inputs.filter }}
           MAX_PARTS: ${{ inputs.max-parts || '9' }}
@@ -166,21 +177,22 @@ jobs:
           if [[ -n "$CAPTURE_SET" && "$CAPTURE_SET" != "every screen" ]]; then
             python3 scripts/screenshots capture --set "$CAPTURE_SET" --devices "$DEVICE" \
               --filter "$SCREEN_FILTER" --max-parts "$MAX_PARTS" --prebuilt \
-              --derived-data "$RUNNER_TEMP/xcode" --output "$RUNNER_TEMP/screenshots"
+              --derived-data "$RUNNER_TEMP/xcode" --output "$RUNNER_TEMP/capture/$LABEL"
           else
             python3 scripts/screenshots capture --devices "$DEVICE" \
               --appearances "$APPEARANCES" --filter "$SCREEN_FILTER" \
               --max-parts "$MAX_PARTS" --prebuilt \
-              --derived-data "$RUNNER_TEMP/xcode" --output "$RUNNER_TEMP/screenshots"
+              --derived-data "$RUNNER_TEMP/xcode" --output "$RUNNER_TEMP/capture/$LABEL"
           fi
       # A failed capture still uploads what it captured, to show what went wrong.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() }}
         with:
           name: screenshots-part-${{ github.run_number }}-${{ matrix.label }}
-          path: ${{ runner.temp }}/screenshots
+          path: ${{ runner.temp }}/capture
           if-no-files-found: error
-          retention-days: 1
+          # Kept as long as the run's images, so a re-run of another simulator can collect these.
+          retention-days: 7
           # A re-run of a failed capture replaces its own images and keeps the other
           # simulators' images from the earlier attempt for the collect job.
           overwrite: true
@@ -196,10 +208,14 @@ jobs:
         with:
           pattern: screenshots-part-${{ github.run_number }}-*
           path: ${{ runner.temp }}/parts
+          # Each artifact holds one folder named for its simulator.
+          merge-multiple: true
+      # Fails, uploading nothing, when no simulator uploaded anything, so a late re-run can't
+      # replace the run's images with an empty list.
       - name: Combine the simulators' captures
+        id: combine
         env:
           DEVICES: ${{ needs.build.outputs.devices }}
-          PREFIX: screenshots-part-${{ github.run_number }}-
         run: |
           python3 - "$RUNNER_TEMP/parts" "$RUNNER_TEMP/screenshots" <<'PYTHON'
           import json, os, shutil, sys
@@ -208,7 +224,7 @@ jobs:
           output.mkdir(parents=True)
           manifest, missing = [], []
           for device in json.loads(os.environ["DEVICES"]):
-              part = parts / (os.environ["PREFIX"] + device["label"])
+              part = parts / device["label"]
               if not part.is_dir():
                   missing.append(device["devices"])
                   continue
@@ -222,7 +238,11 @@ jobs:
                                                    encoding="utf-8")
           print("Collected " + str(len(manifest)) + " screenshots")
           for name in missing:
-              print("::warning::Nothing was uploaded for " + name)
+              print("::error::Nothing was uploaded for " + name)
+          if len(missing) == len(json.loads(os.environ["DEVICES"])):
+              sys.exit("No simulator uploaded any images")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as file:
+              file.write("missing=" + ", ".join(missing) + "\n")
           PYTHON
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -241,3 +261,11 @@ jobs:
             echo
             echo "SCREENSHOT-END $(basename "$image")"
           done
+      # After the upload, so the other simulators' images are kept.
+      - name: Fail when a simulator uploaded nothing
+        if: steps.combine.outputs.missing != ''
+        env:
+          MISSING: ${{ steps.combine.outputs.missing }}
+        run: |
+          echo "Nothing was uploaded for $MISSING" >&2
+          exit 1

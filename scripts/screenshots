@@ -18,8 +18,8 @@ capture     Build the app once, then run ScreenshotTests on each device and appe
 build       Build the app and its tests for any iPhone simulator, as capture does first.
 devices     Print, as JSON, one entry per simulator that capture would use for the same
             --set, --devices and --filter: what to pass as --devices to capture only that
-            simulator, and its file label. Aliases resolve to the simulators they pick here,
-            and a request for a simulator another request already picks is dropped.
+            simulator, and its file label. A request for a simulator another request already
+            picks here is dropped; capture resolves an alias again on its own machine.
 """
 import argparse
 import contextlib

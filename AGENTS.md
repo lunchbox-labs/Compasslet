@@ -154,12 +154,13 @@ other or PR captures. Each run checks out the head commit recorded in its event 
 exact commit in the run summary.
 
 A run builds the app and its tests once (`scripts/screenshots build`), lists the simulators to
-capture (`scripts/screenshots devices`, which resolves `largest` and `smallest` and drops a
-request for a simulator another request already picks), then runs one capture job per simulator
-from that build (`capture --prebuilt`), all on the same commit. Each simulator's job captures
-every appearance it needs. A collect job gathers every simulator's images and `screenshots.json`
-into the run's one artifact, keeping what a failed simulator saved and naming one that uploaded
-nothing.
+capture (`scripts/screenshots devices`, which fails early on a simulator no runtime supports and
+drops a request for a simulator another request already picks there), then runs one capture job
+per simulator from that build (`capture --prebuilt`), all on the same commit. Each capture job
+resolves `largest` and `smallest` again on its own runner, which has the same simulators, and
+captures every appearance it needs. A collect job gathers every simulator's images and
+`screenshots.json` into the run's one artifact, keeping what a failed simulator saved, and fails
+the run when a simulator uploaded nothing.
 
 For custom captures, use Actions → Screenshots → Run workflow. Set `ref` to a branch, tag, commit
 or pull request number (empty uses the run's branch), choose `devices` and `appearances`, and
@@ -185,7 +186,7 @@ on Increase Contrast and Reduce Transparency in the simulator, which the test co
 capturing. `ACCESSIBILITY_SET` in `scripts/screenshots` lists it. A named iPhone that iOS 27
 supports but the Mac hasn't set up is created for the run and deleted afterwards. Use these
 captures for mock-ups; don't push other branches to produce them. Clients that can't download
-artifacts can set `log-images` and read the images from the job log.
+artifacts can set `log-images` and read the images from the collect job's log.
 
 A simulator with more than one display, such as iPhone Duo, runs each pass twice: closed, saving
 the outer display as `-outer`, then open flat, saving the inner display as `-inner`. Each image's

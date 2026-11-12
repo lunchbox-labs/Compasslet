@@ -96,6 +96,17 @@ class DeviceSelectionTests(unittest.TestCase):
         selected = MODULE["select_devices"](["iPhone 17 Pro", "iPhone 17 Pro"], self.phones())
         self.assertEqual([item["label"] for item in selected], ["iphone-17-pro"])
 
+    def test_planning_drops_an_exact_name_its_alias_already_picks(self):
+        devices = {RUNTIME_27: [self.device("iPhone 17 Pro Max", "max"),
+                                self.device("iPhone 17e", "e")]}
+        answers = {"devicetypes": {"devicetypes": self.types},
+                   "devices": {"devices": devices}}
+        with patch.dict(MODULE["plan_devices"].__globals__,
+                        {"simctl_json": lambda kind, *rest: answers[kind]}):
+            planned = MODULE["plan_devices"](["largest", "smallest", "iPhone 17 Pro Max"])
+        self.assertEqual(planned, [{"devices": "largest", "label": "largest"},
+                                   {"devices": "smallest", "label": "smallest"}])
+
     def test_an_unknown_name_lists_the_available_simulators(self):
         with self.assertRaises(SystemExit) as raised:
             MODULE["select_devices"](["iPhone 99"], self.phones())

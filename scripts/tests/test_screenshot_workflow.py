@@ -157,50 +157,81 @@ class ScreenshotWorkflowTests(unittest.TestCase):
                 self.assertEqual(arguments[arguments.index('--max-parts') + 1], '3')
 
     def collect(self, devices, parts):
-        """Runs the collect step over part folders, each a label and its files."""
+        """Runs the collect step over the merged download: a folder per label and its files."""
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
+            (root / 'parts').mkdir()
             for label, files in parts.items():
-                part = root / 'parts' / ('screenshots-part-5-' + label)
+                part = root / 'parts' / label
                 part.mkdir(parents=True)
                 for name, content in files.items():
                     (part / name).write_text(content)
+            output = root / 'output'
+            output.touch()
             result = subprocess.run(
                 ['bash', '-e', '-c', shell_step('Combine the simulators\' captures')],
-                env=dict(os.environ, RUNNER_TEMP=directory, PREFIX='screenshots-part-5-',
-                         DEVICES=json.dumps(devices)),
+                env=dict(os.environ, RUNNER_TEMP=directory, DEVICES=json.dumps(devices),
+                         GITHUB_OUTPUT=str(output)),
                 capture_output=True, text=True)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            output = root / 'screenshots'
-            images = sorted(path.name for path in output.iterdir())
-            return (json.loads((output / 'screenshots.json').read_text()), images,
-                    result.stdout)
+            collected = root / 'screenshots'
+            if result.returncode != 0:
+                return result, None, None, output.read_text()
+            images = sorted(path.name for path in collected.iterdir())
+            return (result, json.loads((collected / 'screenshots.json').read_text()), images,
+                    output.read_text())
 
     def test_collect_joins_each_simulators_images_and_manifest_in_listed_order(self):
         devices = [{'devices': 'smallest', 'label': 'smallest'},
                    {'devices': 'largest', 'label': 'largest'}]
-        manifest, images, _ = self.collect(devices, {
+        result, manifest, images, output = self.collect(devices, {
             'largest': {'largest-light-compass.png': 'L',
                         'screenshots.json': json.dumps([{'file': 'largest-light-compass.png'}])},
             'smallest': {'smallest-light-compass.png': 'S',
                          'screenshots.json': json.dumps([{'file': 'smallest-light-compass.png'}])},
         })
+        self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual([entry['file'] for entry in manifest],
                          ['smallest-light-compass.png', 'largest-light-compass.png'])
         self.assertEqual(images, ['largest-light-compass.png', 'screenshots.json',
                                   'smallest-light-compass.png'])
+        self.assertEqual(output, 'missing=\n')
+
+    def test_one_simulators_images_are_collected_from_its_own_folder(self):
+        result, manifest, images, _ = self.collect(
+            [{'devices': 'iPhone 17', 'label': 'iphone-17'}],
+            {'iphone-17': {'iphone-17-light-compass.png': 'x', 'screenshots.json':
+                           json.dumps([{'file': 'iphone-17-light-compass.png'}])}})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual([entry['file'] for entry in manifest], ['iphone-17-light-compass.png'])
+        self.assertIn('iphone-17-light-compass.png', images)
 
     def test_collect_keeps_what_it_has_and_names_a_simulator_that_uploaded_nothing(self):
         devices = [{'devices': 'iPhone 17', 'label': 'iphone-17'},
                    {'devices': 'iPhone Duo', 'label': 'iphone-duo'}]
-        manifest, images, stdout = self.collect(devices, {
+        result, manifest, images, output = self.collect(devices, {
             'iphone-17': {'iphone-17-light-compass.png': 'x',
                           'screenshots.json': json.dumps([{'file': 'iphone-17-light-compass.png'}])},
         })
+        self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(len(manifest), 1)
         self.assertIn('iphone-17-light-compass.png', images)
-        self.assertIn('Nothing was uploaded for iPhone Duo', stdout)
+        self.assertIn('Nothing was uploaded for iPhone Duo', result.stdout)
+        # A later step fails the run once these images are uploaded.
+        self.assertEqual(output, 'missing=iPhone Duo\n')
 
+    def test_collect_uploads_nothing_when_no_simulator_uploaded_anything(self):
+        result, manifest, _, _ = self.collect([{'devices': 'largest', 'label': 'largest'}], {})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIsNone(manifest)
+
+    def test_each_capture_saves_into_its_simulators_own_folder(self):
+        for capture_set in ('', 'listing'):
+            with self.subTest(capture_set=capture_set):
+                arguments = self.recorded_arguments(
+                    'Capture the screens', CAPTURE_SET=capture_set, DEVICE='iPhone 17',
+                    LABEL='iphone-17', APPEARANCES='dark', SCREEN_FILTER='', MAX_PARTS='9')
+                output = arguments[arguments.index('--output') + 1]
+                self.assertTrue(output.endswith('/capture/iphone-17'), output)
 
 if __name__ == '__main__':
     unittest.main()
