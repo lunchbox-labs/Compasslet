@@ -288,9 +288,10 @@ struct CompassView: View {
         AccessibilityNotification.Announcement("Live Activity ended").post()
       } else {
         await drive.startLiveActivity()
-        guard drive.isDriving else { return }
         switch drive.compactStatus {
-        case .unavailable: showingLiveActivityFailure = true
+        // Without Compasslet on CarPlay, a Live Activity that can't start leaves no drive, and
+        // the failure still shows. A start that location refused has its own notice.
+        case .unavailable: showingLiveActivityFailure = drive.setupStatus == .ready
         case .active: AccessibilityNotification.Announcement("Live Activity started").post()
         case .starting: AccessibilityNotification.Announcement("Live Activity starting").post()
         case .inactive, .dismissed: break

@@ -55,9 +55,10 @@ struct CarPlayUpdateGate {
   mutating func update(_ value: CarPlayPresentation, now: Date) -> CarPlayPresentation? {
     // A fresh input sample is required even while retaining the previous snapshot.
     // Its original timestamp stays visible. Ten-second slots plus the five-second
-    // input freshness limit bound snapshot age to fifteen seconds while rendering.
+    // input freshness limit bound snapshot age to fifteen seconds while rendering. A clock set
+    // back before the last bearing ends its slot, rather than adding that time to the wait.
     if value.courseDegrees != nil, let lastBearingUpdate,
-      now.timeIntervalSince(lastBearingUpdate) < 10
+      (0..<10).contains(now.timeIntervalSince(lastBearingUpdate))
     {
       return nil
     }

@@ -826,6 +826,27 @@ struct CompassActivityControllerTests {
     await controller.end().value
   }
 
+  @Test func aClockSetBackDoesNotHoldBackChangedReadings() async throws {
+    for interval in [1.0, 15] {
+      let system = TestActivitySystem()
+      let start = Date(timeIntervalSince1970: 100)
+      var time = start
+      let controller = CompassActivityController(
+        system: system, now: { time }, refreshInterval: { interval })
+      try await controller.start()
+      await controller.showAndWait(travel(42, at: time))
+      // Before the last write, so no interval can be measured from it.
+      time = start - 30
+      await controller.showAndWait(travel(90, at: time))
+      #expect(system.handle.updates.map(\.bearing) == [42, 90])
+      // The write starts a new interval from the clock as it now stands.
+      time = start - 30 + interval / 2
+      await controller.showAndWait(travel(180, at: time))
+      #expect(system.handle.updates.map(\.bearing) == [42, 90])
+      await controller.end().value
+    }
+  }
+
   @Test func aLowerUpdateFrequencyWritesTheNewestChangeOnceItsIntervalEnds() async throws {
     let system = TestActivitySystem()
     let start = Date(timeIntervalSince1970: 100)

@@ -220,7 +220,16 @@ final class CompassActivityController: CompassActivityPresenting {
   /// interval has passed since the last one.
   private func refreshIntervalHasPassed(at date: Date) -> Bool {
     guard let lastUsableWrite else { return true }
-    return date.timeIntervalSince(lastUsableWrite) >= refreshInterval()
+    return Self.hasPassed(refreshInterval(), since: lastUsableWrite, at: date)
+  }
+
+  /// Whether `interval` has passed since `earlier`, or the clock is now before it, as after the
+  /// clock is set back, so a limit never also waits out the time the clock went back.
+  private static func hasPassed(_ interval: TimeInterval, since earlier: Date, at date: Date)
+    -> Bool
+  {
+    let elapsed = date.timeIntervalSince(earlier)
+    return elapsed >= interval || elapsed < 0
   }
 
   /// Whether a held reading is still worth writing: recorded no longer ago than the refresh
@@ -260,7 +269,9 @@ final class CompassActivityController: CompassActivityPresenting {
       // At a slower rate, the first direction after a clear shows at once rather than waiting out
       // the interval; the standard rate keeps its limit, as before the setting existed.
       let limited = retainedBearing != nil || interval <= Self.changedReadingInterval
-      if limited, let lastUsableWrite, date.timeIntervalSince(lastUsableWrite) < interval {
+      if limited, let lastUsableWrite,
+        !Self.hasPassed(interval, since: lastUsableWrite, at: date)
+      {
         // At the standard rate the next reading follows about when the interval ends, so this one
         // is passed over; a slower rate holds it for the renewal to write.
         if interval > Self.changedReadingInterval { heldReading = content }

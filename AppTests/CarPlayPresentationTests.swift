@@ -99,6 +99,19 @@ final class CarPlayPresentationTests: XCTestCase {
     XCTAssertNil(gate.update(dialValue(90, at: recovery), now: recovery))
   }
 
+  func testAClockSetBackEndsTheBearingSlot() {
+    let start = Date(timeIntervalSince1970: 100)
+    var gate = CarPlayUpdateGate()
+    _ = gate.update(dialValue(0, at: start), now: start)
+    let earlier = start.addingTimeInterval(-30)
+    XCTAssertEqual(gate.update(dialValue(90, at: earlier), now: earlier)?.courseDegrees, 90)
+    // The new bearing starts a slot of its own from the clock as it now stands.
+    let within = earlier.addingTimeInterval(9.75)
+    XCTAssertNil(gate.update(dialValue(180, at: within), now: within))
+    let after = earlier.addingTimeInterval(10)
+    XCTAssertEqual(gate.update(dialValue(180, at: after), now: after)?.courseDegrees, 180)
+  }
+
   func testNativeHeaderHasNoActionsAndClearsItsCourse() throws {
     let screen = CarPlayCompassTemplate()
     let now = Date(timeIntervalSince1970: 100)
