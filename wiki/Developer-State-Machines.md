@@ -401,11 +401,12 @@ scene's content style, which Apple doesn't document as the trait collection's st
 the collection has changed by the time it arrives; with Always Show Dark Map on, the content
 style can stay dark while the interface style changes.
 
-Open failure state ([#336](https://github.com/lunchbox-labs/compasslet/issues/336)): on an idle scene (no drive, a drive that has ended, or a drive whose shown
-value doesn't change, as when parked) with Debug Mode off, a change to the trait collection's
-style or scale that `contentStyleDidChange` doesn't accompany, or that lands after the turn it
-schedules, isn't redrawn. The dial keeps the old style until the next pass, scene activation
-or content style change. The 250 ms poll this replaced caught it within 250 ms.
+Open failure state ([#336](https://github.com/lunchbox-labs/compasslet/issues/336)): on an
+idle scene (no drive, a drive that has ended, or, with Debug Mode off, a drive whose shown value
+doesn't change, as when parked), a change to the trait collection's style or scale that
+`contentStyleDidChange` doesn't accompany, or that lands after the turn it schedules, isn't
+redrawn. The dial keeps the old style until the next pass, scene activation or content style
+change. The 250 ms poll this replaced caught it within 250 ms.
 
 Passes also observe the `fullscreen` diagnostics surface, which counts a gap over 2 seconds as
 a new session. While Debug Mode is on, a drive runs and the scene is active,

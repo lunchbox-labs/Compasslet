@@ -223,6 +223,7 @@ final class CarPlayPresentationTests: XCTestCase {
     }
     XCTAssertEqual(passes.shown.last?.bearing, "—")
     XCTAssertEqual(passes.shown.last?.status, "Direction unavailable")
+    XCTAssertEqual(drive.presentation.status, .unavailable)
     updates.stop()
     await drive.endDrive()
   }
