@@ -215,7 +215,11 @@ final class CompassActivityController: CompassActivityPresenting {
       {
         return
       }
-      if let retainedBearing, Self.sameReading(retainedBearing, bearing) { return }
+      if let retainedBearing, let retained = CompassAngle(degrees: retainedBearing),
+        let current = CompassAngle(degrees: bearing), Self.sameReading(retained, current)
+      {
+        return
+      }
       lastUsableWrite = date
       retainedBearing = bearing
     } else {
@@ -320,10 +324,10 @@ final class CompassActivityController: CompassActivityPresenting {
     return content
   }
 
-  /// Whether two bearings render the same rounded degrees and the same cardinal direction.
-  static func sameReading(_ first: Double, _ second: Double) -> Bool {
-    Int(first.rounded()) % 360 == Int(second.rounded()) % 360
-      && CompassPoint(degrees: first) == CompassPoint(degrees: second)
+  /// Whether two angles render the same rounded degrees and the same cardinal direction.
+  static func sameReading(_ first: CompassAngle, _ second: CompassAngle) -> Bool {
+    first.roundedDegrees == second.roundedDegrees
+      && CompassPoint(angle: first) == CompassPoint(angle: second)
   }
 
   static func content(_ presentation: TravelPresentation, now: Date)

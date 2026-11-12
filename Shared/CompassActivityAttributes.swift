@@ -35,9 +35,9 @@ struct CompassActivityReading {
   init(state: CompassActivityAttributes.ContentState, isStale: Bool) {
     appearance = (state.appearance ?? AppearanceValues()).requiringReadout()
     if !isStale, state.status == .usable, let degrees = state.bearing, degrees.isFinite,
-      (0..<360).contains(degrees), let point = CompassPoint(degrees: degrees)
+      (0..<360).contains(degrees), let angle = CompassAngle(degrees: degrees)
     {
-      reading = Reading(point: point, roundedDegrees: Int(degrees.rounded()) % 360)
+      reading = Reading(point: CompassPoint(angle: angle), roundedDegrees: angle.roundedDegrees)
     } else {
       reading = nil
     }

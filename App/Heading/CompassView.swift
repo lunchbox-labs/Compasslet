@@ -478,7 +478,7 @@ extension HeadingController {
   /// What VoiceOver reads for the heading, or the status without a reading.
   fileprivate var accessibilitySummary: String {
     guard let sample else { return status.title }
-    let degrees = Int(sample.angle.degrees.rounded()) % 360
+    let degrees = sample.angle.roundedDegrees
     let direction = CompassPoint(angle: sample.angle).name
     let prefix = status == .inactive ? "Last reading. " : ""
     return
@@ -494,8 +494,7 @@ private struct HeadingDial: View {
   let appearance: AppearanceValues
 
   var body: some View {
-    CompassDial(
-      bearing: compass.sample?.angle.degrees, appearance: appearance, showsReadout: false)
+    CompassDial(bearing: compass.sample?.angle.degrees, appearance: appearance)
   }
 }
 
@@ -597,13 +596,15 @@ struct PhoneCompassReadout: View {
   var maximumTextSize: CGFloat = .infinity
   @ScaledMetric(relativeTo: .largeTitle) private var textSize = 60
 
+  private var angle: CompassAngle? { CompassAngle(degrees: bearing) }
+
   var body: some View {
     VStack(spacing: 0) {
       if appearance.showDirection {
-        Text(CompassPoint(degrees: bearing)?.abbreviation ?? "—")
+        Text(angle.map { CompassPoint(angle: $0).abbreviation } ?? "—")
       }
       if appearance.showDegrees {
-        Text("\(Int(bearing.rounded()) % 360)°").monospacedDigit()
+        Text(angle.map { "\($0.roundedDegrees)°" } ?? "—").monospacedDigit()
       }
     }
     .font(.system(size: min(textSize, maximumTextSize), weight: .bold, design: .rounded))
