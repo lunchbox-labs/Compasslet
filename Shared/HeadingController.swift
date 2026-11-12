@@ -64,20 +64,6 @@ final class DeviceHeadingSensor: NSObject, HeadingSensor, @preconcurrency CLLoca
 final class HeadingController {
   enum Status: Equatable {
     case inactive, waiting, live, stale, calibration, unavailable, denied, interrupted
-
-    var title: String {
-      switch self {
-      case .inactive: "Compass paused"
-      case .waiting: "Finding north…"
-      case .live: "Magnetic north"
-      case .stale: "Waiting for a fresh heading"
-      case .calibration: "Compass needs calibration"
-      case .unavailable: "Heading sensor unavailable"
-      case .denied: "Heading access unavailable"
-      case .interrupted: "Heading interrupted"
-      }
-    }
-
   }
 
   /// Set through `setStatus(_:)`, only when it changes, so a status that holds across readings
