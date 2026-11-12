@@ -11,11 +11,12 @@ if (( $# > 1 )); then
 fi
 
 cd "$(dirname "$0")/.."
-expected_version=6.4.1
+# Any 6.4 patch release formats the same way; formatting rules can change between minor releases.
+expected_minor=6.4
 actual_version=$(swift-format --version)
-if [[ "$actual_version" != "$expected_version" ]]; then
-  printf 'Expected swift-format %s; found %s. Use the documented toolchain.\n' \
-    "$expected_version" "$actual_version" >&2
+if [[ "$actual_version" != "$expected_minor" && "$actual_version" != "$expected_minor".* ]]; then
+  printf 'Expected swift-format %s.x; found %s. Use the documented toolchain.\n' \
+    "$expected_minor" "$actual_version" >&2
   exit 2
 fi
 
