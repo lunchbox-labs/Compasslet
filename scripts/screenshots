@@ -6,6 +6,8 @@ capture     Build the app once, then run ScreenshotTests on each device and appe
             file; this script answers with a full simulator screenshot and a done file.
             A screen that scrolls is then scrolled about one screen at a time and each
             further part saved as <name>-part2, -part3 and so on, up to --max-parts.
+            A simulator with more than one display, such as iPhone Duo, runs each pass once
+            folded and once open, saving the lit display as <name>-outer or <name>-inner.
             --set accessibility captures the simulator part of the App Store accessibility
             evidence instead: fixed devices, text sizes, Bold Text, Increase Contrast,
             Reduce Transparency and Dark Mode, as listed in ACCESSIBILITY_SET.
@@ -104,11 +106,13 @@ ACCESSIBILITY_SET = (
     CapturePass(CURRENT_PHONE, "dark", ("compass-location-prompt",), undecided_location=True),
 )
 # Apple's screenshot specifications list one required iPhone size, iPhone with Dynamic Island
-# (medium display), which iPhone 17 is. The app is iPhone only (#309) and ships without Apple
-# Watch (#304) or iPhone Duo (#305) screenshots for now. The documented file names use this name.
+# (medium display), which iPhone 17 is, and require iPhone Duo's displays from April 2027 for apps
+# built with the iOS 27.1 SDK (#305). The app is iPhone only (#309) and ships without Apple Watch
+# (#304) screenshots for now. The documented file names use these names.
 LISTING_PHONE = "iPhone 17"
-LISTING_SET = tuple(CapturePass(LISTING_PHONE, appearance, ("compass",))
-                    for appearance in APPEARANCES)
+LISTING_DUO = "iPhone Duo"
+LISTING_SET = tuple(CapturePass(device, appearance, ("compass",))
+                    for device in (LISTING_PHONE, LISTING_DUO) for appearance in APPEARANCES)
 SETS = {"accessibility": ACCESSIBILITY_SET, "listing": LISTING_SET}
 
 
@@ -192,8 +196,186 @@ def select_devices(requested, phones):
     return selected
 
 
-def image_name(label, appearance, screen, tag=""):
-    return "-".join(part for part in (label, appearance, tag, screen) if part) + ".png"
+def image_name(label, appearance, screen, tag="", display=None):
+    parts = (label, appearance, tag, screen, display.name if display else "")
+    return "-".join(part for part in parts if part) + ".png"
+
+
+@dataclass(frozen=True)
+class Display:
+    """One display of a simulator with several: its name in file names, its simctl id, and the
+    hinge angle in degrees that shows apps on it."""
+    name: str
+    identifier: str
+    hinge: int
+
+
+# simctl lists the displays it could capture, as "--display=3  LCD-1 (primary-1) 2007x2853".
+DISPLAY_CHOICE = re.compile(r"^\s*--display=(\S+)\s.*?(\d+)x(\d+)\s*$", re.MULTILINE)
+HINGE_SOURCE = Path(__file__).resolve().with_name("simulator-hinge.m")
+# How long a display may take to light after the hinge moves, how long the move between
+# displays then takes to finish, and how dark a lit display never is.
+DISPLAY_WAIT_SECONDS = 20
+DISPLAY_SETTLE_SECONDS = 2
+DARK_LEVEL = 16
+# The hinge tool waits on the simulator over XPC, so it gets a deadline of its own.
+HINGE_TIMEOUT_SECONDS = 30
+# The hinge angle of each simulator: 0 once booted, as it boots closed, and missing after a move
+# that failed, when the angle isn't known.
+HINGE_ANGLES = {}
+
+
+def displays_from(output):
+    """The outer and inner displays simctl lists when it can't choose between them: closed,
+    the smallest shows apps, and open flat, the largest. Empty when it lists fewer than two."""
+    choices = sorted(DISPLAY_CHOICE.findall(output),
+                     key=lambda choice: int(choice[1]) * int(choice[2]))
+    if len(choices) < 2:
+        return []
+    return [Display("outer", choices[0][0], 0), Display("inner", choices[-1][0], 180)]
+
+
+def find_displays(udid):
+    """The displays of a simulator with more than one, or empty for a single display."""
+    with tempfile.TemporaryDirectory() as directory:
+        result = subprocess.run(["xcrun", "simctl", "io", udid, "screenshot",
+                                 str(Path(directory) / "probe.png")], check=False,
+                                capture_output=True, text=True)
+    if result.returncode == 0:
+        return []
+    return displays_from((result.stdout or "") + (result.stderr or ""))
+
+
+def take_screenshot(udid, path, display=None):
+    """Saves the simulator's screen, or one display of a simulator with several, at path."""
+    arguments = ["xcrun", "simctl", "io", udid, "screenshot"]
+    if display:
+        arguments.append("--display=" + display.identifier)
+    result = subprocess.run(arguments + [str(path)], check=False)
+    return result.returncode == 0 and path.exists()
+
+
+def is_dark_bitmap(data):
+    """Whether an uncompressed 24- or 32-bit BMP has no colour brighter than DARK_LEVEL,
+    ignoring alpha. Only the pixel array counts, not a colour profile or anything after it.
+    Raises ValueError for a bitmap it can't read."""
+    def number(start, size, signed=False):
+        return int.from_bytes(data[start:start + size], "little", signed=signed)
+
+    if data[:2] != b"BM" or number(14, 4) < 40:
+        raise ValueError("not a Windows bitmap")
+    offset, width, bits = number(10, 4), number(18, 4, True), number(28, 2)
+    # Bottom-up bitmaps have a positive height and top-down ones a negative height.
+    rows = abs(number(22, 4, True))
+    if bits not in (24, 32) or number(30, 4) not in (0, 3) or width <= 0 or rows == 0:
+        raise ValueError("unsupported bitmap")
+    channels = bits // 8
+    stride = (width * bits + 31) // 32 * 4
+    if offset + rows * stride > len(data):
+        raise ValueError("truncated bitmap")
+    brightest = 0
+    for row in range(rows):
+        start = offset + row * stride
+        pixels = data[start:start + width * channels]
+        if channels == 4:
+            pixels = bytes(value for index, value in enumerate(pixels) if index % 4 != 3)
+        brightest = max(brightest, max(pixels))
+    return brightest < DARK_LEVEL
+
+
+def display_state(udid, display):
+    """Whether the display is lit, dark or unjudged, from a small copy of a screenshot, or
+    failed when no screenshot could be taken."""
+    with tempfile.TemporaryDirectory() as directory:
+        image, bitmap = Path(directory) / "probe.png", Path(directory) / "probe.bmp"
+        if not take_screenshot(udid, image, display):
+            print("Couldn't take a screenshot of the " + display.name + " display",
+                  file=sys.stderr)
+            return "failed"
+        result = subprocess.run(["sips", "-s", "format", "bmp", "--resampleHeightWidth", "32",
+                                 "32", str(image), "--out", str(bitmap)], check=False,
+                                capture_output=True)
+        try:
+            if result.returncode == 0 and bitmap.exists():
+                return "dark" if is_dark_bitmap(bitmap.read_bytes()) else "lit"
+        except ValueError:
+            pass
+        print("Couldn't check whether the " + display.name + " display is lit",
+              file=sys.stderr)
+        return "unjudged"
+
+
+def display_is_lit(udid, display):
+    """Whether the display shows anything. An image that can't be judged counts as lit, so a
+    missing tool doesn't stop the capture."""
+    return display_state(udid, display) in ("lit", "unjudged")
+
+
+def build_hinge_tool(directory):
+    """Compiles simulator-hinge.m into directory; returns the tool, or None if it won't build."""
+    tool = Path(directory) / "simulator-hinge"
+    result = subprocess.run(["xcrun", "clang", "-fobjc-arc", "-framework", "Foundation", "-o",
+                             str(tool), str(HINGE_SOURCE)], check=False)
+    return tool if result.returncode == 0 else None
+
+
+def move_hinge(hinge_tool, udid, degrees):
+    """Sets the simulator's hinge angle; returns whether the tool finished in time and
+    succeeded. The tool talks to the Xcode in DEVELOPER_DIR, so the selected one is passed when
+    it isn't set."""
+    environment = dict(os.environ)
+    if not environment.get("DEVELOPER_DIR"):
+        selected = subprocess.run(["xcode-select", "-p"], check=False, capture_output=True,
+                                  text=True)
+        environment["DEVELOPER_DIR"] = (selected.stdout or "").strip()
+    HINGE_ANGLES.pop(udid, None)
+    print("+ simulator-hinge " + udid + " " + str(degrees), flush=True)
+    try:
+        result = subprocess.run([str(hinge_tool), udid, str(degrees)], check=False,
+                                env=environment, timeout=HINGE_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        print("The hinge tool didn't finish within " + str(HINGE_TIMEOUT_SECONDS) + " seconds",
+              file=sys.stderr)
+        return False
+    if result.returncode != 0:
+        return False
+    HINGE_ANGLES[udid] = degrees
+    return True
+
+
+def show_display(udid, display, hinge_tool):
+    """Folds or opens the simulator so apps show on display; returns whether the display lit.
+    Without the hinge tool the simulator stays closed, as it boots. Before opening, a display
+    that should be dark while closed must read dark, or its later reading can't be trusted."""
+    if display.hinge != 0:
+        if HINGE_ANGLES.get(udid) != 0:
+            print("The hinge angle isn't known after a failed move, so the " + display.name
+                  + " display can't be checked dark first", file=sys.stderr)
+            return False
+        if display_state(udid, display) != "dark":
+            print("The dark check isn't working: the " + display.name + " display didn't read "
+                  "dark with the simulator closed, so it can't tell when it lights",
+                  file=sys.stderr)
+            return False
+    if hinge_tool:
+        if not move_hinge(hinge_tool, udid, display.hinge):
+            return False
+    elif display.hinge != 0:
+        print("The hinge tool didn't build, so the simulator can't be opened", file=sys.stderr)
+        return False
+    deadline = time.monotonic() + DISPLAY_WAIT_SECONDS
+    while (state := display_state(udid, display)) not in ("lit", "unjudged"):
+        if time.monotonic() >= deadline:
+            if state == "dark":
+                print("The " + display.name + " display stayed dark after the hinge moved to "
+                      + str(display.hinge) + " degrees", file=sys.stderr)
+            else:
+                print("No screenshot of the " + display.name + " display could be taken to "
+                      "check it lit", file=sys.stderr)
+            return False
+        time.sleep(2)
+    time.sleep(DISPLAY_SETTLE_SECONDS)
+    return True
 
 
 def device_label(name):
@@ -272,10 +454,11 @@ def split_text_variant(request, text_variants):
 class ScreenshotResponder(threading.Thread):
     """Takes a simulator screenshot for each request file the test writes."""
 
-    def __init__(self, udid, requests, output, label, appearance, tag=""):
+    def __init__(self, udid, requests, output, label, appearance, tag="", display=None):
         super().__init__(daemon=True)
         self.udid, self.requests, self.output = udid, requests, output
         self.label, self.appearance, self.tag = label, appearance, tag
+        self.display = display
         self.captured = []
         self.failed = []
         self.stopping = threading.Event()
@@ -285,10 +468,8 @@ class ScreenshotResponder(threading.Thread):
             for request in sorted(self.requests.glob("*.request")):
                 screen = request.stem
                 request.unlink()
-                name = image_name(self.label, self.appearance, screen, self.tag)
-                result = subprocess.run(["xcrun", "simctl", "io", self.udid, "screenshot",
-                                         str(self.output / name)], check=False)
-                if result.returncode == 0 and (self.output / name).exists():
+                name = image_name(self.label, self.appearance, screen, self.tag, self.display)
+                if take_screenshot(self.udid, self.output / name, self.display):
                     self.captured.append({"screen": screen, "file": name})
                 else:
                     self.failed.append(name)
@@ -338,13 +519,24 @@ def set_system_setting(udid, setting, on):
     run(SYSTEM_SETTINGS[setting](udid, on))
 
 
-def prepare_device(udid, app):
+def boot(udid):
     subprocess.run(["xcrun", "simctl", "boot", udid], check=False)
     run(["xcrun", "simctl", "bootstatus", udid, "-b"])
     run(["xcrun", "simctl", "status_bar", udid, "override", "--time", "9:41",
          "--dataNetwork", "wifi", "--wifiMode", "active", "--wifiBars", "3",
          "--cellularMode", "active", "--cellularBars", "4",
          "--batteryState", "charged", "--batteryLevel", "100"])
+
+
+def prepare_device(udid, app):
+    try:
+        boot(udid)
+    except subprocess.CalledProcessError:
+        # Only when starting fails, any iPhone gets one more boot: the iPhone Duo runtime has
+        # been seen to report itself booted and then shut down before it took the status bar.
+        print("The simulator stopped while starting, so it's booted again", file=sys.stderr)
+        quietly(["xcrun", "simctl", "shutdown", udid])
+        boot(udid)
     # Granting location first keeps the host app's permission prompt off the screenshots.
     run(["xcrun", "simctl", "install", udid, str(app)])
     run(["xcrun", "simctl", "privacy", udid, "grant", "location", BUNDLE_IDENTIFIER])
@@ -353,29 +545,31 @@ def prepare_device(udid, app):
         set_system_setting(udid, setting, False)
 
 
-def capture_launch(device, capture_pass, output):
+def capture_launch(device, capture_pass, output, display=None):
     """Saves the launch screen as a cold launch shows it. The app is held before its first line
     of code runs, so the system's generated launch screen stays up until the capture."""
     udid = device["udid"]
     quietly(["xcrun", "simctl", "terminate", udid, BUNDLE_IDENTIFIER])
-    name = image_name(device["label"], capture_pass.appearance, LAUNCH_SCREEN, capture_pass.tag)
+    name = image_name(device["label"], capture_pass.appearance, LAUNCH_SCREEN, capture_pass.tag,
+                      display)
     try:
         run(["xcrun", "simctl", "launch", "--wait-for-debugger", udid, BUNDLE_IDENTIFIER],
             capture_output=True)
         # Long enough for the launch animation to finish.
         time.sleep(2)
-        result = subprocess.run(["xcrun", "simctl", "io", udid, "screenshot",
-                                 str(output / name)], check=False)
+        saved = take_screenshot(udid, output / name, display)
     finally:
         quietly(["xcrun", "simctl", "terminate", udid, BUNDLE_IDENTIFIER])
-    if result.returncode == 0 and (output / name).exists():
+    if saved:
         return {"screen": LAUNCH_SCREEN, "file": name}
     print("No screenshot was saved for " + name, file=sys.stderr)
     return None
 
 
-def run_pass(xcodebuild, device, capture_pass, output, screen_filter, parts):
-    """Runs ScreenshotTests once; returns the captured entries and whether anything failed."""
+def run_pass(xcodebuild, device, capture_pass, output, screen_filter, parts, display=None,
+             hinge_tool=None):
+    """Runs ScreenshotTests once, with display showing the app on a simulator that has several;
+    returns the captured entries and whether anything failed."""
     udid = device["udid"]
     captured, failed = [], False
     try:
@@ -384,14 +578,20 @@ def run_pass(xcodebuild, device, capture_pass, output, screen_filter, parts):
             set_system_setting(udid, setting, True)
         if capture_pass.undecided_location:
             run(["xcrun", "simctl", "privacy", udid, "reset", "location", BUNDLE_IDENTIFIER])
-        if capture_pass.captures_launch:
-            launch = capture_launch(device, capture_pass, output)
+        shown = display is None or show_display(udid, display, hinge_tool)
+        if not shown:
+            print("Nothing was captured on the " + display.name + " display of "
+                  + device["name"] + " in " + capture_pass.appearance, file=sys.stderr)
+            failed = True
+        if shown and capture_pass.captures_launch:
+            launch = capture_launch(device, capture_pass, output, display)
             captured += [launch] if launch else []
             failed = launch is None
-        if capture_pass.screens or not capture_pass.captures_launch:
+        if shown and (capture_pass.screens or not capture_pass.captures_launch):
             with tempfile.TemporaryDirectory() as requests:
                 responder = ScreenshotResponder(udid, Path(requests), output, device["label"],
-                                                capture_pass.appearance, capture_pass.tag)
+                                                capture_pass.appearance, capture_pass.tag,
+                                                display)
                 responder.start()
                 environment = dict(
                     os.environ, TEST_RUNNER_SCREENSHOT_DIRECTORY=requests,
@@ -433,6 +633,8 @@ def run_pass(xcodebuild, device, capture_pass, output, screen_filter, parts):
                "system_settings": list(capture_pass.system_settings)}
     if capture_pass.tag:
         details["tag"] = capture_pass.tag
+    if display:
+        details["display"] = display.name
     # A failed pass may still have saved images, which can't be trusted to show its settings.
     if failed:
         details["pass_failed"] = True
@@ -472,6 +674,7 @@ def capture(arguments):
         # Build once before any simulator boots, so a boot never competes with the compile.
         run(xcodebuild + ["-destination", "generic/platform=iOS Simulator", "build-for-testing"])
         app = derived_data / "Build/Products/Debug-iphonesimulator/Compass.app"
+        hinge_tool = None
         for device in devices:
             if passes is None:
                 device_passes = [CapturePass(device["name"], appearance, ())
@@ -480,13 +683,22 @@ def capture(arguments):
                 device_passes = [capture_pass for capture_pass in passes
                                  if capture_pass.device == device["name"]]
             prepare_device(device["udid"], app)
+            HINGE_ANGLES[device["udid"]] = 0
+            displays = find_displays(device["udid"])
+            if displays and hinge_tool is None:
+                hinge_tool = build_hinge_tool(derived_data)
             try:
                 for capture_pass in device_passes:
-                    entries, pass_failed = run_pass(xcodebuild, device, capture_pass, output,
-                                                    screen_filter, arguments.max_parts)
-                    manifest += entries
-                    failed = failed or pass_failed
+                    for display in displays or [None]:
+                        entries, pass_failed = run_pass(xcodebuild, device, capture_pass,
+                                                        output, screen_filter,
+                                                        arguments.max_parts, display, hinge_tool)
+                        manifest += entries
+                        failed = failed or pass_failed
             finally:
+                if displays and hinge_tool and not move_hinge(hinge_tool, device["udid"], 0):
+                    print("Couldn't close the simulator before shutting it down",
+                          file=sys.stderr)
                 quietly(["xcrun", "simctl", "shutdown", device["udid"]])
     finally:
         (output / MANIFEST).write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")

@@ -179,12 +179,23 @@ supports but the Mac hasn't set up is created for the run and deleted afterwards
 captures for mock-ups; don't push other branches to produce them. Clients that can't download
 artifacts can set `log-images` and read the images from the job log.
 
+A simulator with more than one display, such as iPhone Duo, runs each pass twice: closed, saving
+the outer display as `-outer`, then open flat, saving the inner display as `-inner`. Each image's
+`screenshots.json` entry records its `display`. `simctl` can't fold a simulator, so
+`scripts/screenshots` builds `scripts/simulator-hinge.m` and sends the hinge angle Device Hub's
+pose buttons send. That uses private CoreSimulator interfaces an Xcode update can break, so before
+each pass the script waits for that display to light up, after checking that the inner display
+reads dark while closed. A display that stays dark, or a dark check that can't see a dark display,
+fails its pass by name and the other display's images are kept. Outer images are 1398x2034 and
+inner images, opened flat, are 2853x2007 with the app upright in its wide layout. The `largest`
+and `smallest` aliases compare each iPhone's primary display, which on the `xcode-27` runners picks
+iPhone 18 Pro Max and iPhone 17e, not iPhone Duo; name iPhone Duo to capture it.
+
 Choose the `listing` set for the App Store listing screenshots: the `compass` screen in light and
-dark on iPhone 17. Apple's screenshot specifications list one required iPhone size, iPhone with
-Dynamic Island (medium display), which iPhone 17 is. `LISTING_SET` in `scripts/screenshots` lists
-it. The app is iPhone only, so the listing has no iPad screenshots
+dark on iPhone 17 and on iPhone Duo, outer and inner. Apple's screenshot specifications list one
+required iPhone size, iPhone with Dynamic Island (medium display), which iPhone 17 is, and Apple
+says iPhone Duo screenshots become required from April 2027 for apps built with the iOS 27.1 SDK or
+later ([#305](https://github.com/lunchbox-labs/compasslet/issues/305)). `LISTING_SET` in
+`scripts/screenshots` lists it. The app is iPhone only, so the listing has no iPad screenshots
 ([#309](https://github.com/lunchbox-labs/compasslet/issues/309)). Apple Watch
-([#304](https://github.com/lunchbox-labs/compasslet/issues/304)) and iPhone Duo
-([#305](https://github.com/lunchbox-labs/compasslet/issues/305)) are left out of the first release;
-Apple says iPhone Duo screenshots become required from April 2027 for apps built with the iOS 27.1
-SDK or later.
+([#304](https://github.com/lunchbox-labs/compasslet/issues/304)) is left out of the first release.
