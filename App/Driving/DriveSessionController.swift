@@ -45,10 +45,6 @@ final class SystemDriveClock: DriveClock {
 
 @MainActor @Observable
 final class DriveSessionController {
-  enum SetupStatus {
-    case ready, permissionRequired, denied, restricted, servicesDisabled, preciseLocationRequired,
-      unavailable
-  }
   /// The Live Activity as the phone and Shortcuts show it: `inactive` or `unavailable` with no
   /// drive, and otherwise how the drive's activity stands.
   enum CompactStatus { case inactive, starting, active, unavailable, dismissed }
@@ -177,8 +173,9 @@ final class DriveSessionController {
   @ObservationIgnored private var preparation: Task<Void, Never>?
   /// The end of the last drive's Live Activity, and the background time it releases after.
   @ObservationIgnored private var ending: Task<Void, Never>?
-  /// Waits in `needsForegroundStart` for the drive to change.
-  @ObservationIgnored private var changeWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
+  /// Wakes `needsForegroundStart` on each sensor event, CarPlay connection and drive end, so it
+  /// checks again what it waits for.
+  private let changes = ChangeSignal()
 
   init(
     sensor: any TravelLocationSensor, activity: any CompassActivityPresenting,
@@ -252,7 +249,7 @@ final class DriveSessionController {
   func carPlayConnected() {
     isCarPlayConnected = true
     current?.car = .present
-    signalChange()
+    changes.signal()
   }
 
   /// Car audio keeps a drive going without Compasslet's CarPlay scene, and its loss starts the
@@ -416,37 +413,11 @@ final class DriveSessionController {
       guard !Task.isCancelled else { return false }
       // Wakes on the next change, or when the second after a reading or the timeout ends.
       let wait = session.hasReceivedReading ? min(timeout, .seconds(1)) : timeout
-      await nextChange(before: start + wait)
+      await changes.wait(until: start + wait)
       guard !Task.isCancelled else { return false }
     }
     guard session === current, !isCarPlayConnected else { return false }
     return session.locationNeedsForeground || !session.hasReceivedReading
-  }
-
-  /// Waits until the drive next changes, `deadline` passes or the task is cancelled.
-  private func nextChange(before deadline: ContinuousClock.Instant) async {
-    let id = UUID()
-    let timeout = Task { @MainActor [weak self] in
-      do { try await Task.sleep(until: deadline, clock: .continuous) } catch { return }
-      self?.resumeWaiter(id)
-    }
-    await withTaskCancellationHandler {
-      await withCheckedContinuation { changeWaiters[id] = $0 }
-    } onCancel: {
-      Task { @MainActor [weak self] in self?.resumeWaiter(id) }
-    }
-    timeout.cancel()
-  }
-
-  private func resumeWaiter(_ id: UUID) {
-    changeWaiters.removeValue(forKey: id)?.resume()
-  }
-
-  /// Wakes `needsForegroundStart`, which checks again what it waits for.
-  private func signalChange() {
-    let waiters = changeWaiters.values
-    changeWaiters.removeAll()
-    for waiter in waiters { waiter.resume() }
   }
 
   private func observeAuthorization() {
@@ -457,22 +428,7 @@ final class DriveSessionController {
 
   private func refreshSetupStatus() {
     if sensor.authorization != .notDetermined { requestedPermission = false }
-    let status: SetupStatus
-    if !sensor.servicesEnabled {
-      status = .servicesDisabled
-    } else if !sensor.available {
-      status = .unavailable
-    } else if sensor.authorization == .notDetermined {
-      status = .permissionRequired
-    } else if sensor.authorization == .denied {
-      status = .denied
-    } else if sensor.authorization == .restricted {
-      status = .restricted
-    } else if !sensor.fullAccuracy {
-      status = .preciseLocationRequired
-    } else {
-      status = .ready
-    }
+    let status = SetupStatus(sensor: sensor)
     // It refreshes on every reading and beat, so set it only when it changes, or each one would
     // redraw the views that show it.
     if setupStatus != status { setupStatus = status }
@@ -512,7 +468,7 @@ final class DriveSessionController {
       publish(session.filter.update(reading, now: clock.now), for: session)
       armDeadline(for: session)
     }
-    signalChange()
+    changes.signal()
   }
 
   /// Shows a presentation, and hands it to the Live Activity while that is starting or showing.
@@ -665,7 +621,7 @@ final class DriveSessionController {
       releaseBackgroundTime?()
     }
     ending = task
-    signalChange()
+    changes.signal()
     return task
   }
 
