@@ -444,11 +444,8 @@ struct AppearancePreview: View {
               .font(.caption2).foregroundStyle(.secondary)
           }
           if phone.showsDial {
-            CompassDial(
-              bearing: 45, appearance: phone.appearance,
-              showsReadout: false
-            )
-            .frame(height: 180)
+            CompassDial(bearing: 45, appearance: phone.appearance)
+              .frame(height: 180)
           }
           if phone.appearance.hasReadout {
             ViewThatFits(in: .horizontal) {

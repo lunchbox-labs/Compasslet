@@ -34,7 +34,7 @@ struct CarPlayPresentation: Equatable {
         if let sample = presentation.sample, sample.isCurrent(at: now) {
           courseDegrees = sample.angle.degrees
           sampleTimestamp = sample.timestamp
-          let degrees = Int(sample.angle.degrees.rounded()) % 360
+          let degrees = sample.angle.roundedDegrees
           bearing = "\(degrees)° \(CompassPoint(angle: sample.angle).abbreviation)"
           status = "Updates limited to once every 10 seconds"
         } else {
