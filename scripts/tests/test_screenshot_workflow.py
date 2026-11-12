@@ -205,7 +205,7 @@ class ScreenshotWorkflowTests(unittest.TestCase):
         self.assertEqual([entry['file'] for entry in manifest], ['iphone-17-light-compass.png'])
         self.assertIn('iphone-17-light-compass.png', images)
 
-    def test_collect_keeps_what_it_has_and_names_a_simulator_that_uploaded_nothing(self):
+    def test_collect_keeps_what_it_has_and_names_a_simulator_that_captured_nothing(self):
         devices = [{'devices': 'iPhone 17', 'label': 'iphone-17'},
                    {'devices': 'iPhone Duo', 'label': 'iphone-duo'}]
         result, manifest, images, output = self.collect(devices, {
@@ -215,14 +215,40 @@ class ScreenshotWorkflowTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(len(manifest), 1)
         self.assertIn('iphone-17-light-compass.png', images)
-        self.assertIn('Nothing was uploaded for iPhone Duo', result.stdout)
+        self.assertIn('Nothing was captured on iPhone Duo', result.stdout)
         # A later step fails the run once these images are uploaded.
         self.assertEqual(output, 'missing=iPhone Duo\n')
 
-    def test_collect_uploads_nothing_when_no_simulator_uploaded_anything(self):
-        result, manifest, _, _ = self.collect([{'devices': 'largest', 'label': 'largest'}], {})
-        self.assertNotEqual(result.returncode, 0)
-        self.assertIsNone(manifest)
+    def test_collect_uploads_nothing_when_no_simulator_captured_anything(self):
+        devices = [{'devices': 'largest', 'label': 'largest'},
+                   {'devices': 'smallest', 'label': 'smallest'}]
+        for parts in ({}, {'largest': {'screenshots.json': '[]'},
+                           'smallest': {'screenshots.json': '[]'}}):
+            with self.subTest(parts=parts):
+                result, manifest, _, _ = self.collect(devices, parts)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIsNone(manifest)
+
+    def test_a_simulator_whose_capture_saved_nothing_counts_as_missing(self):
+        devices = [{'devices': 'largest', 'label': 'largest'},
+                   {'devices': 'smallest', 'label': 'smallest'}]
+        result, manifest, _, output = self.collect(devices, {
+            'largest': {'largest-light-compass.png': 'L',
+                        'screenshots.json': json.dumps([{'file': 'largest-light-compass.png'}])},
+            'smallest': {'screenshots.json': '[]'}})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(manifest), 1)
+        self.assertEqual(output, 'missing=smallest\n')
+
+    def test_each_capture_starts_with_an_empty_list_in_its_own_folder(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = subprocess.run(
+                ['bash', '-e', '-c', shell_step('Start an empty capture')],
+                env=dict(os.environ, RUNNER_TEMP=directory, LABEL='iphone-17'),
+                capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            listed = Path(directory) / 'capture/iphone-17/screenshots.json'
+            self.assertEqual(json.loads(listed.read_text()), [])
 
     def test_each_capture_saves_into_its_simulators_own_folder(self):
         for capture_set in ('', 'listing'):

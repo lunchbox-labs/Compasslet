@@ -210,8 +210,8 @@ jobs:
           path: ${{ runner.temp }}/parts
           # Each artifact holds one folder named for its simulator.
           merge-multiple: true
-      # Fails, uploading nothing, when no simulator uploaded anything, so a late re-run can't
-      # replace the run's images with an empty list.
+      # Fails, uploading nothing, when no simulator captured anything, so a re-run can't replace
+      # the run's images with an empty list.
       - name: Combine the simulators' captures
         id: combine
         env:
@@ -223,24 +223,26 @@ jobs:
           parts, output = Path(sys.argv[1]), Path(sys.argv[2])
           output.mkdir(parents=True)
           manifest, missing = [], []
-          for device in json.loads(os.environ["DEVICES"]):
+          devices = json.loads(os.environ["DEVICES"])
+          for device in devices:
               part = parts / device["label"]
-              if not part.is_dir():
+              listed = part / "screenshots.json"
+              entries = json.loads(listed.read_text(encoding="utf-8")) if listed.exists() else []
+              # A capture that failed before saving anything uploads an empty list.
+              if not entries:
                   missing.append(device["devices"])
                   continue
               for image in sorted(part.iterdir()):
                   if image.name != "screenshots.json":
                       shutil.copy2(image, output / image.name)
-              listed = part / "screenshots.json"
-              if listed.exists():
-                  manifest += json.loads(listed.read_text(encoding="utf-8"))
-          (output / "screenshots.json").write_text(json.dumps(manifest, indent=2) + "\n",
-                                                   encoding="utf-8")
+              manifest += entries
           print("Collected " + str(len(manifest)) + " screenshots")
           for name in missing:
-              print("::error::Nothing was uploaded for " + name)
-          if len(missing) == len(json.loads(os.environ["DEVICES"])):
-              sys.exit("No simulator uploaded any images")
+              print("::error::Nothing was captured on " + name)
+          if not manifest:
+              sys.exit("No simulator captured anything")
+          (output / "screenshots.json").write_text(json.dumps(manifest, indent=2) + "\n",
+                                                   encoding="utf-8")
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as file:
               file.write("missing=" + ", ".join(missing) + "\n")
           PYTHON
@@ -262,10 +264,10 @@ jobs:
             echo "SCREENSHOT-END $(basename "$image")"
           done
       # After the upload, so the other simulators' images are kept.
-      - name: Fail when a simulator uploaded nothing
+      - name: Fail when a simulator captured nothing
         if: steps.combine.outputs.missing != ''
         env:
           MISSING: ${{ steps.combine.outputs.missing }}
         run: |
-          echo "Nothing was uploaded for $MISSING" >&2
+          echo "Nothing was captured on $MISSING" >&2
           exit 1

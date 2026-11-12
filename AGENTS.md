@@ -160,7 +160,7 @@ per simulator from that build (`capture --prebuilt`), all on the same commit. Ea
 resolves `largest` and `smallest` again on its own runner, which has the same simulators, and
 captures every appearance it needs. A collect job gathers every simulator's images and
 `screenshots.json` into the run's one artifact, keeping what a failed simulator saved, and fails
-the run when a simulator uploaded nothing.
+the run when a simulator captured nothing.
 
 For custom captures, use Actions → Screenshots → Run workflow. Set `ref` to a branch, tag, commit
 or pull request number (empty uses the run's branch), choose `devices` and `appearances`, and
