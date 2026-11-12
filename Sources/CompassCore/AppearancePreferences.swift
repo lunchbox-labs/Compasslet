@@ -186,6 +186,11 @@ public struct AppearancePreferences: Codable, Hashable, Sendable {
     return surface == .activity ? value.requiringReadout() : value
   }
 
+  /// The values a surface shows, or the global values when there is no surface.
+  public func values(for surface: AppearanceSurface?) -> AppearanceValues {
+    surface.map { effective(for: $0) } ?? global
+  }
+
   /// Updates shared values while retaining a usable Live Activity reading.
   public mutating func setGlobal(_ value: AppearanceValues) {
     global = value.requiringReadout()
@@ -199,6 +204,15 @@ public struct AppearancePreferences: Codable, Hashable, Sendable {
   /// Stores a complete local choice, enforcing the activity readout constraint.
   public mutating func setOverride(_ value: AppearanceValues, for surface: AppearanceSurface) {
     set(surface == .activity ? value.requiringReadout() : value, for: surface)
+  }
+
+  /// Stores a surface's override, or the global values when there is no surface.
+  public mutating func setValues(_ value: AppearanceValues, for surface: AppearanceSurface?) {
+    if let surface {
+      setOverride(value, for: surface)
+    } else {
+      setGlobal(value)
+    }
   }
 
   /// Loads persisted choices, recovering safely from unsupported or corrupt data.

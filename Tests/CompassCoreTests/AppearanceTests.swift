@@ -37,6 +37,40 @@ import Testing
   #expect(!preferences.effective(for: .activity).showDegrees)
 }
 
+@Test func valuesWithoutASurfaceReadAndWriteTheGlobalValues() {
+  var preferences = AppearancePreferences()
+  var phone = preferences.global
+  phone.rotation = .arrow
+  preferences.setOverride(phone, for: .phone)
+  var global = preferences.values(for: nil)
+  #expect(global == preferences.global)
+  #expect(global.rotation == .dial)
+  global.cardinalLabels = .outside
+  global.showDirection = false
+  global.showDegrees = false
+  preferences.setValues(global, for: nil)
+  #expect(preferences.values(for: nil) == preferences.global)
+  #expect(preferences.global.cardinalLabels == .outside)
+  #expect(preferences.global.showDirection)
+  #expect(!preferences.global.showDegrees)
+  #expect(preferences.values(for: .phone) == phone)
+  #expect(preferences.values(for: .activity) == preferences.effective(for: .activity))
+  #expect(preferences.values(for: .activity).cardinalLabels == .outside)
+}
+
+@Test func valuesForASurfaceReadAndWriteItsOverride() {
+  var preferences = AppearancePreferences()
+  var hidden = preferences.values(for: .phone)
+  hidden.showDirection = false
+  hidden.showDegrees = false
+  preferences.setValues(hidden, for: .phone)
+  #expect(!preferences.usesGlobal(for: .phone))
+  #expect(preferences.values(for: .phone) == hidden)
+  preferences.setValues(hidden, for: .activity)
+  #expect(preferences.values(for: .activity) == hidden.requiringReadout())
+  #expect(preferences.values(for: nil) == AppearanceValues())
+}
+
 @Test func appearanceRoundTripAndMalformedStorageRecovery() throws {
   var preferences = AppearancePreferences()
   var custom = preferences.global
