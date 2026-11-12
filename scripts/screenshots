@@ -12,9 +12,17 @@ capture     Build the app once, then run ScreenshotTests on each device and appe
             evidence instead: fixed devices, text sizes, Bold Text, Increase Contrast,
             Reduce Transparency and Dark Mode, as listed in ACCESSIBILITY_SET.
             --set listing captures the App Store listing screenshots, as listed in
-            LISTING_SET.
+            LISTING_SET. With --set, --devices narrows the set to some of its simulators.
+            --prebuilt skips the build and uses the products a build command left in
+            --derived-data, so several machines can capture one build.
+build       Build the app and its tests for any iPhone simulator, as capture does first.
+devices     Print, as JSON, one entry per simulator that capture would use for the same
+            --set, --devices and --filter: what to pass as --devices to capture only that
+            simulator, and its file label. A request for a simulator another request already
+            picks here is dropped; capture resolves an alias again on its own machine.
 """
 import argparse
+import contextlib
 import json
 import os
 import plistlib
@@ -491,12 +499,9 @@ def quietly(arguments):
     subprocess.run(arguments, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-def find_devices(names, created):
-    """Available simulators for exact names or aliases. A named iPhone that is missing but
-    supported by an iOS MINIMUM_IOS+ runtime is created and its id added to created, so the
-    caller can delete it afterwards, even when this raises."""
-    types = simctl_json("devicetypes")["devicetypes"]
-    phones = available_iphones(simctl_json("devices", "available")["devices"], types)
+def missing_devices(names, phones):
+    """The requested names no available simulator has, each of which an iOS MINIMUM_IOS+
+    runtime can create. Raises when any requested name can't be created either."""
     missing = [name for name in names
                if name not in ALIASES and name not in {phone["name"] for phone in phones}]
     if missing:
@@ -507,8 +512,19 @@ def find_devices(names, created):
             raise SystemExit("No available simulator named " + ", ".join(unknown) + "; found "
                              + found + "; iOS " + str(MINIMUM_IOS) + " also supports "
                              + ", ".join(sorted(creatable)))
-        for name in missing:
-            type_identifier, runtime = creatable[name]
+        return {name: creatable[name] for name in missing}
+    return {}
+
+
+def find_devices(names, created):
+    """Available simulators for exact names or aliases. A named iPhone that is missing but
+    supported by an iOS MINIMUM_IOS+ runtime is created and its id added to created, so the
+    caller can delete it afterwards, even when this raises."""
+    types = simctl_json("devicetypes")["devicetypes"]
+    phones = available_iphones(simctl_json("devices", "available")["devices"], types)
+    missing = missing_devices(names, phones)
+    if missing:
+        for name, (type_identifier, runtime) in missing.items():
             created.append(run(["xcrun", "simctl", "create", name, type_identifier, runtime],
                                capture_output=True).stdout.strip())
         phones = available_iphones(simctl_json("devices", "available")["devices"], types)
@@ -641,41 +657,108 @@ def run_pass(xcodebuild, device, capture_pass, output, screen_filter, parts, dis
     return [dict(entry, **details) for entry in captured], failed
 
 
+APP_PRODUCT = "Build/Products/Debug-iphonesimulator/Compass.app"
+
+
+def xcodebuild_command(derived_data):
+    return ["bash", "scripts/simulator-xcodebuild", "-project", "Compass.xcodeproj",
+            "-scheme", "Compass", "-derivedDataPath", str(derived_data),
+            "CODE_SIGNING_ALLOWED=NO"]
+
+
+def build_for_testing(xcodebuild):
+    run(xcodebuild + ["-destination", "generic/platform=iOS Simulator", "build-for-testing"])
+
+
+def capture_plan(arguments):
+    """The set's passes (None for every screen), the requested simulators, the appearances for
+    every screen, and the filter the test applies, from the command's options."""
+    if arguments.set:
+        if arguments.appearances is not None:
+            raise SystemExit("--set chooses its own appearances; leave out --appearances")
+        passes = passes_for(arguments.set, arguments.filter)
+        in_set = list(dict.fromkeys(capture_pass.device for capture_pass in passes))
+        if arguments.devices is None:
+            requested = in_set
+        else:
+            requested = split_list(arguments.devices)
+            outside = [name for name in requested if name not in in_set]
+            if outside or not requested:
+                raise SystemExit("With --set, --devices names some of the set's simulators: "
+                                 + ", ".join(in_set))
+            passes = [capture_pass for capture_pass in passes
+                      if capture_pass.device in requested]
+            requested = [name for name in in_set if name in requested]
+        # The set lists exact screens; the filter has already narrowed them.
+        return passes, requested, None, ""
+    appearances = split_list(arguments.appearances or "light,dark")
+    for appearance in appearances:
+        if appearance not in APPEARANCES:
+            raise SystemExit("Unknown appearance " + appearance + "; use light or dark")
+    return None, split_list(arguments.devices or "largest,smallest"), appearances, arguments.filter
+
+
+def plan_devices(requested):
+    """One entry per simulator capture would use for the requests, without creating any:
+    the request that picks it and its file label, in request order. A request that picks a
+    simulator an earlier one already picks is dropped, as capture drops it."""
+    types = simctl_json("devicetypes")["devicetypes"]
+    phones = available_iphones(simctl_json("devices", "available")["devices"], types)
+    missing = missing_devices(requested, phones)
+    planned, picked = [], set()
+    for request in requested:
+        if request in missing:
+            key = "create:" + request
+            label = device_label(request)
+        else:
+            device = select_devices([request], phones)[0]
+            key, label = device["udid"], device["label"]
+        if key not in picked:
+            picked.add(key)
+            planned.append({"devices": request, "label": label})
+    return planned
+
+
+def devices(arguments):
+    # Only the list goes to stdout, so a workflow can read it whole; simctl's log goes to stderr.
+    with contextlib.redirect_stdout(sys.stderr):
+        passes, requested, _, _ = capture_plan(arguments)
+        planned = plan_devices(requested) if passes is None else None
+    if passes is not None:
+        # A set names exact simulators, created on the capture machine when missing there.
+        planned = [{"devices": name, "label": device_label(name)} for name in requested]
+    if not planned:
+        raise SystemExit("No devices requested")
+    print(json.dumps(planned))
+
+
+def build(arguments):
+    build_for_testing(xcodebuild_command(Path(arguments.derived_data).resolve()))
+
+
 def capture(arguments):
     output = Path(arguments.output).resolve()
     output.mkdir(parents=True, exist_ok=True)
-    if arguments.set:
-        if arguments.devices is not None or arguments.appearances is not None:
-            raise SystemExit("--set chooses its own devices and appearances; leave out "
-                             "--devices and --appearances")
-        passes = passes_for(arguments.set, arguments.filter)
-        # The set lists exact screens; the filter has already narrowed them.
-        screen_filter = ""
-        requested = list(dict.fromkeys(capture_pass.device for capture_pass in passes))
-    else:
-        appearances = split_list(arguments.appearances or "light,dark")
-        for appearance in appearances:
-            if appearance not in APPEARANCES:
-                raise SystemExit("Unknown appearance " + appearance + "; use light or dark")
-        requested = split_list(arguments.devices or "largest,smallest")
-        passes = None
-        screen_filter = arguments.filter
+    passes, requested, appearances, screen_filter = capture_plan(arguments)
     created = []
     manifest = []
     failed = False
     try:
-        devices = find_devices(requested, created)
-        if not devices:
+        selected = find_devices(requested, created)
+        if not selected:
             raise SystemExit("No devices requested")
         derived_data = Path(arguments.derived_data).resolve()
-        xcodebuild = ["bash", "scripts/simulator-xcodebuild", "-project", "Compass.xcodeproj",
-                      "-scheme", "Compass", "-derivedDataPath", str(derived_data),
-                      "CODE_SIGNING_ALLOWED=NO"]
-        # Build once before any simulator boots, so a boot never competes with the compile.
-        run(xcodebuild + ["-destination", "generic/platform=iOS Simulator", "build-for-testing"])
-        app = derived_data / "Build/Products/Debug-iphonesimulator/Compass.app"
+        xcodebuild = xcodebuild_command(derived_data)
+        app = derived_data / APP_PRODUCT
+        if arguments.prebuilt:
+            if not app.is_dir():
+                raise SystemExit("--prebuilt found no app at " + str(app) + "; run the build "
+                                 "command with the same --derived-data first")
+        else:
+            # Build once before any simulator boots, so a boot never competes with the compile.
+            build_for_testing(xcodebuild)
         hinge_tool = None
-        for device in devices:
+        for device in selected:
             if passes is None:
                 device_passes = [CapturePass(device["name"], appearance, ())
                                  for appearance in appearances]
@@ -717,16 +800,19 @@ def main(argv=None):
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
     capture_parser = commands.add_parser("capture")
-    capture_parser.add_argument("--set", choices=sorted(SETS),
-                                help="capture a predefined set of devices, settings and screens "
-                                     "instead of every screen")
-    capture_parser.add_argument("--devices",
-                                help="aliases (largest, smallest) or exact simulator names, "
-                                     "default largest,smallest; a named iPhone that iOS 27 "
-                                     "supports but isn't set up is created and then deleted")
-    capture_parser.add_argument("--appearances", help="light, dark or both; default light,dark")
-    capture_parser.add_argument("--filter", default="",
-                                help="comma-separated screen name prefixes; empty for all")
+    devices_parser = commands.add_parser("devices")
+    for subparser in (capture_parser, devices_parser):
+        subparser.add_argument("--set", choices=sorted(SETS),
+                               help="capture a predefined set of devices, settings and screens "
+                                    "instead of every screen")
+        subparser.add_argument("--devices",
+                               help="aliases (largest, smallest) or exact simulator names, "
+                                    "default largest,smallest; a named iPhone that iOS 27 "
+                                    "supports but isn't set up is created and then deleted; "
+                                    "with --set, some of the set's simulators")
+        subparser.add_argument("--appearances", help="light, dark or both; default light,dark")
+        subparser.add_argument("--filter", default="",
+                               help="comma-separated screen name prefixes; empty for all")
     capture_parser.add_argument("--max-parts", type=max_parts, default=DEFAULT_MAX_PARTS,
                                 help="most captures of each screen that scrolls, counting the "
                                      "first, from 1 (only the top) to "
@@ -734,7 +820,14 @@ def main(argv=None):
                                      + str(DEFAULT_MAX_PARTS))
     capture_parser.add_argument("--output", default=".build/screenshots")
     capture_parser.add_argument("--derived-data", default=".build/xcode")
+    capture_parser.add_argument("--prebuilt", action="store_true",
+                                help="skip the build and use the products the build command "
+                                     "left in --derived-data")
     capture_parser.set_defaults(handler=capture)
+    devices_parser.set_defaults(handler=devices)
+    build_parser = commands.add_parser("build")
+    build_parser.add_argument("--derived-data", default=".build/xcode")
+    build_parser.set_defaults(handler=build)
     arguments = parser.parse_args(argv)
     arguments.handler(arguments)
 
