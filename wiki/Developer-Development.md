@@ -44,6 +44,17 @@ or the eight-hour limit clears and ends it. Dismissal removes only the activity
 for that drive. Changed readings update at most once per second; unchanged readings
 need no heartbeat. No prior-drive reading is restored.
 
+## Storage
+
+Appearance settings are saved in the `group.dev.lunchbox-labs.carplay-compass` App Group's
+defaults suite. Only the app reads and writes it; the Live Activity gets its appearance from the
+activity's content state, and diagnostics live in the app's Application Support
+([State Machines](Developer-State-Machines#diagnostics)). The first time
+the app opens its diagnostics store, it also deletes an older diagnostics folder from the group's
+container. The suite stays because moving to standard defaults would need a one-time migration of
+saved settings. The extension's App Group entitlement is unused but kept, since dropping it is a
+provisioning change best made alongside another entitlements change.
+
 ## CompassCore
 
 CompassCore contains angle normalization, sample validation, freshness checks and
