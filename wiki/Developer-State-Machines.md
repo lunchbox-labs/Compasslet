@@ -177,10 +177,10 @@ run while a drive does, both in process, so they only advance while the process 
 
 - The heartbeat (`heartbeatInterval`, `beat`) runs once a second. It re-reads the car audio
   route, refreshes setup, enforces the eight-hour limit, calls `renew()` on a starting or active
-  Live Activity, which keeps the activity's diagnostics clock running (see
-  [Live Activity lifecycle](#live-activity-lifecycle)), writes a reading held by a lower update
-  frequency or renews the stale date once it has gone 60 s without a write, and checks every
-  limit again. The update frequency never changes the heartbeat. Each beat sets the next one an
+  Live Activity, which keeps its diagnostics clock running (see
+  [Live Activity lifecycle](#live-activity-lifecycle)) and writes a reading held by a lower
+  update frequency or renews the stale date once it has gone 60 s without a write, and checks
+  every limit again. The update frequency never changes the heartbeat. Each beat sets the next one an
   interval after it ran (`scheduleHeartbeat`), so beats are never under 1 s apart, which
   diagnostics would skip, and a late beat brings no burst of catch-up beats.
 - One deadline timer (`armDeadline`, `deadlineCame`) fires at the first moment past the
@@ -285,13 +285,14 @@ within 5 minutes and the card shows travel as unavailable instead of the last di
 stays until the app next launches, the End shortcut runs, or ActivityKit's own limit ends it.
 
 The controller is the only writer of the `activity` [diagnostics](#diagnostics) clock
-(`observeDiagnostics`), so the clock follows `handle`, whether an activity exists, rather than
-the drive's status. It observes the surface active once a request returns an activity and on
-each `renew()`, so the clock keeps running between writes, which a lower update frequency or a
-stop makes further apart than its 2 s gap. It observes it inactive on a dismissal (`dismissed`)
-and on every `end()`, including the one a drive's end queues. A request that fails or that an
-end overtakes never observes it active, and a Live Activity started again during a drive starts
-a new diagnostics session.
+(`CompassActivityController.observeDiagnostics` in
+`App/LiveActivity/CompassActivityController.swift`), so the clock follows `handle`, whether an
+activity exists, rather than the drive's status. It observes the surface active once a request
+returns an activity and on each `renew()`, so the clock keeps running between writes, which a
+lower update frequency or a stop makes further apart than its 2 s gap. It observes it inactive
+on a dismissal (`dismissed`) and on every `end()`, including the one a drive's end queues. A
+request that fails or that an end overtakes never observes it active, and a Live Activity
+started again during a drive starts a new diagnostics session.
 
 ## Live Activity content
 

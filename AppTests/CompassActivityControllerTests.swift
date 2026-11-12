@@ -1015,7 +1015,7 @@ struct CompassActivityControllerTests {
     system.fail = false
     try await controller.start()
     #expect(observed.values == [true])
-    // Each renewal keeps it running, though a lower update frequency writes nothing new.
+    // Each renewal keeps it running, though it writes nothing new to the activity.
     let writes = system.handle.updates.count
     controller.renew()
     controller.renew()

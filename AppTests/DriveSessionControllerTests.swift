@@ -1194,7 +1194,7 @@ final class DriveSessionControllerTests: XCTestCase {
     await controller.endDrive()
   }
 
-  func testHeartbeatRenewsOnlyAShowingActivity() async {
+  func testHeartbeatRenewsOnlyARunningActivity() async {
     let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
     let beat = DriveSessionController.heartbeatInterval
     time += beat
