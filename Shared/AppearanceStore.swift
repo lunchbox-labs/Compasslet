@@ -5,7 +5,7 @@ import Observation
 /// Saves the appearance settings in the App Group's defaults suite. The suite is the app's own
 /// storage: the Live Activity gets its appearance from the activity's content state, and nothing
 /// else reads the suite. It stays because moving to standard defaults would need a migration of
-/// saved settings and an entitlement change.
+/// saved settings.
 @MainActor @Observable
 final class AppearanceStore {
   static let shared = AppearanceStore()
