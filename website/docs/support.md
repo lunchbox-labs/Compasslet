@@ -27,7 +27,8 @@ on iPhone, then open Compasslet from the CarPlay launcher. CarPlay shows the dir
 you are travelling, so it updates once the car is moving.
 
 **The Live Activity doesn't appear or doesn't end.** It starts when you open Compasslet on
-CarPlay and ends a minute after CarPlay disconnects, and iOS decides when to show it.
+CarPlay and ends a minute after CarPlay disconnects, or after the time you choose under
+Auto-Stop in Compasslet's Settings › Live Activity, and iOS decides when to show it.
 Make sure Live Activities are allowed for Compasslet in the Settings app. While CarPlay is
 connected, you can also start or end it yourself with the round play or stop button (Start
 Live Activity or End Live Activity) at the bottom right of the compass screen on iPhone.

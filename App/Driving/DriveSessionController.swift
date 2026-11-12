@@ -59,6 +59,16 @@ final class DriveSessionController {
     /// Whether the activity is showing or about to, so it gets the drive's presentations.
     var isRunning: Bool { self == .starting || self == .active }
   }
+  /// Whether a drive's car shows, and how its absence ends the drive.
+  private enum CarPresence {
+    case present
+    /// The drive started away from the car, which hasn't shown since. The drive ends once
+    /// `carPlayAbsenceLimit` passes without it.
+    case awaited(since: Date)
+    /// The car left during the drive. The drive ends once the auto-stop delay passes, unless
+    /// auto-stop is never.
+    case left(since: Date)
+  }
   /// No drive, or one drive. `liveActivityFailed` records that the last start ended because its
   /// Live Activity couldn't start, and without CarPlay nothing else would show the drive.
   private enum State {
@@ -79,8 +89,9 @@ final class DriveSessionController {
     var hasReceivedReading = false
     /// Whether location reported that it can't run until the app is in use.
     var locationNeedsForeground = false
-    /// When the car was last seen, while neither CarPlay nor car audio is connected.
-    var carAbsentSince: Date?
+    /// Whether the car shows, and since when it hasn't while neither CarPlay nor car audio is
+    /// connected.
+    var car = CarPresence.present
     /// When location reported that the app isn't in use with no reading since.
     var notInUseSince: Date?
     /// Releases the background time held while waiting for a reading after that report.
@@ -135,7 +146,8 @@ final class DriveSessionController {
   /// Whether location reported that it can't run until the app is in use.
   var locationNeedsForeground: Bool { current?.locationNeedsForeground ?? false }
 
-  /// How long a drive keeps running without CarPlay before it ends.
+  /// How long a drive started away from the car waits for CarPlay or car audio before it ends.
+  /// It is also the standard auto-stop delay once the car leaves (`LiveActivityAutoStop`).
   static let carPlayAbsenceLimit: TimeInterval = 60
   /// How long a drive waits for a reading after location reports that the app isn't in use
   /// before it ends, since the report can arrive while readings still flow and readings can be
@@ -154,6 +166,9 @@ final class DriveSessionController {
   private let clock: any DriveClock
   private let readCarAudioRoute: @MainActor () -> Bool
   private let holdBackgroundTime: @MainActor () -> @MainActor () -> Void
+  /// The auto-stop choice, read whenever a limit is checked or set, so a change applies to the
+  /// drive in progress.
+  private let autoStop: @MainActor () -> LiveActivityAutoStop
   @ObservationIgnored private var active = false
   @ObservationIgnored private var suppressed = false
   /// Whether the location prompt was asked for while permission is undecided. It clears once a
@@ -169,13 +184,17 @@ final class DriveSessionController {
     sensor: any TravelLocationSensor, activity: any CompassActivityPresenting,
     clock: any DriveClock = SystemDriveClock(),
     carAudioRoute: @escaping @MainActor () -> Bool = { false },
-    backgroundTime: @escaping @MainActor () -> @MainActor () -> Void = { {} }
+    backgroundTime: @escaping @MainActor () -> @MainActor () -> Void = { {} },
+    autoStop: @escaping @MainActor () -> LiveActivityAutoStop = {
+      LiveActivityPreferences().autoStop
+    }
   ) {
     self.sensor = sensor
     self.activity = activity
     self.clock = clock
     self.readCarAudioRoute = carAudioRoute
     self.holdBackgroundTime = backgroundTime
+    self.autoStop = autoStop
     refreshSetupStatus()
     observeAuthorization()
   }
@@ -232,19 +251,19 @@ final class DriveSessionController {
 
   func carPlayConnected() {
     isCarPlayConnected = true
-    current?.carAbsentSince = nil
+    current?.car = .present
     signalChange()
   }
 
   /// Car audio keeps a drive going without Compasslet's CarPlay scene, and its loss starts the
-  /// same absence limit as a CarPlay disconnect.
+  /// same auto-stop wait as a CarPlay disconnect.
   func carAudioChanged(connected: Bool) {
     isCarAudioConnected = connected
     guard let session = current else { return }
     if connected {
-      session.carAbsentSince = nil
-    } else if !isCarPlayConnected, session.carAbsentSince == nil {
-      session.carAbsentSince = clock.now
+      session.car = .present
+    } else if !isCarPlayConnected, case .present = session.car {
+      session.car = .left(since: clock.now)
       armDeadline(for: session)
     }
   }
@@ -305,7 +324,9 @@ final class DriveSessionController {
     }
     // A notification can be missed while the app is suspended, so read the route itself.
     isCarAudioConnected = readCarAudioRoute()
-    if !isCarPlayConnected, !isCarAudioConnected { session.carAbsentSince = session.startedAt }
+    if !isCarPlayConnected, !isCarAudioConnected {
+      session.car = .awaited(since: session.startedAt)
+    }
     presentation = TravelPresentation(sample: nil, status: .waiting)
     state = .driving(session)
     scheduleHeartbeat(for: session)
@@ -346,16 +367,16 @@ final class DriveSessionController {
     suppressed = false
   }
 
-  /// A brief disconnect keeps the drive; its absence limit ends it once CarPlay stays away too
-  /// long. Car audio that stays connected keeps the drive too.
+  /// A brief disconnect keeps the drive; auto-stop ends it once CarPlay stays away for the chosen
+  /// delay, unless auto-stop is never. Car audio that stays connected keeps the drive too.
   func carPlayDisconnected() {
     active = false
     suppressed = false
     isCarPlayConnected = false
-    guard let session = current, !isCarAudioConnected, session.carAbsentSince == nil else {
+    guard let session = current, !isCarAudioConnected, case .present = session.car else {
       return
     }
-    session.carAbsentSince = clock.now
+    session.car = .left(since: clock.now)
     armDeadline(for: session)
   }
 
@@ -540,7 +561,7 @@ final class DriveSessionController {
   /// Ends the drive when the car has been away too long, or when location stopped because the
   /// app isn't in use and no newer reading came, and reports whether it did.
   private func endsAtLimit(_ session: DriveSession) -> Bool {
-    if let since = session.carAbsentSince, hasPassed(Self.carPlayAbsenceLimit, since: since) {
+    if let absence = carAbsence(of: session), hasPassed(absence.limit, since: absence.since) {
       stopDrive()
       return true
     }
@@ -550,6 +571,17 @@ final class DriveSessionController {
       return true
     }
     return false
+  }
+
+  /// How long the car can stay away, and since when it has: the start window for a drive started
+  /// away from it, or the auto-stop delay once it has left. Nil while the car shows, or once it
+  /// has left when auto-stop is never.
+  private func carAbsence(of session: DriveSession) -> (since: Date, limit: TimeInterval)? {
+    switch session.car {
+    case .present: nil
+    case .awaited(let since): (since: since, limit: Self.carPlayAbsenceLimit)
+    case .left(let since): autoStop().delay.map { (since: since, limit: $0) }
+    }
   }
 
   private func expireReading(of session: DriveSession) {
@@ -563,8 +595,8 @@ final class DriveSessionController {
   /// Sets a timer for the next limit, so each one ends on time rather than at the next beat.
   private func armDeadline(for session: DriveSession) {
     var dates: [Date] = []
-    if let since = session.carAbsentSince {
-      dates.append(passing(Self.carPlayAbsenceLimit, since: since))
+    if let absence = carAbsence(of: session) {
+      dates.append(passing(absence.limit, since: absence.since))
     }
     if !active, let since = session.notInUseSince {
       dates.append(passing(Self.notInUseLimit, since: since))

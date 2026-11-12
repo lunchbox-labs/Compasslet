@@ -61,6 +61,8 @@ final class DriveSessionControllerTests: XCTestCase {
     set { clock.now = newValue }
   }
   var carAudio = false
+  /// The auto-stop choice the drive reads, the standard one unless a test changes it.
+  var autoStop = LiveActivityAutoStop.afterOneMinute
   var backgroundHolds = 0
   var backgroundReleases = 0
   func reading(_ course: Double = 90) -> TravelSensorEvent {
@@ -76,7 +78,8 @@ final class DriveSessionControllerTests: XCTestCase {
       backgroundTime: {
         self.backgroundHolds += 1
         return { self.backgroundReleases += 1 }
-      })
+      },
+      autoStop: { self.autoStop })
   }
   /// Runs what has come due at the current time: the heartbeat once a second has passed since
   /// the last one, and any limit.
@@ -977,6 +980,176 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertFalse(controller.isDriving)
     XCTAssertEqual(activity.ends, 1)
     XCTAssertEqual(sensor.starts, 0)
+  }
+
+  func testAutoStopEndsTheDriveTheChosenTimeAfterTheCarLeaves() async {
+    for (choice, delay) in [
+      (LiveActivityAutoStop.afterFiveMinutes, 5 * 60.0),
+      (.afterFifteenMinutes, 15 * 60),
+    ] {
+      for carAudioLeaves in [false, true] {
+        autoStop = choice
+        let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+        if carAudioLeaves { setCarAudio(true, controller) }
+        await controller.carPlayActivated()
+        controller.carPlayResignedActive()
+        controller.carPlayDisconnected()
+        let left = time
+        if carAudioLeaves {
+          // The car audio keeps the drive until it goes too.
+          clock.run(until: left + 10 * 60)
+          XCTAssertTrue(controller.isDriving)
+          setCarAudio(false, controller)
+        }
+        let since = time
+        // The standard minute no longer ends it.
+        clock.run(until: since + DriveSessionController.carPlayAbsenceLimit + 1)
+        XCTAssertTrue(controller.isDriving)
+        clock.run(until: since + delay)
+        XCTAssertTrue(controller.isDriving)
+        clock.run(until: since + delay + 0.1)
+        XCTAssertFalse(controller.isDriving, "\(choice), car audio \(carAudioLeaves)")
+        await controller.waitForPendingOperations()
+        XCTAssertEqual(sensor.stops, 1)
+        XCTAssertEqual(activity.ends, 2)
+      }
+    }
+  }
+
+  func testAutoStopNeverKeepsTheDriveUntilItsLimitOrAnEnd() async {
+    autoStop = .never
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    let start = time
+    await controller.carPlayActivated()
+    controller.carPlayResignedActive()
+    controller.carPlayDisconnected()
+    clock.run(until: start + 2 * 60 * 60)
+    XCTAssertTrue(controller.isDriving)
+    XCTAssertEqual(controller.compactStatus, .active)
+    // Nothing waits for the car, so only the heartbeat is set.
+    XCTAssertEqual(clock.pending.count, 1)
+    // The eight-hour drive limit still ends it.
+    time = start + DriveSessionController.driveLimit - 1
+    tick()
+    XCTAssertTrue(controller.isDriving)
+    time = start + DriveSessionController.driveLimit
+    tick()
+    XCTAssertFalse(controller.isDriving)
+    await controller.waitForPendingOperations()
+    XCTAssertEqual(activity.ends, 2)
+
+    // An explicit end, or dismissing the Live Activity without CarPlay, still ends it.
+    for dismisses in [false, true] {
+      let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+      await controller.carPlayActivated()
+      controller.carPlayResignedActive()
+      controller.carPlayDisconnected()
+      time += 60 * 60
+      tick()
+      XCTAssertTrue(controller.isDriving)
+      if dismisses {
+        activity.onDismiss?()
+      } else {
+        await controller.endLiveActivity()
+      }
+      XCTAssertFalse(controller.isDriving)
+      XCTAssertEqual(sensor.stops, 1)
+    }
+  }
+
+  func testAutoStopLeavesTheStartWindowAwayFromTheCarAsItWas() async {
+    for choice in LiveActivityAutoStop.allCases {
+      autoStop = choice
+      let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+      let start = time
+      // Started from Shortcuts away from the car, the drive still ends unless the car shows.
+      await controller.startLiveActivity()
+      clock.run(until: start + DriveSessionController.carPlayAbsenceLimit)
+      XCTAssertTrue(controller.isDriving)
+      clock.run(until: start + DriveSessionController.carPlayAbsenceLimit + 0.1)
+      XCTAssertFalse(controller.isDriving, "\(choice)")
+    }
+  }
+
+  func testAutoStopAppliesOnceTheCarHasShownAndLeft() async {
+    autoStop = .afterFiveMinutes
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    let start = time
+    await controller.startLiveActivity()
+    clock.run(until: start + 30)
+    controller.carPlayConnected()
+    controller.carPlayDisconnected()
+    let left = time
+    clock.run(until: left + 5 * 60)
+    XCTAssertTrue(controller.isDriving)
+    clock.run(until: left + 5 * 60 + 0.1)
+    XCTAssertFalse(controller.isDriving)
+  }
+
+  func testReconnectingDuringAnAutoStopWaitStartsItAgainNextTime() async {
+    autoStop = .afterFiveMinutes
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    await controller.carPlayActivated()
+    controller.carPlayResignedActive()
+    controller.carPlayDisconnected()
+    clock.run(until: time + 4 * 60)
+    controller.carPlayConnected()
+    clock.run(until: time + 10 * 60)
+    XCTAssertTrue(controller.isDriving)
+    controller.carPlayDisconnected()
+    let left = time
+    clock.run(until: left + 5 * 60)
+    XCTAssertTrue(controller.isDriving)
+    clock.run(until: left + 5 * 60 + 0.1)
+    XCTAssertFalse(controller.isDriving)
+    XCTAssertEqual(sensor.stops, 1)
+  }
+
+  func testChangingAutoStopDuringAWaitAppliesToIt() async {
+    // Shorter than the time already waited: the next beat ends the drive.
+    autoStop = .never
+    var sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    await controller.carPlayActivated()
+    controller.carPlayResignedActive()
+    controller.carPlayDisconnected()
+    var left = time
+    clock.run(until: left + 10 * 60)
+    XCTAssertTrue(controller.isDriving)
+    autoStop = .afterFiveMinutes
+    clock.run(until: time + DriveSessionController.heartbeatInterval)
+    XCTAssertFalse(controller.isDriving)
+    XCTAssertEqual(sensor.stops, 1)
+
+    // Longer, with the standard minute's deadline already set: that deadline doesn't end it.
+    autoStop = .afterOneMinute
+    sensor = Sensor()
+    activity = Activity()
+    controller = make(sensor, activity)
+    await controller.carPlayActivated()
+    controller.carPlayResignedActive()
+    controller.carPlayDisconnected()
+    left = time
+    clock.run(until: left + 30)
+    autoStop = .afterFifteenMinutes
+    clock.run(until: left + 15 * 60)
+    XCTAssertTrue(controller.isDriving)
+    clock.run(until: left + 15 * 60 + 0.1)
+    XCTAssertFalse(controller.isDriving)
+
+    // Never, during the standard minute: the drive keeps running.
+    autoStop = .afterOneMinute
+    sensor = Sensor()
+    activity = Activity()
+    controller = make(sensor, activity)
+    await controller.carPlayActivated()
+    controller.carPlayResignedActive()
+    controller.carPlayDisconnected()
+    left = time
+    clock.run(until: left + 30)
+    autoStop = .never
+    clock.run(until: left + 60 * 60)
+    XCTAssertTrue(controller.isDriving)
+    await controller.endDrive()
   }
 
   func testHeartbeatRenewsOnlyAShowingActivity() async {

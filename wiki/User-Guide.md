@@ -22,8 +22,22 @@ not required. Open Compasslet from the CarPlay launcher to start automatically.
 Connecting a cable alone may not launch the app.
 
 Switching to Maps keeps the drive running with the background location indicator.
-The drive ends a minute after CarPlay disconnects, when you end the Live Activity,
+The drive ends a minute after CarPlay disconnects (see
+[Live Activity settings](#live-activity-settings)), when you end the Live Activity,
 when location access or Precise Location is turned off, or after eight hours.
 Dismissing the Live Activity ends the drive unless Compasslet is connected on CarPlay.
 Open Compasslet on CarPlay again to start a new drive.
+
+### Live Activity settings
+
+In Compasslet's Settings, under Live Activity:
+
+- **Refresh Rate** sets how often Compasslet sends the Live Activity a new direction during a
+  drive: every second (the standard), or every 5, 15 or 30 seconds. iOS decides when the Lock
+  Screen and CarPlay show each update.
+- **Auto-Stop** sets how long a drive continues after CarPlay disconnects before it ends on
+  its own: 1 minute (the standard), 5 or 15 minutes, or Never. Leaving the Live Activity
+  running a long time may affect battery life. Drives still end after eight hours, and a drive
+  started from Shortcuts or Siri away from the car still ends after a minute unless CarPlay
+  connects.
 

@@ -13,6 +13,9 @@ struct CompassSettingsView: View {
         Section("Display") {
           NavigationLink("Appearance") { AppearanceSettingsView() }
         }
+        Section("Driving") {
+          NavigationLink("Live Activity") { LiveActivitySettingsView() }
+        }
         Section("Location") {
           LabeledContent("Location Enabled") {
             Text(locationEnabled ? "Yes" : "No").foregroundStyle(.primary)

@@ -1,6 +1,6 @@
 # Privacy Policy
 
-_Last updated November 3, 2026_
+_Last updated November 12, 2026_
 
 The Compasslet app does not collect personal information. It has no account,
 advertising, analytics or tracking, and the app sends no data to Lunchbox Labs. Lunchbox
@@ -15,8 +15,9 @@ comes from the phone's compass sensor and does not need location access. During 
 drive, location gives your travel direction, including while another app is visible. A
 drive starts when you open Compasslet on CarPlay, or when you start the Live Activity in
 the Compasslet app, from Shortcuts or with Siri. It ends when you tap or run End Live
-Activity, a minute after CarPlay disconnects, a minute after it starts from Shortcuts or
-Siri if CarPlay isn't connected, when location access or Precise Location is turned off,
+Activity, a minute after CarPlay disconnects (you can choose a longer time, or Never, under
+Auto-Stop in Compasslet's Settings), a minute after it starts from Shortcuts or Siri if CarPlay
+isn't connected, when location access or Precise Location is turned off,
 or after eight hours. Dismissing the Live Activity ends the drive unless Compasslet is
 connected on CarPlay, where travel direction continues until CarPlay disconnects or you
 end it.
@@ -38,7 +39,7 @@ receive it.
 
 ## Settings and Diagnostics
 
-Your display choices, and a summary of your car's CarPlay screen (its display scale,
+Your display and Live Activity choices, and a summary of your car's CarPlay screen (its display scale,
 image size limit and light or dark appearance), are stored on your device. They are
 included in your device backups and deleted when you delete the app.
 
