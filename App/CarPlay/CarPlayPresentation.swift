@@ -79,11 +79,13 @@ struct CarPlayUpdateGate {
 }
 
 /// Passes the drive to the CarPlay template through the update gate: once at the start, again
-/// whenever a value the template reads from the drive changes, and once more when a slot that
-/// held a bearing back ends, so that bearing still shows when nothing else changes.
+/// whenever a value the template reads from the drive changes or Debug Mode is switched, and once
+/// more when a slot that held a bearing back ends, so that bearing still shows when nothing else
+/// changes.
 @MainActor
 final class CarPlayTemplateUpdates {
   private let drive: DriveSessionController
+  private let diagnostics: CompassDiagnostics?
   private let clock: any DriveClock
   private let pass: @MainActor (CarPlayPresentation?) -> Void
   private var gate = CarPlayUpdateGate()
@@ -92,25 +94,29 @@ final class CarPlayTemplateUpdates {
   private var slotEnd: (date: Date, timer: DriveTimer)?
 
   /// `pass` runs on every pass, with the value to show or nil when the template keeps its own.
+  /// A pass when Debug Mode is switched lets the owner start or stop observing diagnostics.
   init(
-    drive: DriveSessionController, clock: any DriveClock = SystemDriveClock(),
+    drive: DriveSessionController, diagnostics: CompassDiagnostics? = CompassDiagnostics.shared,
+    clock: any DriveClock = SystemDriveClock(),
     pass: @escaping @MainActor (CarPlayPresentation?) -> Void
   ) {
     self.drive = drive
+    self.diagnostics = diagnostics
     self.clock = clock
     self.pass = pass
   }
 
   isolated deinit { stop() }
 
-  /// Passes the drive through now, then again after each change until `stop`.
+  /// Follows the drive until `stop`. The sequence's first value makes a pass once the task starts,
+  /// after any pass the caller made itself, and each later change makes another.
   func start() {
     guard observing == nil else { return }
-    update()
     let drive = drive
+    let diagnostics = diagnostics
     let changes = Observations { @MainActor in
       // Reading everything `update` reads from the drive ends each wait at the next change.
-      _ = (drive.presentation, drive.setupStatus, drive.isDriving)
+      _ = (drive.presentation, drive.setupStatus, drive.isDriving, diagnostics?.isEnabled)
     }
     observing = Task { [weak self] in
       for await _ in changes {

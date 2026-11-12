@@ -134,7 +134,7 @@ final class CarPlayPresentationTests: XCTestCase {
     let (drive, sensor, driveClock) = await runningDrive()
     let clock = TestDriveClock(now: driveClock.now)
     var shown: [String] = []
-    let updates = CarPlayTemplateUpdates(drive: drive, clock: clock) { next in
+    let updates = CarPlayTemplateUpdates(drive: drive, diagnostics: nil, clock: clock) { next in
       if let next { shown.append(next.bearing) }
     }
     let start = clock.now
@@ -165,7 +165,7 @@ final class CarPlayPresentationTests: XCTestCase {
     let (drive, sensor, driveClock) = await runningDrive()
     let clock = TestDriveClock(now: driveClock.now)
     var shown: [String] = []
-    let updates = CarPlayTemplateUpdates(drive: drive, clock: clock) { next in
+    let updates = CarPlayTemplateUpdates(drive: drive, diagnostics: nil, clock: clock) { next in
       if let next { shown.append(next.status) }
     }
     let start = clock.now
@@ -193,26 +193,123 @@ final class CarPlayPresentationTests: XCTestCase {
   }
 
   func testDriveChangesReachTheTemplateWithoutAPollUntilStopped() async {
-    let (drive, sensor, driveClock) = await runningDrive()
-    let clock = TestDriveClock(now: driveClock.now)
-    var shown: [String] = []
-    let updates = CarPlayTemplateUpdates(drive: drive, clock: clock) { next in
-      if let next { shown.append(next.status) }
-    }
-    updates.start()
-    XCTAssertEqual(shown, ["Start moving"])
-    sensor.receive?(reading(90, at: clock.now, speed: 0))
-    for _ in 0..<100 where shown.count < 2 { await Task.yield() }
-    XCTAssertEqual(shown, ["Start moving", "Stopped or moving too slowly"])
+    let (drive, sensor, clock) = await runningDrive()
+    let passes = Passes()
+    let updates = following(drive, on: clock, into: passes)
+    await next(passes) { updates.start() }
+    XCTAssertEqual(passes.shown.map(\.status), ["Start moving"])
+    await next(passes) { sensor.receive?(reading(90, at: clock.now, speed: 0)) }
+    XCTAssertEqual(
+      passes.shown.map(\.status), ["Start moving", "Stopped or moving too slowly"])
     updates.stop()
+    let count = passes.count
     sensor.receive?(reading(90, at: clock.now))
     for _ in 0..<100 { await Task.yield() }
-    XCTAssertEqual(shown, ["Start moving", "Stopped or moving too slowly"])
+    XCTAssertEqual(passes.count, count)
     await drive.endDrive()
   }
 
+  func testAnExpiredReadingClearsTheBearingWithoutAnotherChange() async {
+    let (drive, sensor, clock) = await runningDrive()
+    let passes = Passes()
+    let updates = following(drive, on: clock, into: passes)
+    await next(passes) { updates.start() }
+    let start = clock.now
+    await next(passes) { sensor.receive?(reading(90, at: start)) }
+    XCTAssertEqual(passes.shown.last?.bearing, "90° E")
+    // The drive's own timers expire the reading; nothing calls `update` here.
+    await next(passes) {
+      clock.run(until: start.addingTimeInterval(CompassSample.travelLifetime + 1))
+    }
+    XCTAssertEqual(passes.shown.last?.bearing, "—")
+    XCTAssertEqual(passes.shown.last?.status, "Direction unavailable")
+    updates.stop()
+    await drive.endDrive()
+  }
+
+  func testAnObservedBearingHeldByTheGateShowsAtTheSlotEnd() async {
+    let (drive, sensor, clock) = await runningDrive()
+    let passes = Passes()
+    let updates = following(drive, on: clock, into: passes)
+    await next(passes) { updates.start() }
+    let start = clock.now
+    let end = start.addingTimeInterval(CarPlayUpdateGate.slot)
+    await next(passes) { sensor.receive?(reading(90, at: start)) }
+    XCTAssertEqual(passes.shown.last?.bearing, "90° E")
+    // Fresh readings within the slot are held; the time moves without the drive's timers.
+    for elapsed in [3.0, 6.0, 9.0] {
+      let now = start.addingTimeInterval(elapsed)
+      clock.now = now
+      await next(passes, showing: false) { sensor.receive?(reading(180, at: now)) }
+      XCTAssertEqual(passes.shown.last?.bearing, "90° E")
+      XCTAssertTrue(clock.pending.contains(end))
+    }
+    clock.run(until: end)
+    XCTAssertEqual(passes.shown.last?.bearing, "180° S")
+    XCTAssertFalse(clock.pending.contains(end))
+    updates.stop()
+    await drive.endDrive()
+  }
+
+  func testSwitchingDebugModeMakesAPass() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+      UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+    let diagnostics = try CompassDiagnostics(directory: directory)
+    let (drive, _, clock) = await runningDrive()
+    let passes = Passes()
+    let updates = following(drive, on: clock, into: passes, diagnostics: diagnostics)
+    await next(passes) { updates.start() }
+    // Nothing on the drive changes, so the pass only lets the owner observe diagnostics.
+    await next(passes, showing: false) { try? diagnostics.setEnabled(true) }
+    XCTAssertTrue(diagnostics.isEnabled)
+    XCTAssertEqual(passes.shown.count, 1)
+    updates.stop()
+    try diagnostics.setEnabled(false)
+    await drive.endDrive()
+  }
+
+  /// What the updates pass to the template, with a wait for the next pass.
+  @MainActor
+  private final class Passes {
+    private(set) var shown: [CarPlayPresentation] = []
+    private(set) var count = 0
+    private var waiting: (expectation: XCTestExpectation, needsValue: Bool)?
+
+    func pass(_ next: CarPlayPresentation?) {
+      count += 1
+      if let next { shown.append(next) }
+      guard let waiting, next != nil || !waiting.needsValue else { return }
+      self.waiting = nil
+      waiting.expectation.fulfill()
+    }
+
+    func wait(for expectation: XCTestExpectation, needsValue: Bool) {
+      waiting = (expectation, needsValue)
+    }
+  }
+
+  /// Updates for `drive` whose passes go to `passes`, and that observe only these diagnostics.
+  private func following(
+    _ drive: DriveSessionController, on clock: TestDriveClock, into passes: Passes,
+    diagnostics: CompassDiagnostics? = nil
+  ) -> CarPlayTemplateUpdates {
+    CarPlayTemplateUpdates(drive: drive, diagnostics: diagnostics, clock: clock) { next in
+      passes.pass(next)
+    }
+  }
+
+  /// Makes `change`, then waits for the next pass that shows a value, or for any pass.
+  private func next(_ passes: Passes, showing: Bool = true, after change: () -> Void) async {
+    let passed = expectation(description: showing ? "A value shows" : "A pass")
+    passes.wait(for: passed, needsValue: showing)
+    change()
+    await fulfillment(of: [passed], timeout: 5)
+  }
+
   /// A drive started by CarPlay on a clock that moves only when the test sets it, whose timers
-  /// never fire.
+  /// fire only when the test runs them.
   private func runningDrive() async -> (DriveSessionController, Sensor, TestDriveClock) {
     let sensor = Sensor()
     let clock = TestDriveClock()

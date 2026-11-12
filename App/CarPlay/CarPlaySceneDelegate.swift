@@ -32,13 +32,15 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     updates.update()
     interfaceController.setRootTemplate(screen.template, animated: false, completion: nil)
     // The template draws only what the updates read from the drive, so following those values
-    // covers every change; course still shows in ten-second slots.
+    // covers every change; course still shows in ten-second slots. Their first value makes a
+    // second pass, now that the template is shown.
     updates.start()
     // Connection itself is not activation; use UISceneDelegate's foreground callback.
   }
 
   func sceneDidBecomeActive(_ scene: UIScene) {
     sceneActive = true
+    refreshStyle()
     observeDiagnostics()
     bridge?.activate()
   }
@@ -54,10 +56,10 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     didDisconnectInterfaceController interfaceController: CPInterfaceController
   ) { disconnect() }
 
-  /// The car's light or dark style arrives through its trait collection, not the drive.
+  /// The template's style comes from the car's trait collection, not the drive. Apple doesn't say
+  /// whether that collection has changed by the time this arrives, so it's read on a later turn.
   func contentStyleDidChange(_ contentStyle: UIUserInterfaceStyle) {
-    guard let compass, let interfaceController else { return }
-    compass.refresh(traits: interfaceController.carTraitCollection)
+    Task { [weak self] in self?.refreshStyle() }
   }
 
   private func disconnect() {
@@ -75,15 +77,22 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
   private func render(_ next: CarPlayPresentation?) {
     guard drive != nil, let compass, let interfaceController else { return }
     observeDiagnostics()
-    compass.refresh(traits: interfaceController.carTraitCollection)
+    refreshStyle()
     guard let next else { return }
     compass.update(next, traits: interfaceController.carTraitCollection)
     _ = try? CompassDiagnostics.shared?.record(.fullscreen, kind: .templateUpdated)
   }
 
+  /// Redraws the current content when the car's style or scale differs from what it was drawn for.
+  private func refreshStyle() {
+    guard let compass, let interfaceController else { return }
+    compass.refresh(traits: interfaceController.carTraitCollection)
+  }
+
   /// Observes whether a drive shows on the active scene. Diagnostics count a gap over 2 seconds
   /// as a new session, and passes come only with changes, so while one shows with Debug Mode on,
-  /// this observes again a second later, through stretches with nothing new to show.
+  /// this observes again a second later, through stretches with nothing new to show. That tick
+  /// also checks the car's style.
   private func observeDiagnostics() {
     let active = sceneActive && drive?.isDriving == true
     try? CompassDiagnostics.shared?.observe(.fullscreen, active: active)
@@ -97,6 +106,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
       do { try await Task.sleep(for: .seconds(1)) } catch { return }
       guard let self, !Task.isCancelled else { return }
       self.diagnosticsTick = nil
+      self.refreshStyle()
       self.observeDiagnostics()
     }
   }

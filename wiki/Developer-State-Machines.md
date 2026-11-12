@@ -8,8 +8,13 @@ transition they touch. File and line references are to commit
 symbol if lines have moved. [Development](Developer-Development#reading-policies) gives the
 reading policies these machines enforce.
 
-Open failure states are listed here and under their machine, each tracked as an issue. None
-are open; the three found while mapping these machines are fixed:
+Open failure states are listed here and under their machine, each tracked as an issue. One is
+open:
+
+- The CarPlay dial can keep the wrong light or dark style on an idle scene, as the
+  [CarPlay update gate](#carplay-update-gate) section describes.
+
+The three found while mapping these machines are fixed:
 
 - [#247](https://github.com/lunchbox-labs/compasslet/issues/247), fixed by
   [#250](https://github.com/lunchbox-labs/compasslet/pull/250):
@@ -39,7 +44,7 @@ active.
 | [Live Activity content](#live-activity-content) | `CompassActivityController` | The last content state does |
 | [Background start intent](#background-start-intent) | `StartLiveActivityIntent` | No |
 | [CarPlay scene](#carplay-scene) | `CarPlaySceneDelegate`, `CarPlayLifecycleBridge` | No |
-| [CarPlay update gate](#carplay-update-gate) | `CarPlayUpdateGate` | No |
+| [CarPlay update gate](#carplay-update-gate) | `CarPlayUpdateGate`, `CarPlayTemplateUpdates` | No |
 | [Travel course filter](#travel-course-filter) | `TravelCourseFilter` | No |
 | [Phone heading](#phone-heading) | `HeadingController` | No |
 | [Phone location and city](#phone-location-and-city) | `PhoneLocationController` | No |
@@ -355,19 +360,20 @@ the slot to end. When it holds a value back, `heldUntil` reports when that slot 
 equal to the one showing isn't held, and leaves `heldUntil` nil.
 
 `CarPlayTemplateUpdates` (`App/CarPlay/CarPlayPresentation.swift`) feeds the gate for each
-connected scene. `CarPlaySceneDelegate` creates it on connect, passes the drive through once
-before setting the root template, and `start()` passes it once more and then follows an
-`Observations` sequence over what each pass reads from the drive: `presentation`,
-`setupStatus` and `isDriving`. Each change makes one pass; nothing runs while the drive is
-unchanged. A held bearing would otherwise wait for an unrelated change, so while the gate holds
-one, a single `DriveClock` timer is set for `heldUntil`, and its pass shows the value the drive
-has then.
+connected scene. `CarPlaySceneDelegate` creates it on connect and passes the drive through once
+before setting the root template. `start()` then follows an `Observations` sequence over what
+each pass reads from the drive (`presentation`, `setupStatus` and `isDriving`) and over Debug
+Mode (`CompassDiagnostics.isEnabled`). The sequence's first value makes a second pass on
+connect, now that the template is shown, and each later change makes one more. Apart from the
+Debug Mode tick below, nothing runs while those values are unchanged. A held bearing would
+otherwise wait for an unrelated change, so while the gate holds one, a single `DriveClock`
+timer is set for `heldUntil`, and its pass shows the value the drive has then.
 
 ```mermaid
 stateDiagram-v2
     direction LR
     [*] --> Following: didConnect, pass, start()
-    Following --> Following: drive change, value shown or already showing
+    Following --> Following: drive or Debug Mode change, value shown or already showing
     Following --> Holding: drive change, gate holds a bearing, timer for heldUntil
     Holding --> Holding: drive change held until the same end, timer kept
     Holding --> Following: drive change shown or already showing, timer cancelled
@@ -382,16 +388,30 @@ task holds the updates weakly and checks for cancellation after each wait, so a 
 already on its way when CarPlay disconnects makes no pass. A pass also depends on the time,
 because a bearing stops showing once its sample is more than 5 seconds old; the drive
 publishes an `unavailable` presentation when its reading expires (`expireReading`), and that
-change makes the pass that clears the bearing. Each pass also redraws the current content when
-the car's style or scale has changed (`CarPlayCompassTemplate.refresh(traits:)`), and
-`contentStyleDidChange` does the same when CarPlay reports a new light or dark style, since
-style comes from the car's trait collection rather than the drive.
+change makes the pass that clears the bearing.
+
+The dial's light or dark style and scale come from the car's trait collection
+(`CPInterfaceController.carTraitCollection`), not the drive, and CarPlay gives a non-navigation
+app no trait-change callback for it (only navigation apps get `carWindow`).
+`CarPlayCompassTemplate.refresh(traits:)` redraws the current content when those traits differ
+from the ones it was drawn for. It runs on every pass, on scene activation, on each Debug Mode
+tick, and on the main actor's turn after `contentStyleDidChange`. That callback reports the
+scene's content style, which Apple doesn't document as the trait collection's style, nor whether
+the collection has changed by the time it arrives; with Always Show Dark Map on, the content
+style can stay dark while the interface style changes.
+
+Open failure state: on an idle scene (no drive, a drive that has ended, or a drive whose shown
+value doesn't change, as when parked) with Debug Mode off, a change to the trait collection's
+style or scale that `contentStyleDidChange` doesn't accompany, or that lands after the turn it
+schedules, isn't redrawn. The dial keeps the old style until the next pass, scene activation
+or content style change. The 250 ms poll this replaced caught it within 250 ms.
 
 Passes also observe the `fullscreen` diagnostics surface, which counts a gap over 2 seconds as
 a new session. While Debug Mode is on, a drive runs and the scene is active,
 `CarPlaySceneDelegate.observeDiagnostics` sets one task to observe again a second later, so
 stretches with nothing new to show still count as active. It stops at the first observation
-with any of those false, and on resign and disconnect.
+with any of those false, and on resign and disconnect. Switching Debug Mode on makes a pass,
+which starts it.
 
 ## Travel course filter
 
