@@ -11,7 +11,8 @@ reading policies these machines enforce.
 Open failure states are listed here and under their machine, each tracked as an issue. One is
 open:
 
-- The CarPlay dial can keep the wrong light or dark style on an idle scene, as the
+- [#336](https://github.com/lunchbox-labs/compasslet/issues/336): the CarPlay dial can keep the
+  wrong light or dark style on an idle scene, as the
   [CarPlay update gate](#carplay-update-gate) section describes.
 
 The three found while mapping these machines are fixed:
@@ -400,7 +401,7 @@ scene's content style, which Apple doesn't document as the trait collection's st
 the collection has changed by the time it arrives; with Always Show Dark Map on, the content
 style can stay dark while the interface style changes.
 
-Open failure state: on an idle scene (no drive, a drive that has ended, or a drive whose shown
+Open failure state ([#336](https://github.com/lunchbox-labs/compasslet/issues/336)): on an idle scene (no drive, a drive that has ended, or a drive whose shown
 value doesn't change, as when parked) with Debug Mode off, a change to the trait collection's
 style or scale that `contentStyleDidChange` doesn't accompany, or that lands after the turn it
 schedules, isn't redrawn. The dial keeps the old style until the next pass, scene activation
