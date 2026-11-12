@@ -209,7 +209,7 @@ final class CompassActivityController: CompassActivityPresenting {
         await write(latest, retainingReading: true, on: handle)
       } else if let held = heldReading, refreshIntervalHasPassed(at: now()) {
         heldReading = nil
-        await commit(held, at: now(), on: handle)
+        if isRecentEnough(held, at: now()) { await commit(held, at: now(), on: handle) }
       } else {
         return
       }
@@ -221,6 +221,18 @@ final class CompassActivityController: CompassActivityPresenting {
   private func refreshIntervalHasPassed(at date: Date) -> Bool {
     guard let lastUsableWrite else { return true }
     return date.timeIntervalSince(lastUsableWrite) >= refreshInterval()
+  }
+
+  /// Whether a held reading is still worth writing: recorded no longer ago than the refresh
+  /// interval and a reading's lifetime. A held reading is written up to an interval after it was
+  /// recorded, past the lifetime a handed-over reading has, but one held longer, as when the
+  /// renewal came late, is passed over.
+  private func isRecentEnough(
+    _ held: CompassActivityAttributes.ContentState, at date: Date
+  ) -> Bool {
+    guard let sampleTime = held.sampleTime else { return false }
+    let age = date.timeIntervalSince(sampleTime)
+    return age <= refreshInterval() + CompassSample.travelLifetime
   }
 
   private func write(
@@ -245,7 +257,10 @@ final class CompassActivityController: CompassActivityPresenting {
         return
       }
       let interval = refreshInterval()
-      if let lastUsableWrite, date.timeIntervalSince(lastUsableWrite) < interval {
+      // At a slower rate, the first direction after a clear shows at once rather than waiting out
+      // the interval; the standard rate keeps its limit, as before the setting existed.
+      let limited = retainedBearing != nil || interval <= Self.changedReadingInterval
+      if limited, let lastUsableWrite, date.timeIntervalSince(lastUsableWrite) < interval {
         // At the standard rate the next reading follows about when the interval ends, so this one
         // is passed over; a slower rate holds it for the renewal to write.
         if interval > Self.changedReadingInterval { heldReading = content }

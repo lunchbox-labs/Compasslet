@@ -1105,6 +1105,48 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertEqual(sensor.stops, 1)
   }
 
+  func testADriveWithoutItsLiveActivityEndsAMinuteAfterTheCarLeaves() async {
+    for choice in [LiveActivityAutoStop.afterFifteenMinutes, .never] {
+      for dismissed in [true, false] {
+        autoStop = choice
+        let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+        // Dismissed during the CarPlay drive, or unable to start: the drive goes on without it.
+        activity.fails = !dismissed
+        await controller.carPlayActivated()
+        if dismissed { activity.onDismiss?() }
+        XCTAssertEqual(controller.compactStatus, dismissed ? .dismissed : .unavailable)
+        controller.carPlayResignedActive()
+        controller.carPlayDisconnected()
+        let left = time
+        // Nothing would show the drive once the car has gone, so auto-stop doesn't keep it.
+        clock.run(until: left + DriveSessionController.carPlayAbsenceLimit)
+        XCTAssertTrue(controller.isDriving)
+        clock.run(until: left + DriveSessionController.carPlayAbsenceLimit + 0.1)
+        XCTAssertFalse(controller.isDriving, "\(choice), dismissed \(dismissed)")
+        XCTAssertEqual(sensor.stops, 1)
+      }
+    }
+  }
+
+  func testStartingTheLiveActivityAgainDuringTheWaitAppliesAutoStop() async {
+    autoStop = .never
+    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
+    await controller.carPlayActivated()
+    activity.onDismiss?()
+    controller.carPlayResignedActive()
+    controller.carPlayDisconnected()
+    let left = time
+    clock.run(until: left + 30)
+    // Started again from Shortcuts while the car is away, it shows the drive again.
+    await controller.startLiveActivity()
+    XCTAssertEqual(controller.compactStatus, .active)
+    clock.run(until: left + 60 * 60)
+    XCTAssertTrue(controller.isDriving)
+    // Dismissed again without CarPlay, the drive ends at once, as before.
+    activity.onDismiss?()
+    XCTAssertFalse(controller.isDriving)
+  }
+
   func testChangingAutoStopDuringAWaitAppliesToIt() async {
     // Shorter than the time already waited: the next beat ends the drive.
     autoStop = .never

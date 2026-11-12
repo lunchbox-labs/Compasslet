@@ -14,7 +14,7 @@ struct LiveActivitySettingsView: View {
         Text("Refresh Rate")
       } footer: {
         Text(
-          "How often Compasslet sends the Live Activity a new direction during a drive. iOS decides when the Lock Screen and CarPlay show it."
+          "How often the Live Activity gets a new direction during a drive. iOS decides when the Lock Screen and CarPlay show each update. Compasslet’s own CarPlay screen isn’t affected."
         )
       }
       Section {
@@ -23,7 +23,7 @@ struct LiveActivitySettingsView: View {
         Text("Auto-Stop")
       } footer: {
         Text(
-          "How long a drive continues after CarPlay disconnects before it ends on its own. Drives still end after eight hours. Leaving the Live Activity running a long time may affect battery life."
+          "How long a drive continues after CarPlay disconnects. Until it ends, Compasslet keeps using your location, which uses more battery. Drives always end after eight hours."
         )
       }
     }

@@ -15,12 +15,12 @@ comes from the phone's compass sensor and does not need location access. During 
 drive, location gives your travel direction, including while another app is visible. A
 drive starts when you open Compasslet on CarPlay, or when you start the Live Activity in
 the Compasslet app, from Shortcuts or with Siri. It ends when you tap or run End Live
-Activity, a minute after CarPlay disconnects (you can choose a longer time, or Never, under
-Auto-Stop in Compasslet's Settings), a minute after it starts from Shortcuts or Siri if CarPlay
-isn't connected, when location access or Precise Location is turned off,
-or after eight hours. Dismissing the Live Activity ends the drive unless Compasslet is
-connected on CarPlay, where travel direction continues until CarPlay disconnects or you
-end it.
+Activity, a minute after CarPlay disconnects (you can choose a longer time, or Never, in
+Compasslet's Settings › Live Activity › Auto-Stop), a minute after it starts from
+Shortcuts or Siri if CarPlay isn't connected, when location access or Precise Location is
+turned off, or after eight hours. Dismissing the Live Activity ends the drive unless
+Compasslet is connected on CarPlay, where travel direction continues until CarPlay
+disconnects or you end it.
 
 Apart from the nearest-city lookup below, location is used only on your device as it
 arrives. Compasslet does not save location or route history. The Live Activity shows
@@ -39,9 +39,9 @@ receive it.
 
 ## Settings and Diagnostics
 
-Your display and Live Activity choices, and a summary of your car's CarPlay screen (its display scale,
-image size limit and light or dark appearance), are stored on your device. They are
-included in your device backups and deleted when you delete the app.
+Your display and Live Activity choices, and a summary of your car's CarPlay screen (its
+display scale, image size limit and light or dark appearance), are stored on your device.
+They are included in your device backups and deleted when you delete the app.
 
 Debug Mode is off unless you turn it on. While it is on, Compasslet records timing
 events, with dates and times, for the Live Activity and CarPlay display on your device.

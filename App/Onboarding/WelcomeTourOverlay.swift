@@ -207,7 +207,7 @@ struct WelcomeTourOverlay: View {
         ? shown : shown + " You’re seeing a preview. It hides when you move on."
     case .shortcuts:
       return
-        "Start Live Activity and End Live Activity are also in the Shortcuts app for your automations, and you can ask Siri to “Start Compasslet Live Activity”. If your iPhone asks you to unlock it, do it while parked. The Live Activity ends a minute after CarPlay disconnects, or after a minute if CarPlay doesn’t connect."
+        "Start Live Activity and End Live Activity are also in the Shortcuts app for your automations, and you can ask Siri to “Start Compasslet Live Activity”. If your iPhone asks you to unlock it, do it while parked. The Live Activity ends after the Auto-Stop time once CarPlay disconnects (a minute unless you change it in Settings), or after a minute if CarPlay doesn’t connect."
     }
   }
 }

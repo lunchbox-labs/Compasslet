@@ -66,7 +66,7 @@ final class DriveSessionController {
     /// `carPlayAbsenceLimit` passes without it.
     case awaited(since: Date)
     /// The car left during the drive. The drive ends once the auto-stop delay passes, unless
-    /// auto-stop is never.
+    /// auto-stop is never, or after `carPlayAbsenceLimit` while its Live Activity isn't running.
     case left(since: Date)
   }
   /// No drive, or one drive. `liveActivityFailed` records that the last start ended because its
@@ -575,12 +575,20 @@ final class DriveSessionController {
 
   /// How long the car can stay away, and since when it has: the start window for a drive started
   /// away from it, or the auto-stop delay once it has left. Nil while the car shows, or once it
-  /// has left when auto-stop is never.
+  /// has left when auto-stop is never. Auto-stop keeps only a drive whose Live Activity is
+  /// starting or showing; one whose Live Activity was dismissed or couldn't start shows nothing
+  /// once the car has gone, so it ends after the standard minute whatever auto-stop is set to.
   private func carAbsence(of session: DriveSession) -> (since: Date, limit: TimeInterval)? {
     switch session.car {
-    case .present: nil
-    case .awaited(let since): (since: since, limit: Self.carPlayAbsenceLimit)
-    case .left(let since): autoStop().delay.map { (since: since, limit: $0) }
+    case .present:
+      return nil
+    case .awaited(let since):
+      return (since: since, limit: Self.carPlayAbsenceLimit)
+    case .left(let since):
+      guard session.liveActivity.isRunning else {
+        return (since: since, limit: Self.carPlayAbsenceLimit)
+      }
+      return autoStop().delay.map { (since: since, limit: $0) }
     }
   }
 

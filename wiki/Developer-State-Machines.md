@@ -205,20 +205,26 @@ stateDiagram-v2
     Awaited --> Ended: 60 s without the car (carPlayAbsenceLimit)
     Present --> Left: CarPlay disconnects without car audio, or car audio drops without CarPlay
     Left --> Present: CarPlay connects or car audio returns
-    Left --> Ended: auto-stop delay passes (1 minute by default; never ends it when Never)
+    Left --> Ended: auto-stop delay passes while the Live Activity runs (never, with Never)
+    Left --> Ended: 60 s while the Live Activity is dismissed or couldn't start
 ```
 
 The states are `DriveSession.car`, a `CarPresence`: `present`, `awaited(since:)` or
 `left(since:)`. `carAbsence(of:)` gives each its limit. A drive started away from the car, as
 from Shortcuts, always gets the 60 s start window (`carPlayAbsenceLimit`), whatever auto-stop
 is set to. Once the car has shown and left, the limit is the auto-stop delay
-(`LiveActivityAutoStop`: 1, 5 or 15 minutes, or never), which `DriveSessionController` reads
+(`LiveActivityAutoStop`: 1, 5 or 15 minutes, or never) while the drive's Live Activity is
+`starting` or `active` (`LiveActivityStatus.isRunning`), which `DriveSessionController` reads
 through its `autoStop` closure each time it checks or sets a limit, so a change in Settings
-applies to a wait already running. The standard choice, 1 minute, is the same 60 s as before
-the setting existed. With Never, nothing ends the drive for the car's absence: it runs until
-it is ended, its Live Activity is dismissed, setup leaves `ready` or the eight-hour
-`driveLimit` passes. The deadline timer ends the drive at the first moment past the limit,
-and every heartbeat checks it too.
+applies to a wait already running. A drive whose Live Activity is `dismissed` or `unavailable`
+would show nothing once the car has gone, so it keeps the 60 s limit whatever auto-stop is set
+to; starting the Live Activity again during the wait, as from Shortcuts, brings the auto-stop
+delay back at the next heartbeat or deadline. The standard choice, 1 minute, is the same 60 s
+as before the setting existed. With Never and a running Live Activity, nothing ends the drive
+for the car's absence: it runs until it is ended, its Live Activity is dismissed (which ends a
+drive without CarPlay at once), setup leaves `ready` or the eight-hour `driveLimit` passes.
+The deadline timer ends the drive at the first moment past the limit, and every heartbeat
+checks it too.
 
 The choice is stored with the refresh rate as `LiveActivityPreferences` (in
 `Sources/CompassCore/LiveActivityPreferences.swift`) by `LiveActivitySettingsStore`
@@ -287,7 +293,8 @@ reaches the card:
 
 - a usable reading is written only when it is a current travel bearing
   (`CompassSample.isCurrent(at:)` in `Sources/CompassCore/TravelCourse.swift`: the vehicle's
-  course against true north, a heading in 0..<360, and 0 to 5 s old), and only when its rounded
+  course against true north, a heading in 0..<360, and 0 to 5 s old) when it is handed over
+  (a held reading is the one deliberate exception, below), and only when its rounded
   degrees or cardinal point change, at most once per refresh interval. The interval comes from
   the refresh rate setting (`LiveActivityRefreshRate`, read through the controller's
   `refreshInterval` closure at each write): every second by default
@@ -298,11 +305,18 @@ reaches the card:
   its own sample time, once the interval has passed, by the drain after the drive's next
   `renew()`. A newer changed reading replaces it, and a reading back at the direction shown, a
   write without a bearing, a clear, a dismissal or an end drops it, so a turn just before a
-  stop still reaches the card;
+  stop still reaches the card. This is a deliberate exception to the 5 s rule: the reading was
+  current when it was handed over, and is written up to an interval after it was recorded,
+  with that sample time, so the card dates it correctly. A held reading recorded longer ago
+  than the interval plus the 5 s lifetime, as when the renewal comes late, is passed over
+  (`isRecentEnough`);
+- at a slower rate, a changed reading while no bearing is shown, as after a clear, is written
+  at once rather than waiting out the interval since the last bearing. The standard rate keeps
+  its limit there, as before the setting existed;
 - while a reading is retained (`retainedBearing`), slow, unreliable or unavailable input, or a
-  bearing that aged past 5 s in the queue (`CompassSample.hasExpired(at:)`), leaves the card
-  unchanged, so the last direction and its sample time stay visible through stops. A usable
-  sample that was never current, such as one dated after the clock, clears it;
+  handed-over bearing that aged past 5 s in the queue (`CompassSample.hasExpired(at:)`), leaves
+  the card unchanged, so the last direction and its sample time stay visible through stops. A
+  usable sample that was never current, such as one dated after the clock, clears it;
 - `invalidateReading()` after a location interruption clears the retained reading and shows
   unavailable;
 - `waiting` is always written.

@@ -867,9 +867,9 @@ struct CompassActivityControllerTests {
     await controller.end().value
   }
 
-  @Test func aHeldReadingGivesWayToTheShownDirectionAClearOrAnEnd() async throws {
+  @Test func aHeldReadingGivesWayToTheShownDirectionOrAClear() async throws {
     let start = Date(timeIntervalSince1970: 100)
-    for ending in ["return", "clear", "end", "dismissal"] {
+    for ending in ["return", "clear"] {
       let system = TestActivitySystem()
       var time = start
       let controller = CompassActivityController(
@@ -879,11 +879,10 @@ struct CompassActivityControllerTests {
       time = start + 1
       await controller.showAndWait(travel(90, at: time))
       time = start + 2
-      switch ending {
-      case "return": await controller.showAndWait(travel(42, at: time))
-      case "clear": await controller.invalidateAndWait()
-      case "end": await controller.end().value
-      default: system.handle.onDismiss?()
+      if ending == "return" {
+        await controller.showAndWait(travel(42, at: time))
+      } else {
+        await controller.invalidateAndWait()
       }
       time = start + 15
       controller.renew()
@@ -891,6 +890,50 @@ struct CompassActivityControllerTests {
       #expect(!system.handle.updates.contains { $0.bearing == 90 }, "\(ending)")
       await controller.end().value
     }
+  }
+
+  @Test func aHeldReadingRecordedTooLongAgoIsPassedOver() async throws {
+    let system = TestActivitySystem()
+    let start = Date(timeIntervalSince1970: 100)
+    var time = start
+    let controller = CompassActivityController(
+      system: system, now: { time }, refreshInterval: { 15 })
+    try await controller.start()
+    await controller.showAndWait(travel(42, at: time))
+    time = start + 1
+    await controller.showAndWait(travel(90, at: time))
+    // The renewal comes late, past the interval and a reading's lifetime after the sample.
+    time = start + 1 + 15 + CompassSample.travelLifetime + 1
+    controller.renew()
+    await controller.waitForPendingOperations()
+    #expect(system.handle.updates.map(\.bearing) == [42])
+    // It is dropped rather than kept for a later beat.
+    time += 1
+    controller.renew()
+    await controller.waitForPendingOperations()
+    #expect(!system.handle.updates.contains { $0.bearing == 90 })
+    await controller.end().value
+  }
+
+  @Test func aSlowerRefreshRateShowsTheFirstDirectionAfterAClearAtOnce() async throws {
+    let system = TestActivitySystem()
+    let start = Date(timeIntervalSince1970: 100)
+    var time = start
+    let controller = CompassActivityController(
+      system: system, now: { time }, refreshInterval: { 15 })
+    try await controller.start()
+    await controller.showAndWait(travel(42, at: time))
+    time = start + 1
+    await controller.invalidateAndWait()
+    // Nothing is shown after the clear, so the next direction doesn't wait out the interval.
+    time = start + 2
+    await controller.showAndWait(travel(90, at: time))
+    #expect(system.handle.updates.map(\.bearing) == [42, nil, 90])
+    // The direction shown starts a new interval for the next change.
+    time = start + 3
+    await controller.showAndWait(travel(180, at: time))
+    #expect(system.handle.updates.map(\.bearing) == [42, nil, 90])
+    await controller.end().value
   }
 
   @Test func aRefreshRateChangeAppliesToTheNextWrite() async throws {
