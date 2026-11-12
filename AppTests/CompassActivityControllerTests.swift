@@ -810,6 +810,205 @@ struct CompassActivityControllerTests {
     await controller.end().value
   }
 
+  @Test func theStandardUpdateFrequencyPassesOverAReadingThatComesTooSoon() async throws {
+    let system = TestActivitySystem()
+    var time = Date(timeIntervalSince1970: 100)
+    let controller = CompassActivityController(system: system, now: { time })
+    try await controller.start()
+    await controller.showAndWait(travel(42, at: time))
+    time += 0.5
+    await controller.showAndWait(travel(90, at: time))
+    // As before the update frequency setting: nothing holds the reading for a later write.
+    time += 1
+    controller.renew()
+    await controller.waitForPendingOperations()
+    #expect(system.handle.updates.map(\.bearing) == [42])
+    await controller.end().value
+  }
+
+  @Test func aLowerUpdateFrequencyWritesTheNewestChangeOnceItsIntervalEnds() async throws {
+    let system = TestActivitySystem()
+    let start = Date(timeIntervalSince1970: 100)
+    var time = start
+    let controller = CompassActivityController(
+      system: system, now: { time }, refreshInterval: { 15 })
+    try await controller.start()
+    await controller.showAndWait(travel(42, at: time))
+    time = start + 1
+    await controller.showAndWait(travel(90, at: time))
+    time = start + 2
+    await controller.showAndWait(travel(180, at: time))
+    // The car stops: nothing usable follows, and the reading ages past its lifetime.
+    time = start + 3
+    await controller.showAndWait(.init(sample: nil, status: .slow))
+    time = start + 14
+    controller.renew()
+    await controller.waitForPendingOperations()
+    #expect(system.handle.updates.map(\.bearing) == [42])
+    time = start + 15
+    controller.renew()
+    await controller.waitForPendingOperations()
+    // Only the newest change is written, with the time it was recorded.
+    #expect(system.handle.updates.map(\.bearing) == [42, 180])
+    #expect(system.handle.updates.last?.sampleTime == start + 2)
+    #expect(system.handle.updates.last?.status == .usable)
+    #expect(
+      system.handle.updates.last?.expiry
+        == time.addingTimeInterval(CompassActivityController.staleInterval))
+    // The write starts a new interval, and nothing is left to write at the next beat.
+    time = start + 16
+    await controller.showAndWait(travel(270, at: time))
+    controller.renew()
+    await controller.waitForPendingOperations()
+    #expect(system.handle.updates.map(\.bearing) == [42, 180])
+    time = start + 30
+    await controller.showAndWait(travel(0, at: time))
+    #expect(system.handle.updates.map(\.bearing) == [42, 180, 0])
+    await controller.end().value
+  }
+
+  @Test func aHeldReadingGivesWayToTheShownDirectionOrAClear() async throws {
+    let start = Date(timeIntervalSince1970: 100)
+    for ending in ["return", "clear"] {
+      let system = TestActivitySystem()
+      var time = start
+      let controller = CompassActivityController(
+        system: system, now: { time }, refreshInterval: { 15 })
+      try await controller.start()
+      await controller.showAndWait(travel(42, at: time))
+      time = start + 1
+      await controller.showAndWait(travel(90, at: time))
+      time = start + 2
+      if ending == "return" {
+        await controller.showAndWait(travel(42, at: time))
+      } else {
+        await controller.invalidateAndWait()
+      }
+      time = start + 15
+      controller.renew()
+      await controller.waitForPendingOperations()
+      #expect(!system.handle.updates.contains { $0.bearing == 90 }, "\(ending)")
+      await controller.end().value
+    }
+  }
+
+  @Test func aHeldReadingRecordedTooLongAgoIsPassedOver() async throws {
+    let system = TestActivitySystem()
+    let start = Date(timeIntervalSince1970: 100)
+    var time = start
+    let controller = CompassActivityController(
+      system: system, now: { time }, refreshInterval: { 15 })
+    try await controller.start()
+    await controller.showAndWait(travel(42, at: time))
+    time = start + 1
+    await controller.showAndWait(travel(90, at: time))
+    // The renewal comes late, past the interval and a reading's lifetime after the sample.
+    time = start + 1 + 15 + CompassSample.travelLifetime + 1
+    controller.renew()
+    await controller.waitForPendingOperations()
+    #expect(system.handle.updates.map(\.bearing) == [42])
+    // It is dropped rather than kept for a later beat.
+    time += 1
+    controller.renew()
+    await controller.waitForPendingOperations()
+    #expect(!system.handle.updates.contains { $0.bearing == 90 })
+    await controller.end().value
+  }
+
+  @Test func aLowerUpdateFrequencyShowsTheFirstDirectionAfterAClearAtOnce() async throws {
+    let system = TestActivitySystem()
+    let start = Date(timeIntervalSince1970: 100)
+    var time = start
+    let controller = CompassActivityController(
+      system: system, now: { time }, refreshInterval: { 15 })
+    try await controller.start()
+    await controller.showAndWait(travel(42, at: time))
+    time = start + 1
+    await controller.invalidateAndWait()
+    // Nothing is shown after the clear, so the next direction doesn't wait out the interval.
+    time = start + 2
+    await controller.showAndWait(travel(90, at: time))
+    #expect(system.handle.updates.map(\.bearing) == [42, nil, 90])
+    // The direction shown starts a new interval for the next change.
+    time = start + 3
+    await controller.showAndWait(travel(180, at: time))
+    #expect(system.handle.updates.map(\.bearing) == [42, nil, 90])
+    await controller.end().value
+  }
+
+  @Test func aUpdateFrequencyChangeAppliesToTheNextWrite() async throws {
+    let system = TestActivitySystem()
+    let start = Date(timeIntervalSince1970: 100)
+    var time = start
+    let settings = LiveActivitySettingsStore(defaults: nil)
+    settings.update { $0.updateFrequency = .everyFifteenSeconds }
+    let controller = CompassActivityController(
+      system: system, now: { time },
+      refreshInterval: { settings.preferences.updateFrequency.interval })
+    try await controller.start()
+    await controller.showAndWait(travel(42, at: time))
+    time = start + 2
+    await controller.showAndWait(travel(90, at: time))
+    #expect(system.handle.updates.map(\.bearing) == [42])
+    // Back to the standard rate: the held reading is written at the next beat.
+    settings.update { $0.updateFrequency = .everySecond }
+    time = start + 3
+    controller.renew()
+    await controller.waitForPendingOperations()
+    #expect(system.handle.updates.map(\.bearing) == [42, 90])
+    // A slower rate limits the next change from the last write.
+    settings.update { $0.updateFrequency = .everyFiveSeconds }
+    time = start + 6
+    await controller.showAndWait(travel(180, at: time))
+    #expect(system.handle.updates.map(\.bearing) == [42, 90])
+    time = start + 8
+    controller.renew()
+    await controller.waitForPendingOperations()
+    #expect(system.handle.updates.map(\.bearing) == [42, 90, 180])
+    await controller.end().value
+  }
+
+  @Test func aDriveAtALowerUpdateFrequencyShowsTheTurnBeforeAStop() async throws {
+    let system = TestActivitySystem()
+    let clock = TestDriveClock(now: Date(timeIntervalSince1970: 100))
+    let start = clock.now
+    let sensor = TestTravelSensor()
+    let activity = CompassActivityController(
+      system: system, now: { clock.now }, refreshInterval: { 15 })
+    let drive = DriveSessionController(sensor: sensor, activity: activity, clock: clock)
+    await drive.carPlayActivated()
+    func send(_ degrees: Double, speed: Double = 10) {
+      sensor.receive?(
+        .reading(
+          .init(
+            courseDegrees: degrees, courseAccuracyDegrees: 1, speedMetersPerSecond: speed,
+            speedAccuracyMetersPerSecond: 1, horizontalAccuracyMeters: 1, timestamp: clock.now)))
+    }
+    send(42)
+    await drive.waitForPendingOperations()
+    clock.run(until: start + 1)
+    send(90)
+    await drive.waitForPendingOperations()
+    clock.run(until: start + 2)
+    send(90, speed: 0)
+    await drive.waitForPendingOperations()
+    #expect(system.handle.updates.compactMap(\.bearing) == [42])
+    // The heartbeat writes the turn once the interval has passed, though the car has stopped.
+    clock.run(until: start + 15.5)
+    await drive.waitForPendingOperations()
+    #expect(system.handle.updates.compactMap(\.bearing) == [42, 90])
+    #expect(system.handle.updates.last?.sampleTime == start + 1)
+    await drive.endDrive()
+  }
+
+}
+
+/// A usable travel presentation recorded at `time`.
+private func travel(_ degrees: Double, at time: Date) -> TravelPresentation {
+  .init(
+    sample: CompassSample(
+      degrees: degrees, source: .vehicleCourse, reference: .trueNorth,
+      accuracyDegrees: 1, timestamp: time), status: .usable)
 }
 
 @MainActor private final class TestActivityHandle: CompassActivityHandle {

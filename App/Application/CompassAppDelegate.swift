@@ -1,14 +1,20 @@
 import CarPlay
+import CompassCore
 import UIKit
 
 @MainActor
 final class CompassAppDelegate: NSObject, UIApplicationDelegate {
   // One process-lifetime owner shared by the phone and all CarPlay callbacks.
   static let sharedDrive: DriveSessionController = {
+    let settings = LiveActivitySettingsStore.shared
     let drive = DriveSessionController(
-      sensor: DeviceTravelLocationSensor(), activity: CompassActivityController(),
+      sensor: DeviceTravelLocationSensor(),
+      activity: CompassActivityController(refreshInterval: {
+        settings.preferences.updateFrequency.interval
+      }),
       carAudioRoute: { CarAudioRouteMonitor.isConnected },
-      backgroundTime: { holdBackgroundTime() })
+      backgroundTime: { holdBackgroundTime() },
+      autoStop: { settings.preferences.autoStop })
     carAudio = CarAudioRouteMonitor { [weak drive] connected in
       drive?.carAudioChanged(connected: connected)
     }

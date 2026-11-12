@@ -54,6 +54,14 @@ final class CompassActivityController: CompassActivityPresenting {
   private var pendingInvalidation = false
   /// Whether a drain of the pending clear and presentation is queued or running.
   private var drainQueued = false
+  /// The shortest time between two changed readings written, from the update frequency. It is
+  /// read at each write, so a change applies at once.
+  private let refreshInterval: @MainActor () -> TimeInterval
+  /// At an update frequency lower than the standard one, the newest changed reading that came too
+  /// soon after the last one written. A drive's renewal writes it once the interval has passed,
+  /// unless a newer write, a return to the direction shown or a clear replaces it first, so a turn
+  /// just before a stop still reaches the card.
+  private var heldReading: CompassActivityAttributes.ContentState?
 
   var canStartActivities: Bool { system.enabled }
   var hasActivities: Bool { system.hasActivities }
@@ -68,10 +76,14 @@ final class CompassActivityController: CompassActivityPresenting {
   init(
     system: any CompassActivitySystem = LocalCompassActivitySystem(),
     now: @escaping () -> Date = Date.init,
-    appearanceStore: AppearanceStore = .shared
+    appearanceStore: AppearanceStore = .shared,
+    refreshInterval: @escaping @MainActor () -> TimeInterval = {
+      CompassActivityController.changedReadingInterval
+    }
   ) {
     self.system = system
     self.now = now
+    self.refreshInterval = refreshInterval
     let initial = appearanceStore.preferences.effective(for: .activity)
     appearance = initial
     let changes = Observations { @MainActor in
@@ -94,8 +106,9 @@ final class CompassActivityController: CompassActivityPresenting {
     guard handle == nil else { return }
     guard !starting, system.enabled else { throw Failure.unavailable }
     starting = true
-    // A new activity has no retained reading to clear.
+    // A new activity has no retained reading to clear or replace.
     pendingInvalidation = false
+    heldReading = nil
     let token = generation
     let previous = operation
     let requesting = Task { @MainActor [weak self] in
@@ -146,6 +159,7 @@ final class CompassActivityController: CompassActivityPresenting {
     lastUsableWrite = nil
     lastWrite = nil
     retainedBearing = nil
+    heldReading = nil
     pendingPresentation = nil
     pendingInvalidation = false
     onDismiss?()
@@ -153,8 +167,8 @@ final class CompassActivityController: CompassActivityPresenting {
 
   /// This is a sampled last-reading display, not a promise of live vehicle orientation.
   /// Unchanged readings get only the slow stale-date renewal; changed readings remain
-  /// rate-limited.
-  static let changedReadingInterval: TimeInterval = 1
+  /// rate-limited, to this standard interval unless a lower update frequency is chosen.
+  static let changedReadingInterval = LiveActivityUpdateFrequency.everySecond.interval
 
   func show(_ presentation: TravelPresentation) {
     pendingPresentation = presentation
@@ -162,8 +176,9 @@ final class CompassActivityController: CompassActivityPresenting {
   }
 
   func invalidateReading() {
-    // A presentation handed over before the failure is older than it.
+    // A presentation handed over or held before the failure is older than it.
     pendingPresentation = nil
+    heldReading = nil
     pendingInvalidation = true
     // Rewrites already queued would show the reading again before the clear.
     validity = UUID()
@@ -180,8 +195,9 @@ final class CompassActivityController: CompassActivityPresenting {
     }
   }
 
-  /// Writes the pending clear, then the latest presentation, until nothing waits or the activity
-  /// is gone. A clear that arrives during a write is written before anything handed over with it.
+  /// Writes the pending clear, then the latest presentation, then a held reading whose interval
+  /// has passed, until nothing waits or the activity is gone. A clear that arrives during a write
+  /// is written before anything handed over with it.
   private func drain() async {
     let token = generation
     while generation == token, let handle {
@@ -191,17 +207,39 @@ final class CompassActivityController: CompassActivityPresenting {
       } else if let latest = pendingPresentation {
         pendingPresentation = nil
         await write(latest, retainingReading: true, on: handle)
+      } else if let held = heldReading, refreshIntervalHasPassed(at: now()) {
+        heldReading = nil
+        if isRecentEnough(held, at: now()) { await commit(held, at: now(), on: handle) }
       } else {
         return
       }
     }
   }
 
+  /// Whether a changed reading can be written at `date`: none has been yet, or the refresh
+  /// interval has passed since the last one.
+  private func refreshIntervalHasPassed(at date: Date) -> Bool {
+    guard let lastUsableWrite else { return true }
+    return date.timeIntervalSince(lastUsableWrite) >= refreshInterval()
+  }
+
+  /// Whether a held reading is still worth writing: recorded no longer ago than the refresh
+  /// interval and a reading's lifetime. A held reading is written up to an interval after it was
+  /// recorded, past the lifetime a handed-over reading has, but one held longer, as when the
+  /// renewal came late, is passed over.
+  private func isRecentEnough(
+    _ held: CompassActivityAttributes.ContentState, at date: Date
+  ) -> Bool {
+    guard let sampleTime = held.sampleTime else { return false }
+    let age = date.timeIntervalSince(sampleTime)
+    return age <= refreshInterval() + CompassSample.travelLifetime
+  }
+
   private func write(
     _ presentation: TravelPresentation, retainingReading: Bool, on handle: any CompassActivityHandle
   ) async {
     let date = now()
-    var content = Self.content(presentation, now: date)
+    let content = Self.content(presentation, now: date)
     // A bearing that aged out in the queue is passed over; any other sample that isn't current,
     // such as one dated ahead of the clock, clears the reading.
     let expiredTravelSample = presentation.sample?.hasExpired(at: date) ?? false
@@ -211,21 +249,43 @@ final class CompassActivityController: CompassActivityPresenting {
       return
     }
     if let bearing = content.bearing {
-      if let lastUsableWrite, date.timeIntervalSince(lastUsableWrite) < Self.changedReadingInterval
-      {
-        return
-      }
       if let retainedBearing, let retained = CompassAngle(degrees: retainedBearing),
         let current = CompassAngle(degrees: bearing), Self.sameReading(retained, current)
       {
+        // Back to the direction shown, so a reading held to replace it is older than this one.
+        heldReading = nil
         return
       }
+      let interval = refreshInterval()
+      // At a slower rate, the first direction after a clear shows at once rather than waiting out
+      // the interval; the standard rate keeps its limit, as before the setting existed.
+      let limited = retainedBearing != nil || interval <= Self.changedReadingInterval
+      if limited, let lastUsableWrite, date.timeIntervalSince(lastUsableWrite) < interval {
+        // At the standard rate the next reading follows about when the interval ends, so this one
+        // is passed over; a slower rate holds it for the renewal to write.
+        if interval > Self.changedReadingInterval { heldReading = content }
+        return
+      }
+    }
+    await commit(content, at: date, on: handle)
+  }
+
+  /// Writes content with the current appearance and a new stale date. A bearing becomes the one
+  /// retained and starts a new refresh interval; content without one clears the retained reading.
+  /// Either replaces a held reading.
+  private func commit(
+    _ content: CompassActivityAttributes.ContentState, at date: Date,
+    on handle: any CompassActivityHandle
+  ) async {
+    var content = content
+    if let bearing = content.bearing {
       lastUsableWrite = date
       retainedBearing = bearing
     } else {
       validity = UUID()
       retainedBearing = nil
     }
+    heldReading = nil
     content.appearance = appearance
     content = stamped(content)
     lastContent = content
@@ -239,11 +299,17 @@ final class CompassActivityController: CompassActivityPresenting {
     return rewriteLastContent()
   }
 
-  /// Rewrites the current content with a new stale date once the last write is older than the
-  /// renewal interval, so a long stop with nothing new to show doesn't make the activity stale.
+  /// Writes a held reading once its refresh interval has passed. Otherwise rewrites the current
+  /// content with a new stale date once the last write is older than the renewal interval, so a
+  /// long stop with nothing new to show doesn't make the activity stale.
   func renew() {
-    guard handle != nil, let lastWrite else { return }
+    guard handle != nil else { return }
     let date = now()
+    if heldReading != nil, refreshIntervalHasPassed(at: date) {
+      queueDrain()
+      return
+    }
+    guard let lastWrite else { return }
     guard date.timeIntervalSince1970.isFinite,
       !(0..<Self.renewalInterval).contains(date.timeIntervalSince(lastWrite))
     else { return }
@@ -282,6 +348,7 @@ final class CompassActivityController: CompassActivityPresenting {
     lastUsableWrite = nil
     lastWrite = nil
     retainedBearing = nil
+    heldReading = nil
     pendingPresentation = nil
     pendingInvalidation = false
     let owned = handle

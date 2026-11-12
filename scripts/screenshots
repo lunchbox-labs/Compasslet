@@ -76,7 +76,8 @@ APPEARANCE_PAGES = ("settings-appearance", "settings-appearance-global",
                     "settings-appearance-minor-ticks", "settings-appearance-cardinal-labels",
                     "settings-appearance-rotation", "settings-appearance-reduce-motion")
 LARGER_TEXT = (COMPASS_WITH_LIVE_ACTIVITY_BUTTON, LIVE_ACTIVITY_TIP, *TOUR, "settings",
-               "settings-bottom", *APPEARANCE_PAGES, "compass-location-denied")
+               "settings-bottom", *APPEARANCE_PAGES, "settings-live-activity",
+               "compass-location-denied")
 CONTRAST = (COMPASS_WITH_LIVE_ACTIVITY_BUTTON, LIVE_ACTIVITY_TIP, "compass-settings-sheet",
             "settings")
 DARK_INTERFACE = (*TOUR, "compass", COMPASS_WITH_LIVE_ACTIVITY_BUTTON, LIVE_ACTIVITY_TIP,

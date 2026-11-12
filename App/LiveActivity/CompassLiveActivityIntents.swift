@@ -9,7 +9,7 @@ struct StartLiveActivityIntent: LiveActivityIntent {
   static var title: LocalizedStringResource { "Start Live Activity" }
   static var description: IntentDescription? {
     IntentDescription(
-      "Starts the Compasslet Live Activity for a CarPlay drive. It ends a minute after CarPlay disconnects, or after a minute if CarPlay doesn’t connect."
+      "Starts the Compasslet Live Activity for a CarPlay drive. Once CarPlay disconnects, it ends after the Auto-Stop time set in Settings, a minute by default. If CarPlay doesn’t connect, it ends after a minute."
     )
   }
   static var supportedModes: IntentModes { [.background, .foreground(.dynamic)] }
