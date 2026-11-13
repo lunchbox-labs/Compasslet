@@ -160,8 +160,8 @@ final class DriveSessionController {
 
   /// Whether this drive has had a location reading, which shows location started.
   var hasReceivedReading: Bool { current?.hasReceivedReading ?? false }
-  /// Whether location reported during the drive's current start that it can't run until the app
-  /// is in use.
+  /// Whether location reported that it can't run until the app is in use, during the drive's
+  /// current start or in an earlier start without a newer reading since.
   var locationNeedsForeground: Bool { current?.notInUseReport.needsForeground ?? false }
 
   /// How long a drive started away from the car waits for CarPlay or car audio before it ends.

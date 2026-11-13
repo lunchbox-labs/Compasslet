@@ -1549,11 +1549,12 @@ struct StartShortcutAfterNotInUseTests {
       sensor: sensor, activity: activity, clock: clock, autoStop: { .oneMinute })
   }
 
-  private func reading() -> TravelSensorEvent {
+  private func reading(takenAt timestamp: Date? = nil) -> TravelSensorEvent {
     .reading(
       TravelReading(
         courseDegrees: 90, courseAccuracyDegrees: 2, speedMetersPerSecond: 10,
-        speedAccuracyMetersPerSecond: 1, horizontalAccuracyMeters: 5, timestamp: clock.now))
+        speedAccuracyMetersPerSecond: 1, horizontalAccuracyMeters: 5,
+        timestamp: timestamp ?? clock.now))
   }
 
   private typealias Run = (outcome: LiveActivityShortcut.StartOutcome, continuedInForeground: Bool)
@@ -1613,6 +1614,25 @@ struct StartShortcutAfterNotInUseTests {
     #expect(run.continuedInForeground)
     #expect(run.outcome == .startedWithoutCarPlay)
     // The drive ended and started again from the foreground.
+    #expect(sensor.starts == 2)
+    #expect(sensor.stops == 1)
+    await controller.endDrive()
+  }
+
+  /// A reading taken at or before the report, delivered after it, doesn't show that location
+  /// recovered.
+  @Test(arguments: [0, 0.5])
+  func readingNoNewerThanTheReportContinuesInTheForeground(secondsBefore: TimeInterval) async {
+    await controller.carPlayActivated()
+    sensor.receive?(reading())
+    activity.onDismiss?()
+    controller.carPlayDisconnected()
+    clock.now += 1
+    sensor.receive?(.notInUse)
+    sensor.receive?(reading(takenAt: clock.now - secondsBefore))
+    let run = await runStartShortcut()
+    #expect(run.continuedInForeground)
+    #expect(run.outcome == .startedWithoutCarPlay)
     #expect(sensor.starts == 2)
     #expect(sensor.stops == 1)
     await controller.endDrive()

@@ -381,7 +381,7 @@ stateDiagram-v2
     Starting --> Waiting: no CarPlay scene and the intent can continue in the foreground
     Starting --> Done: CarPlay scene connected, can't continue in the foreground, or no drive started
     Waiting --> Done: reading received and 1 s passed, CarPlay connected, or drive ended
-    Waiting --> Foreground: notInUse reported during this start, or no reading within 5 s
+    Waiting --> Foreground: notInUse reported during this start or not yet recovered from, or no reading within 5 s
     Foreground --> Done: drive ended, app foregrounded, drive started again
     Foreground --> Done: user doesn't continue (drive stays ended)
 ```
@@ -417,6 +417,7 @@ stateDiagram-v2
     Recovered --> Reported: notInUse
     Reported --> Recovered: newer reading
     Recovered --> Unreported: Live Activity started again
+    Reported --> Reported: Live Activity started again
 ```
 
 Any `notInUse` report while Compasslet isn't active on CarPlay starts a wait
