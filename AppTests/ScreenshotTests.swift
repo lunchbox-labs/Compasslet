@@ -548,16 +548,23 @@ final class ScreenshotTests: XCTestCase {
     let item = try XCTUnwrap((0..<form.numberOfItems(inSection: section)).last)
     let lastRow = IndexPath(item: item, section: section)
     let deadline = ContinuousClock.now + .seconds(3)
+    var seen = ""
     repeat {
       form.scrollToItem(at: lastRow, at: .bottom, animated: false)
       try await Task.sleep(for: .milliseconds(100))
       form.layoutIfNeeded()
       let row = try XCTUnwrap(form.layoutAttributesForItem(at: lastRow))
-      let viewport = form.bounds.inset(by: form.adjustedContentInset)
-      if form.cellForItem(at: lastRow) != nil, viewport.contains(row.frame) { return }
+      // A row aligned to the bottom edge can end a rounding error past it, at fractional
+      // offsets, so allow a hundredth of a point.
+      let viewport = form.bounds.inset(by: form.adjustedContentInset).insetBy(dx: 0, dy: -0.01)
+      let hasCell = form.cellForItem(at: lastRow) != nil
+      if hasCell, viewport.contains(row.frame) { return }
+      seen =
+        "row \(row.frame), viewport \(viewport), offset \(form.contentOffset), "
+        + "content \(form.contentSize), insets \(form.adjustedContentInset), cell \(hasCell)"
     } while ContinuousClock.now < deadline
     struct LastRowNotVisible: Error {}
-    XCTFail("The reset row must be fully visible before capture")
+    XCTFail("The reset row must be fully visible before capture; \(seen)")
     throw LastRowNotVisible()
   }
 
