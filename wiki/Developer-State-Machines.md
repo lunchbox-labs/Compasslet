@@ -8,12 +8,9 @@ transition they touch. File and line references are to commit
 symbol if lines have moved. [Development](Developer-Development#reading-policies) gives the
 reading policies these machines enforce.
 
-Open failure states are listed here and under their machine, each tracked as an issue. Two are
+Open failure states are listed here and under their machine, each tracked as an issue. One is
 open:
 
-- [#343](https://github.com/lunchbox-labs/compasslet/issues/343): diagnostics can split one Live
-  Activity session in two when a beat wakes late, as the [Diagnostics](#diagnostics) section
-  describes.
 - [#348](https://github.com/lunchbox-labs/compasslet/issues/348): the Start shortcut can end a
   working drive after an earlier not-in-use report
   ([Background start intent](#background-start-intent)).
@@ -29,15 +26,18 @@ These are fixed:
 - [#249](https://github.com/lunchbox-labs/compasslet/issues/249), fixed by
   [#252](https://github.com/lunchbox-labs/compasslet/pull/252):
   a background start that lost location after its start window could keep running.
+- [#336](https://github.com/lunchbox-labs/compasslet/issues/336), fixed by
+  [#353](https://github.com/lunchbox-labs/compasslet/pull/353):
+  the CarPlay dial could keep the wrong light or dark style on an idle scene.
+- [#343](https://github.com/lunchbox-labs/compasslet/issues/343), fixed by
+  [#355](https://github.com/lunchbox-labs/compasslet/pull/355):
+  diagnostics could split one Live Activity session in two when a beat woke late.
 - [#346](https://github.com/lunchbox-labs/compasslet/issues/346), fixed by
   [#345](https://github.com/lunchbox-labs/compasslet/pull/345):
   the phone said nothing when the Live Activity couldn't start without Compasslet on CarPlay.
 - [#347](https://github.com/lunchbox-labs/compasslet/issues/347), fixed by
   [#345](https://github.com/lunchbox-labs/compasslet/pull/345):
   a clock set back during a drive held back direction updates for as long as it went back.
-- [#336](https://github.com/lunchbox-labs/compasslet/issues/336), fixed by
-  [#353](https://github.com/lunchbox-labs/compasslet/pull/353):
-  the CarPlay dial could keep the wrong light or dark style on an idle scene.
 
 ## Overview
 
@@ -199,8 +199,8 @@ run while a drive does, both in process, so they only advance while the process 
   lifecycle](#live-activity-lifecycle)) and writes a reading held by a lower update frequency or
   renews the stale date once it has gone 60 s without a write, and checks every limit again. The
   update frequency never changes the heartbeat. Each beat sets the next one an interval after it
-  ran (`scheduleHeartbeat`), so beats are never under 1 s apart, which diagnostics would skip,
-  and a late beat brings no burst of catch-up beats.
+  ran (`scheduleHeartbeat`), so beats are never under 1 s apart, which diagnostics wouldn't
+  write, and a late beat brings no burst of catch-up beats.
 - One deadline timer (`armDeadline`, `deadlineCame`) fires at the first moment past the
   earliest of the car's absence limit, the not-in-use limit and the reading's 5 s lifetime, so
   each takes effect on time rather than at the next heartbeat. A change that moves a limit later,
@@ -502,6 +502,7 @@ no timer.
 stateDiagram-v2
     direction LR
     [*] --> Inactive: didConnect
+    [*] --> Active: didConnect on an active scene, check, timer
     Inactive --> Inactive: pass or content style change, check
     Inactive --> Active: sceneDidBecomeActive, check, timer
     Active --> Active: pass or content style change, check, timer restarted
@@ -611,8 +612,14 @@ share sheet closes or Debug Mode is turned off.
 `CompassActivityController` is the only writer of the `activity` clock, so the clock follows
 whether the app holds an activity (see [Live Activity lifecycle](#live-activity-lifecycle)).
 
-Open failure state ([#343](https://github.com/lunchbox-labs/compasslet/issues/343)): a repeat
-within 1 s is dropped without moving the clock, so if the first beat after a request lands
-under 1 s after it and the next beat wakes late, the next call comes over 2 s after the last
-accepted one. That starts a new `activity` session with no `paused` before it and loses about
-2 s of active time.
+A repeat of a surface's state under 1 s after the last call written isn't written, so settings
+are saved at most about once a second per surface, but it still counts as seen
+(`ObservedState` in `App/Diagnostics/CompassDiagnostics.swift`). The 2 s gap runs from the last
+call seen, and the time counted from the clock's last write, so a beat that wakes late after a
+repeat keeps the session, as when the first heartbeat after a Live Activity request lands under
+1 s after it. `record` takes an event from the clock's write until 2 s after the last call
+seen, or 3 s of wall time. A repeat counts only while the clock holds the call it repeats
+(`State.lastSeen`), so repeats of a call whose write failed can't bridge a gap. Measuring the gap
+from the last call written split such a session in two
+([#343](https://github.com/lunchbox-labs/compasslet/issues/343), fixed by
+[#355](https://github.com/lunchbox-labs/compasslet/pull/355)).

@@ -486,7 +486,8 @@ final class DriveSessionController {
   }
 
   /// Sets the next beat an interval after now, so each gap is at least the interval and a late
-  /// beat brings no burst of catch-up beats. Diagnostics skip calls under 1 s apart.
+  /// beat brings no burst of catch-up beats. Diagnostics don't write a renewal under 1 s after the
+  /// last one written, but still measure their 2 s gap from it.
   private func scheduleHeartbeat(for session: DriveSession) {
     let date = clock.now.addingTimeInterval(Self.heartbeatInterval)
     session.heartbeat = clock.timer(at: date) { [weak self, weak session] in
