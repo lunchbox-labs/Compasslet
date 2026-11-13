@@ -1154,17 +1154,6 @@ private func travel(_ degrees: Double, at time: Date) -> TravelPresentation {
   }
 }
 
-@MainActor private final class TestTravelSensor: TravelLocationSensor {
-  var authorization: TravelAuthorization = .authorized
-  var fullAccuracy = true
-  var servicesEnabled = true
-  var available = true
-  var receive: ((TravelSensorEvent) -> Void)?
-  func requestAuthorization() {}
-  func start() throws {}
-  func stop() {}
-}
-
 extension CompassActivityController {
   /// Hands over a presentation and waits until it has been written or passed over.
   fileprivate func showAndWait(_ presentation: TravelPresentation) async {
