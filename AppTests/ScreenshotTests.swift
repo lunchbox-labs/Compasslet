@@ -159,6 +159,11 @@ final class ScreenshotTests: XCTestCase {
     Screen(name: "settings-test-build", showsEnd: true) {
       ScreenshotTests.settings(testBuild: ScreenshotTests.sampleTestBuild)
     },
+    Screen(name: "settings-test-build-largest-text", showsEnd: true) {
+      AnyView(
+        ScreenshotTests.settings(testBuild: ScreenshotTests.sampleTestBuild)
+          .environment(\.dynamicTypeSize, .accessibility5))
+    },
     // Location is undecided, as after Allow Once ends, so Settings offers the prompt.
     Screen(name: "settings-location-undecided") {
       ScreenshotTests.settings(location: .notDetermined)

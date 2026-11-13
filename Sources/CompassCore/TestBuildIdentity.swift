@@ -10,14 +10,18 @@ public struct TestBuildIdentity: Hashable, Sendable {
   public let version: String
   public let build: String
   public let commit: String
+  /// The commit's page on GitHub.
+  public let commitURL: URL
 
   public init?(version: String, build: String, commit: String) {
     guard !version.isEmpty, !build.isEmpty, commit.count == 40,
-      commit.allSatisfy({ "0123456789abcdef".contains($0) })
+      commit.allSatisfy({ "0123456789abcdef".contains($0) }),
+      let commitURL = SourceRepository.commitURL(commit)
     else { return nil }
     self.version = version
     self.build = build
     self.commit = commit
+    self.commitURL = commitURL
   }
 
   /// Reads a bundle's Info.plist values, such as `Bundle.main.infoDictionary`.
@@ -34,7 +38,4 @@ public struct TestBuildIdentity: Hashable, Sendable {
 
   /// The commit shortened as Git and GitHub show it.
   public var shortCommit: String { String(commit.prefix(7)) }
-
-  /// The commit's page on GitHub.
-  public var commitURL: URL? { SourceRepository.commitURL(commit) }
 }

@@ -53,22 +53,21 @@ struct CompassSettingsView: View {
             LabeledContent("Version") {
               Text(testBuild.versionAndBuild).foregroundStyle(.primary).textSelection(.enabled)
             }
-            if let url = testBuild.commitURL {
-              Link(destination: url) {
-                LabeledContent {
-                  Text(testBuild.shortCommit).speechSpellsOutCharacters()
-                } label: {
-                  Text("Commit").foregroundStyle(.primary)
-                }
+            Link(destination: testBuild.commitURL) {
+              LabeledContent {
+                // The accent, as on the app's other links; links otherwise draw in the system
+                // blue, 3.6:1 on these rows. Fixed styles, because .primary would follow it.
+                Text(testBuild.shortCommit).foregroundStyle(.tint)
+              } label: {
+                Text("Commit").foregroundStyle(Color.primary)
               }
-              // Links draw in the system blue (3.6:1 on these rows), not the accent, unless told.
-              .foregroundStyle(.tint)
-              .accessibilityHint("Opens the commit on GitHub.")
-              .contextMenu {
-                Button("Copy Commit", systemImage: "doc.on.doc") {
-                  UIPasteboard.general.string = testBuild.commit
-                }
-              }
+            }
+            .accessibilityLabel("Commit")
+            .accessibilityValue(Text(testBuild.shortCommit).speechSpellsOutCharacters())
+            .accessibilityHint("Opens the commit on GitHub.")
+            .accessibilityAction(named: "Copy Commit") { copyCommit(testBuild) }
+            .contextMenu {
+              Button("Copy Commit", systemImage: "doc.on.doc") { copyCommit(testBuild) }
             }
           } header: {
             Text("Test Build")
@@ -95,6 +94,11 @@ struct CompassSettingsView: View {
     .task {
       closeFocused = true
     }
+  }
+
+  /// Copies the full SHA, which the row shortens.
+  private func copyCommit(_ testBuild: TestBuildIdentity) {
+    UIPasteboard.general.string = testBuild.commit
   }
 }
 
