@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		A64DCE328A7D9AD9AC1666EC /* ChangeSignalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09AAAE017647FDAE371E21C5 /* ChangeSignalTests.swift */; };
+		F87D11B664E63E93889234D5 /* CarPlayStyleCheckTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D7730AAF853E5A41077AA89 /* CarPlayStyleCheckTests.swift */; };
 		25ADC9DE2475197810F86FB0 /* SetupStatusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78E8F7DF1DA199233119AA4F /* SetupStatusTests.swift */; };
 		FA5DA1F36AFFCE5D7935FF2D /* ChangeSignal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CD6596854CBB7F7BF0A47AB /* ChangeSignal.swift */; };
 		605E0D7F022D50FF323D21AC /* SetupStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7CB47ABC0B5A97169BB792F /* SetupStatus.swift */; };
@@ -40,6 +41,7 @@
 		CEA035473B23389211293856 /* LiveActivitySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E2AB743B3BDE851424E4D36 /* LiveActivitySettingsView.swift */; };
 		6E8EB0A54357DC19BEBD7DC8 /* CompassCore in Frameworks */ = {isa = PBXBuildFile; productRef = 7706EB0E2104646E568CD71F /* CompassCore */; };
 		774742633DD35133F9D14ED8 /* CompassDiagnosticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 275D9183B5D424FCC7810822 /* CompassDiagnosticsTests.swift */; };
+		F1020EA160A57BEACEC42A4D /* CompassDiagnosticsSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CF248EACF2442EB95F785CF /* CompassDiagnosticsSessionTests.swift */; };
 		7AA75085FC60695A12D26713 /* CompassActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE2F63BB5C501FDD96214F95 /* CompassActivityAttributes.swift */; };
 		7AE82164CFC284EB48F0ECB8 /* CarPlaySceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C6B9391E9371285A195C789 /* CarPlaySceneDelegate.swift */; };
 		7D2734D738F62A57FBC0C728 /* CarPlayPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BF0680E9674EB8E22601374 /* CarPlayPresentationTests.swift */; };
@@ -108,6 +110,7 @@
 
 /* Begin PBXFileReference section */
 		09AAAE017647FDAE371E21C5 /* ChangeSignalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeSignalTests.swift; sourceTree = "<group>"; };
+		1D7730AAF853E5A41077AA89 /* CarPlayStyleCheckTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayStyleCheckTests.swift; sourceTree = "<group>"; };
 		78E8F7DF1DA199233119AA4F /* SetupStatusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupStatusTests.swift; sourceTree = "<group>"; };
 		5CD6596854CBB7F7BF0A47AB /* ChangeSignal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeSignal.swift; sourceTree = "<group>"; };
 		E7CB47ABC0B5A97169BB792F /* SetupStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupStatus.swift; sourceTree = "<group>"; };
@@ -128,6 +131,7 @@
 		46691D6613DE3A84758F5BEE /* LiveActivitySettingsStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LiveActivitySettingsStore.swift; sourceTree = "<group>"; };
 		E109024E9C91FC595A3F09DB /* CompassLiveActivityIntents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompassLiveActivityIntents.swift; sourceTree = "<group>"; };
 		275D9183B5D424FCC7810822 /* CompassDiagnosticsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompassDiagnosticsTests.swift; sourceTree = "<group>"; };
+		7CF248EACF2442EB95F785CF /* CompassDiagnosticsSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompassDiagnosticsSessionTests.swift; sourceTree = "<group>"; };
 		2B1452F1D8CFC9C48AC3E6CC /* CompassTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CompassTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2D622E267E018877158D2019 /* CompassActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = CompassActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		2DCA6A3149843FD54FCEC16B /* CompassAppDelegate.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompassAppDelegate.swift; sourceTree = "<group>"; };
@@ -371,7 +375,9 @@
 				43DECBF43D00BEAEEF7E2CD8 /* DriveSessionControllerTests.swift */,
 				13F96CE477553A99C1F0F39D /* CompassActivityControllerTests.swift */,
 				7BF0680E9674EB8E22601374 /* CarPlayPresentationTests.swift */,
+				1D7730AAF853E5A41077AA89 /* CarPlayStyleCheckTests.swift */,
 				275D9183B5D424FCC7810822 /* CompassDiagnosticsTests.swift */,
+				7CF248EACF2442EB95F785CF /* CompassDiagnosticsSessionTests.swift */,
 				5C4EE0A1D2B3C4D5E6F70812 /* ScreenshotTests.swift */,
 				477ECA488466B5E09ABBE0F2 /* AppearanceStoreTests.swift */,
 				9A3C5E7F1B2D4F6081A3C5E7 /* RenderedPixels.swift */,
@@ -545,7 +551,9 @@
 				A64DCE328A7D9AD9AC1666EC /* ChangeSignalTests.swift in Sources */,
 				29D6B7B8A0067DFD42EA7CB5 /* CompassActivityControllerTests.swift in Sources */,
 				7D2734D738F62A57FBC0C728 /* CarPlayPresentationTests.swift in Sources */,
+				F87D11B664E63E93889234D5 /* CarPlayStyleCheckTests.swift in Sources */,
 				774742633DD35133F9D14ED8 /* CompassDiagnosticsTests.swift in Sources */,
+				F1020EA160A57BEACEC42A4D /* CompassDiagnosticsSessionTests.swift in Sources */,
 				5C4EE0A1D2B3C4D5E6F70811 /* ScreenshotTests.swift in Sources */,
 				BDA9B299C2EB6FF52080780E /* AppearanceStoreTests.swift in Sources */,
 				9A3C5E7F1B2D4F6081A3C5E8 /* RenderedPixels.swift in Sources */,
