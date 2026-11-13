@@ -8,7 +8,7 @@ transition they touch. File and line references are to commit
 symbol if lines have moved. [Development](Developer-Development#reading-policies) gives the
 reading policies these machines enforce.
 
-Open failure states are listed here and under their machine, each tracked as an issue. Two are
+Open failure states are listed here and under their machine, each tracked as an issue. Three are
 open:
 
 - [#336](https://github.com/lunchbox-labs/compasslet/issues/336): the CarPlay dial can keep the
@@ -17,8 +17,11 @@ open:
 - [#343](https://github.com/lunchbox-labs/compasslet/issues/343): diagnostics can split one Live
   Activity session in two when a beat wakes late, as the [Diagnostics](#diagnostics) section
   describes.
+- [#348](https://github.com/lunchbox-labs/compasslet/issues/348): the Start shortcut can end a
+  working drive after an earlier not-in-use report
+  ([Background start intent](#background-start-intent)).
 
-The three found while mapping these machines are fixed:
+These are fixed:
 
 - [#247](https://github.com/lunchbox-labs/compasslet/issues/247), fixed by
   [#250](https://github.com/lunchbox-labs/compasslet/pull/250):
@@ -29,6 +32,12 @@ The three found while mapping these machines are fixed:
 - [#249](https://github.com/lunchbox-labs/compasslet/issues/249), fixed by
   [#252](https://github.com/lunchbox-labs/compasslet/pull/252):
   a background start that lost location after its start window could keep running.
+- [#346](https://github.com/lunchbox-labs/compasslet/issues/346), fixed by
+  [#345](https://github.com/lunchbox-labs/compasslet/pull/345):
+  the phone said nothing when the Live Activity couldn't start without Compasslet on CarPlay.
+- [#347](https://github.com/lunchbox-labs/compasslet/issues/347), fixed by
+  [#345](https://github.com/lunchbox-labs/compasslet/pull/345):
+  a clock set back during a drive held back direction updates for as long as it went back.
 
 ## Overview
 
@@ -79,9 +88,9 @@ activation, on a manual start, on each drive heartbeat, on each sensor event, an
 `authorizationChanged` while no drive runs (`observeAuthorization`). Any state other than
 `ready` ends a running drive (`phoneBecameActive`, `beat` and `receive`).
 `beginDrive` sets `unavailable` directly when the sensor refuses to start, leaves the drive
-plainly idle and clears the sensor callback without restoring
-the authorization observer. The next refresh replaces the status. This can't happen in
-practice, because the sensor checks the same conditions the refresh checked just before.
+plainly idle and restores the authorization observer (`observeAuthorization`), so the next
+refresh or permission change replaces the status. This can't happen in practice, because the
+sensor checks the same conditions the refresh checked just before.
 
 ## Location permission request
 
@@ -254,6 +263,9 @@ represented. `compactStatus` and `isLiveActivityRunning` are computed from `stat
 `compactStatus` is `inactive` when idle, `unavailable` after a Live Activity start failed
 without CarPlay, and otherwise the drive's status. `isLiveActivityRunning` is true while a
 drive runs with its activity `starting` or `active`; the phone's Live Activity button reads it.
+After a start from that button, `CompassView.toggleLiveActivity` shows the Live Activity
+Couldn't Start alert whenever `compactStatus` is `unavailable` and setup is `ready`, with or
+without a drive: without Compasslet's CarPlay scene the failed start leaves none.
 
 `CompassActivityController` holds the system activity's `handle`, a `starting` flag and its
 own `generation`. Its `start()`, `end()`, content writes and rewrites all run in order on its
@@ -321,7 +333,9 @@ reaches the card:
   degrees or cardinal point change, at most once per refresh interval. The interval comes from
   the update frequency setting (`LiveActivityUpdateFrequency`, read through the controller's
   `refreshInterval` closure at each write): every second by default
-  (`changedReadingInterval`), or every 5 or 15 seconds. The CarPlay screen
+  (`changedReadingInterval`), or every 5 or 15 seconds. A clock that is now before the last
+  changed reading written, as after it is set back, counts as past the interval (`hasPassed`),
+  so the card doesn't also wait out the time the clock went back. The CarPlay screen
   (`CarPlayPresentation.init`) shows a bearing by the same rule, with its own gate;
 - at the standard rate, a changed reading that comes within the interval is passed over, as
   before the setting existed. At a slower rate it is held (`heldReading`) and written, with
@@ -331,7 +345,8 @@ reaches the card:
   stop still reaches the card. This is a deliberate exception to the 5 s rule: the reading was
   current when it was handed over, and is written up to an interval after it was recorded,
   with that sample time, so the card dates it correctly. A held reading recorded longer ago
-  than the interval plus the 5 s lifetime, as when the renewal comes late, is passed over
+  than the interval plus the 5 s lifetime, as when the renewal comes late, or dated after
+  the clock, as when the clock was set back since, is passed over
   (`isRecentEnough`);
 - at a slower rate, a changed reading while no bearing is shown, as after a clear, is written
   at once rather than waiting out the interval since the last bearing. The standard rate keeps
@@ -379,6 +394,10 @@ the signal on its own: a wait ends at the next signal, its deadline or its task'
 and leaves no waiter behind. A cancelled wait reports that no foreground start is needed. Its
 result is the only consumer of `locationNeedsForeground`.
 
+Open failure state: `locationNeedsForeground` is never cleared during a drive, so a Start
+shortcut run later in a drive that once got `notInUse` and then carried on can end it to ask
+for the foreground ([#348](https://github.com/lunchbox-labs/compasslet/issues/348)).
+
 Any `notInUse` report while Compasslet isn't active on CarPlay starts a wait
 (`DriveSession.notInUseSince`, in `receive`). During `Waiting` the intent ends the drive first;
 after `Waiting` has settled, or when it was skipped, the wait is what ends it. A reading taken
@@ -422,8 +441,9 @@ and no updates.
 `CarPlayUpdateGate` (`CarPlayPresentation.swift:57`) shows a new bearing at most every 10
 seconds (`CarPlayUpdateGate.slot`). Changes without a bearing (status text, drive ended) pass
 at once, so a status can replace a bearing within the slot, and the next bearing then waits for
-the slot to end. When it holds a value back, `heldUntil` reports when that slot ends; a value
-equal to the one showing isn't held, and leaves `heldUntil` nil.
+the slot to end. A clock set back before the last bearing shown ends its slot. When it holds a
+value back, `heldUntil` reports when that slot ends; a value equal to the one showing isn't
+held, and leaves `heldUntil` nil.
 
 `CarPlayTemplateUpdates` (`App/CarPlay/CarPlayPresentation.swift`) feeds the gate for each
 connected scene. `CarPlaySceneDelegate` creates it on connect and passes the drive through once
@@ -523,6 +543,9 @@ shown angle.
 changes only when a reading appears or clears, and `status` is set only when it changes. The
 phone screen's layout reads those two, so only the dial, readout and accuracy views in
 `App/Heading/CompassView.swift`, which read `sample`, redraw at the heading rate.
+Within the dial, the rim's ticks don't depend on the bearing (`DialTicks` in
+`Shared/CompassDial.swift`): the dial rotates them as one layer, so a reading changes that
+rotation, the four labels and the pointer, and rebuilds no tick.
 
 ## Phone location and city
 

@@ -48,27 +48,14 @@ struct CompassDial: View {
       let rim: HierarchicalShapeStyle = increasedContrast ? .tertiary : .quaternary
       ZStack {
         Circle().stroke(rim, lineWidth: increasedContrast ? 1.5 : 1)
-        ForEach(Array(appearance.minorTicks.angles.enumerated()), id: \.offset) { index, angle in
-          let major = index % (appearance.minorTicks.rawValue + 1) == 0
-          Group {
-            if index == 0 {
-              // Spans 0.80r to 0.96r: longer than a major tick, clear of the inside labels,
-              // and ending before the fixed index triangle so the two never merge near north.
-              NorthMarker()
-                .fill(north)
-                .frame(width: diameter * 0.06, height: diameter * 0.08)
-                .offset(y: radius * 0.02)
-            } else {
-              Capsule()
-                .fill(major ? Color.primary : Color.secondary)
-                .frame(
-                  width: major ? 2 : (increasedContrast ? 1.5 : 1),
-                  height: diameter * (major ? 0.06 : 0.025))
-            }
-          }
-          .offset(y: -radius * 0.9)
-          .rotationEffect(.degrees(angle + rotation))
-        }
+        // The ticks turn as one layer, so a new bearing changes its rotation and redraws none of
+        // them.
+        DialTicks(
+          minorTicks: appearance.minorTicks, diameter: diameter,
+          increasedContrast: increasedContrast, colorScheme: colorScheme
+        )
+        .equatable()
+        .rotationEffect(.degrees(rotation))
         if appearance.cardinalLabels != .hidden {
           ForEach(Array(["N", "E", "S", "W"].enumerated()), id: \.offset) { index, label in
             let angle = (Double(index) * 90 + rotation - 90) * .pi / 180
@@ -100,6 +87,45 @@ struct CompassDial: View {
       .frame(width: diameter, height: diameter)
       .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+  }
+}
+
+/// The rim's ticks as they stand at north. Nothing here depends on the bearing: the dial rotates
+/// the whole layer, and equal values skip the body, so readings at the heading rate don't rebuild
+/// up to 72 ticks each.
+private struct DialTicks: View, Equatable {
+  let minorTicks: MinorTicks
+  let diameter: CGFloat
+  let increasedContrast: Bool
+  let colorScheme: ColorScheme
+
+  var body: some View {
+    let radius = diameter / 2
+    ZStack {
+      ForEach(Array(minorTicks.angles.enumerated()), id: \.offset) { index, angle in
+        let major = index % (minorTicks.rawValue + 1) == 0
+        Group {
+          if index == 0 {
+            // Spans 0.80r to 0.96r: longer than a major tick, clear of the inside labels,
+            // and ending before the fixed index triangle so the two never merge near north.
+            NorthMarker()
+              .fill(Color.north(for: colorScheme))
+              .frame(width: diameter * 0.06, height: diameter * 0.08)
+              .offset(y: radius * 0.02)
+          } else {
+            Capsule()
+              .fill(major ? Color.primary : Color.secondary)
+              .frame(
+                width: major ? 2 : (increasedContrast ? 1.5 : 1),
+                height: diameter * (major ? 0.06 : 0.025))
+          }
+        }
+        .offset(y: -radius * 0.9)
+        .rotationEffect(.degrees(angle))
+      }
+    }
+    // The dial's size, so the layer turns about the dial's center.
+    .frame(width: diameter, height: diameter)
   }
 }
 

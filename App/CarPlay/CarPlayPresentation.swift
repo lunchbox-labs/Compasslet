@@ -63,8 +63,9 @@ struct CarPlayUpdateGate {
     guard value != latest else { return nil }
     // A fresh input sample is required even while retaining the previous snapshot.
     // Its original timestamp stays visible. Ten-second slots plus the five-second
-    // input freshness limit bound snapshot age to fifteen seconds while rendering.
-    if value.courseDegrees != nil, let lastBearingUpdate {
+    // input freshness limit bound snapshot age to fifteen seconds while rendering. A clock set
+    // back before the last bearing ends its slot, rather than adding that time to the wait.
+    if value.courseDegrees != nil, let lastBearingUpdate, now >= lastBearingUpdate {
       // The same date is compared and reported, so a pass at `heldUntil` is never held again.
       let slotEnd = lastBearingUpdate.addingTimeInterval(Self.slot)
       if now < slotEnd {

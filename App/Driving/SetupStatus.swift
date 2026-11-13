@@ -13,16 +13,13 @@ extension DriveSessionController {
         self = .servicesDisabled
       } else if !sensor.available {
         self = .unavailable
-      } else if sensor.authorization == .notDetermined {
-        self = .permissionRequired
-      } else if sensor.authorization == .denied {
-        self = .denied
-      } else if sensor.authorization == .restricted {
-        self = .restricted
-      } else if !sensor.fullAccuracy {
-        self = .preciseLocationRequired
       } else {
-        self = .ready
+        switch sensor.authorization {
+        case .notDetermined: self = .permissionRequired
+        case .denied: self = .denied
+        case .restricted: self = .restricted
+        case .authorized: self = sensor.fullAccuracy ? .ready : .preciseLocationRequired
+        }
       }
     }
   }

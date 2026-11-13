@@ -207,6 +207,15 @@ struct CompassView: View {
       .animation(reduceMotion ? nil : .smooth, value: carPlayReady)
     }
     .padding(.horizontal, margin).padding(.bottom, 8)
+    // On the row, not the button, which leaves when the car does and would take the alert along.
+    .alert("Live Activity Couldn’t Start", isPresented: $showingLiveActivityFailure) {
+      if let url = URL(string: UIApplication.openSettingsURLString) {
+        Button("Open Settings") { openURL(url) }
+      }
+      Button("OK", role: .cancel) {}
+    } message: {
+      Text("Make sure Live Activities are allowed for Compasslet in the Settings app.")
+    }
   }
 
   private func settingsButton(diameter: CGFloat) -> some View {
@@ -254,14 +263,6 @@ struct CompassView: View {
     .accessibilityShowsLargeContentViewer {
       Label(liveActivityAction, systemImage: liveActivitySymbol)
     }
-    .alert("Live Activity Couldn’t Start", isPresented: $showingLiveActivityFailure) {
-      if let url = URL(string: UIApplication.openSettingsURLString) {
-        Button("Open Settings") { openURL(url) }
-      }
-      Button("OK", role: .cancel) {}
-    } message: {
-      Text("Make sure Live Activities are allowed for Compasslet in the Settings app.")
-    }
   }
 
   /// A drive whose Live Activity was dismissed or couldn't start offers to start it again.
@@ -288,9 +289,10 @@ struct CompassView: View {
         AccessibilityNotification.Announcement("Live Activity ended").post()
       } else {
         await drive.startLiveActivity()
-        guard drive.isDriving else { return }
         switch drive.compactStatus {
-        case .unavailable: showingLiveActivityFailure = true
+        // Without Compasslet on CarPlay, a Live Activity that can't start leaves no drive, and
+        // the failure still shows. A start that location refused has its own notice.
+        case .unavailable: showingLiveActivityFailure = drive.setupStatus == .ready
         case .active: AccessibilityNotification.Announcement("Live Activity started").post()
         case .starting: AccessibilityNotification.Announcement("Live Activity starting").post()
         case .inactive, .dismissed: break

@@ -51,13 +51,15 @@ final class DeviceTravelLocationSensor: NSObject, TravelLocationSensor,
   }
   var fullAccuracy: Bool { authorizationManager.accuracyAuthorization == .fullAccuracy }
   var servicesEnabled: Bool { CLLocationManager.locationServicesEnabled() }
-  var available: Bool {
-    servicesEnabled
-      && (Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String])?
-        .contains("location") == true
-      && !(Bundle.main.object(forInfoDictionaryKey: "NSLocationWhenInUseUsageDescription")
-        as? String ?? "").isEmpty
-  }
+  var available: Bool { servicesEnabled && Self.isBuiltForTravelLocation }
+  /// Whether the app declares the location background mode and a usage description. The bundle
+  /// doesn't change while the app runs, and setup is read on every reading and heartbeat, so
+  /// this is read once.
+  private static let isBuiltForTravelLocation =
+    (Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String])?
+    .contains("location") == true
+    && !(Bundle.main.object(forInfoDictionaryKey: "NSLocationWhenInUseUsageDescription")
+      as? String ?? "").isEmpty
 
   isolated deinit {
     diagnostics?.cancel()
