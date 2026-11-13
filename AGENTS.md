@@ -49,8 +49,8 @@ the `check-test-results-run-<number>-attempt-<attempt>` artifact, with each fail
 the test timings and attachments. Passing runs keep nothing.
 
 To check whether a simulator test is flaky, run the tests repeatedly. `scripts/test-ios` passes its
-options to `xcodebuild`, and this stops at the first failure and relaunches the app each time so no
-in-memory state carries over:
+options to `xcodebuild`. This command repeats each test until it fails, up to 20 times, and
+relaunches the app each time so no in-memory state carries over:
 
 ```sh
 bash scripts/test-ios -test-iterations 20 -run-tests-until-failure -test-repetition-relaunch-enabled YES
