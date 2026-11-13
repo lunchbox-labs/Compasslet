@@ -88,7 +88,12 @@ final class DriveSessionController {
     /// Whether the car shows, and since when it hasn't while neither CarPlay nor car audio is
     /// connected.
     var car = CarPresence.present
-    /// When location reported that the app isn't in use with no reading since.
+    /// When location last reported that the app isn't in use, while no newer reading has come.
+    /// Unlike `notInUseSince`, it records reports while Compasslet is active on CarPlay too.
+    var notInUseReportedAt: Date?
+    /// When the drive began waiting for a reading after a not-in-use report: at the report, or
+    /// when Compasslet's CarPlay scene resigned after one. Nil while the scene is active, which
+    /// keeps location running.
     var notInUseSince: Date?
     /// Releases the background time held while waiting for a reading after that report.
     var releaseBackgroundTime: (@MainActor () -> Void)?
@@ -361,16 +366,24 @@ final class DriveSessionController {
     }
   }
 
+  /// Compasslet's CarPlay scene stays connected but is no longer in use, as when another app
+  /// comes to the front on CarPlay.
   func carPlayResignedActive() {
     active = false
     suppressed = false
+    // A report made while the scene was active, with no newer reading since, may mean location
+    // stops now that Compasslet isn't in use, and no new report will come to say so.
+    if let session = current, session.notInUseReportedAt != nil {
+      startNotInUseWait(for: session)
+    }
   }
 
   /// A brief disconnect keeps the drive; auto-stop ends it once CarPlay stays away for the chosen
   /// delay, unless auto-stop is never. Car audio that stays connected keeps the drive too.
   func carPlayDisconnected() {
-    active = false
-    suppressed = false
+    // A disconnected scene isn't active either. The bridge has usually resigned it already, and
+    // resigning again changes nothing.
+    carPlayResignedActive()
     isCarPlayConnected = false
     guard let session = current, !isCarAudioConnected, case .present = session.car else {
       return
@@ -451,18 +464,18 @@ final class DriveSessionController {
     case .notInUse:
       session.locationNeedsForeground = true
       // Compasslet in use on CarPlay keeps location running.
-      if !active, session.notInUseSince == nil {
-        session.notInUseSince = clock.now
-        // A drive that lost location in the background could otherwise be suspended before
-        // it ends.
-        session.releaseBackgroundTime = holdBackgroundTime()
-        armDeadline(for: session)
-      }
+      startNotInUseWait(for: session)
+      // Kept while the scene is active too, so the wait can start once it resigns.
+      session.notInUseReportedAt = clock.now
     case .interrupted:
       session.lastReading = nil
       if session.liveActivity.isRunning { activity.invalidateReading() }
       publish(session.filter.update(nil, now: clock.now), for: session)
     case .reading(let reading):
+      // A newer reading shows that location runs again after the report.
+      if let reportedAt = session.notInUseReportedAt, reading.timestamp > reportedAt {
+        session.notInUseReportedAt = nil
+      }
       // A reading taken before the report doesn't show that location still runs.
       if let since = session.notInUseSince, reading.timestamp > since { clearNotInUse() }
       session.lastReading = reading
@@ -524,7 +537,7 @@ final class DriveSessionController {
       return true
     }
     // Location stopped because the app isn't in use, so the drive can't show travel.
-    if !active, let since = session.notInUseSince, hasPassed(Self.notInUseLimit, since: since) {
+    if let since = session.notInUseSince, hasPassed(Self.notInUseLimit, since: since) {
       stopDrive()
       return true
     }
@@ -564,7 +577,7 @@ final class DriveSessionController {
     if let absence = carAbsence(of: session) {
       dates.append(passing(absence.limit, since: absence.since))
     }
-    if !active, let since = session.notInUseSince {
+    if let since = session.notInUseSince {
       dates.append(passing(Self.notInUseLimit, since: since))
     }
     if let reading = session.lastReading {
@@ -626,6 +639,19 @@ final class DriveSessionController {
     return task
   }
 
+  /// Waits for a reading after location reported that the app isn't in use, and ends the drive
+  /// if none comes within `notInUseLimit`. It never waits while Compasslet is active on CarPlay,
+  /// and a wait already running keeps its start.
+  private func startNotInUseWait(for session: DriveSession) {
+    guard !active, session.notInUseSince == nil else { return }
+    session.notInUseSince = clock.now
+    // A drive that lost location in the background could otherwise be suspended before it ends.
+    session.releaseBackgroundTime = holdBackgroundTime()
+    armDeadline(for: session)
+  }
+
+  /// Ends the wait for a reading and releases its background time, as when a newer reading comes
+  /// or Compasslet becomes active on CarPlay.
   private func clearNotInUse() {
     guard let session = current else { return }
     session.notInUseSince = nil
