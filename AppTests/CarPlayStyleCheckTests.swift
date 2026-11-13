@@ -94,27 +94,21 @@ struct CarPlayStyleCheckTests {
   /// With no drive, the car turning dark or changing scale reaches the dial within one interval
   /// though nothing else happens on the scene, and checks with nothing changed draw nothing.
   @Test func anIdleSceneFollowsTheCarsStyleAndScaleAndRedrawsOnlyOnAChange() throws {
-    func car(_ style: UIUserInterfaceStyle, scale: CGFloat) -> UITraitCollection {
-      UITraitCollection { traits in
-        traits.userInterfaceStyle = style
-        traits.displayScale = scale
-      }
-    }
     let screen = CarPlayCompassTemplate()
-    var traits = car(.light, scale: 2)
+    let car = Car(.light, scale: 2)
     var redraws = 0
     let styleCheck = CarPlayStyleCheck(clock: clock) {
-      if screen.refresh(traits: traits) { redraws += 1 }
+      if screen.refresh(traits: car.traits) { redraws += 1 }
     }
     let ended = CarPlayPresentation(
       presentation: TravelPresentation(sample: nil, status: .waiting), setup: .ready,
       driving: false, now: clock.now)
-    screen.update(ended, traits: traits)
+    screen.update(ended, traits: car.traits)
     let light = try #require(screen.template.listHeader?.thumbnail.image.renderedPixels)
     styleCheck.activate()
     clock.run(until: after(3))
     #expect(redraws == 0)
-    traits = car(.dark, scale: 2)
+    car.set(.dark, scale: 2)
     clock.run(until: after(4))
     #expect(redraws == 1)
     let dark = try #require(screen.template.listHeader?.thumbnail.image.renderedPixels)
@@ -122,16 +116,31 @@ struct CarPlayStyleCheckTests {
     #expect(screen.template.listHeader?.bodyVariants.map(\.string) == [ended.status])
     clock.run(until: after(6))
     #expect(redraws == 1)
-    traits = car(.dark, scale: 3)
+    car.set(.dark, scale: 3)
     clock.run(until: after(7))
     #expect(redraws == 2)
     // Once the scene resigns, a change waits for the next activation or pass.
     styleCheck.resign()
-    traits = car(.light, scale: 3)
+    car.set(.light, scale: 3)
     clock.run(until: after(20))
     #expect(redraws == 2)
     styleCheck.activate()
     #expect(redraws == 3)
     styleCheck.resign()
+  }
+}
+
+/// The car's trait collection, as the test changes it.
+@MainActor
+private final class Car {
+  private(set) var traits = UITraitCollection()
+
+  init(_ style: UIUserInterfaceStyle, scale: CGFloat) { set(style, scale: scale) }
+
+  func set(_ style: UIUserInterfaceStyle, scale: CGFloat) {
+    traits = UITraitCollection { traits in
+      traits.userInterfaceStyle = style
+      traits.displayScale = scale
+    }
   }
 }
