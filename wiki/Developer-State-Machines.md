@@ -508,7 +508,8 @@ non-increasing timestamp starts a new smoothing sequence.
 
 ## Phone heading
 
-`HeadingController` (`Shared/HeadingController.swift`) runs while the phone scene is active.
+`HeadingController` (`App/Heading/HeadingController.swift`) runs while the phone scene is
+active.
 
 ```mermaid
 stateDiagram-v2
@@ -539,13 +540,13 @@ status while stopped, and the next start resets to `waiting`.
 Under Reduce Motion with the dial kept, readings within 4 degrees of the shown one keep the
 shown angle.
 
-`HeadingController.hasSample` (`Shared/HeadingController.swift`) is derived from `sample` and
-changes only when a reading appears or clears, and `status` is set only when it changes. The
+`HeadingController.hasSample` (`App/Heading/HeadingController.swift`) is derived from `sample`
+and changes only when a reading appears or clears, and `status` is set only when it changes. The
 phone screen's layout reads those two, so only the dial, readout and accuracy views in
 `App/Heading/CompassView.swift`, which read `sample`, redraw at the heading rate.
 Within the dial, the rim's ticks don't depend on the bearing (`DialTicks` in
-`Shared/CompassDial.swift`): the dial rotates them as one layer, so a reading changes that
-rotation, the four labels and the pointer, and rebuilds no tick.
+`App/Heading/CompassDial.swift`): the dial rotates them as one layer, so a reading changes
+that rotation, the four labels and the pointer, and rebuilds no tick.
 
 ## Phone location and city
 
@@ -566,12 +567,12 @@ one tip. The location prompt waits until the tour ends.
 
 ## Diagnostics
 
-`CompassDiagnostics` (`Shared/CompassDiagnostics.swift`) is off by default. Turning it off
-erases all events. While on, each surface (`activity`, `fullscreen`) has a clock that is active
-or paused; gaps over 2 seconds and process changes start a new session rather than adding time.
-Events are kept for 30 active minutes per surface, up to 50,000. Only the app's process writes
-the store, under one lock, so each call is written before it returns and events keep the order
-of the calls. The store is two files in Application Support's `Diagnostics` folder:
+`CompassDiagnostics` (`App/Diagnostics/CompassDiagnostics.swift`) is off by default. Turning it
+off erases all events. While on, each surface (`activity`, `fullscreen`) has a clock that is
+active or paused; gaps over 2 seconds and process changes start a new session rather than adding
+time. Events are kept for 30 active minutes per surface, up to 50,000. Only the app's process
+writes the store, under one lock, so each call is written before it returns and events keep the
+order of the calls. The store is two files in Application Support's `Diagnostics` folder:
 `settings.json` holds the switch, the clocks and the next sequence number, and is saved on each
 observation and switch change; `events.jsonl` holds one event per line. Recording an event
 doesn't save settings, because opening the store takes the next sequence number from the last
