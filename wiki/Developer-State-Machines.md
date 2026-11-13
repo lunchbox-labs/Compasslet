@@ -37,6 +37,9 @@ These are fixed:
 - [#348](https://github.com/lunchbox-labs/compasslet/issues/348), fixed by
   [#354](https://github.com/lunchbox-labs/compasslet/pull/354):
   the Start shortcut could end a working drive after an earlier not-in-use report.
+- [#356](https://github.com/lunchbox-labs/compasslet/issues/356), fixed by
+  [#359](https://github.com/lunchbox-labs/compasslet/pull/359):
+  a not-in-use report while the CarPlay scene was active never ended the drive after it resigned.
 - [#357](https://github.com/lunchbox-labs/compasslet/issues/357), fixed by
   [#358](https://github.com/lunchbox-labs/compasslet/pull/358):
   the Start shortcut could announce the wrong end time when it started a kept drive's Live
@@ -128,11 +131,12 @@ or `driving` with one `DriveSession` object.
 The session holds everything that belongs to one drive: `startedAt`, the course filter, the
 last reading, `hasReceivedReading`, `notInUseReport`, `car` (its car presence),
 `notInUseSince`, the background time held for that wait, its heartbeat and deadline timers, and
-the drive's Live Activity status. Every sensor callback, timer and Live Activity callback holds
-the session it was made for and does nothing once `session === current` fails, so nothing from
-an earlier drive reaches the next one. State that spans drives stays on the controller:
-`active`, `suppressed`, `requestedPermission`, `setupStatus`, the CarPlay and car audio flags
-and `preparation`.
+the drive's Live Activity status, along with `notInUseReportedAt`, a not-in-use report with no
+newer reading since while Compasslet isn't active on CarPlay. Every sensor callback, timer and
+Live Activity callback holds the session it was made for and does nothing once
+`session === current` fails, so nothing from an earlier drive reaches the next one. State that
+spans drives stays on the controller: `active`, `suppressed`,
+`requestedPermission`, `setupStatus`, the CarPlay and car audio flags and `preparation`.
 
 ```mermaid
 stateDiagram-v2
@@ -174,9 +178,9 @@ deadline timer and starts the Live Activity.
 - eight hours since `startedAt`, or a clock that moved backwards (`driveLimit`, `beat`);
 - the car's absence: the start window for a drive started away from the car, or the
   auto-stop delay once the car has left (`endsAtLimit`, see below);
-- location reporting `notInUse` while Compasslet isn't active on CarPlay, with no newer
-  reading within 15 s (`notInUseLimit`, `endsAtLimit`; see
-  [Background start intent](#background-start-intent));
+- location reporting `notInUse` while Compasslet isn't active on CarPlay, or the CarPlay scene
+  resigning after such a report while it was active, with no newer reading within 15 s
+  (`notInUseLimit`, `endsAtLimit`; see [Background start intent](#background-start-intent));
 - an explicit end from the phone button, the End intent or the Start intent's foreground
   retry (`endDrive`);
 - a Live Activity dismissal or failed start while Compasslet's CarPlay scene isn't connected
@@ -430,19 +434,45 @@ stateDiagram-v2
 ```
 
 Any `notInUse` report while Compasslet isn't active on CarPlay starts a wait
-(`DriveSession.notInUseSince`, in `receive`). During `Waiting` the intent ends the drive first;
-after `Waiting` has settled, or when it was skipped, the wait is what ends it. A reading taken
-after the report or CarPlay activation (`clearNotInUse`) clears it; otherwise the deadline
-timer ends the drive at the first moment past 15 seconds after the report. The drive holds
-background time from the report until the wait clears or the drive's Live Activity has ended,
-so suspension can't stop the timer first.
+(`DriveSession.notInUseSince`, set by `startNotInUseWait` from `receive`). During `Waiting` the
+intent ends the drive first; after `Waiting` has settled, or when it was skipped, the wait is what
+ends it. A reading taken after the wait started or CarPlay activation (`clearNotInUse`) clears
+it; otherwise the deadline timer ends the drive at the first moment past 15 seconds after the
+wait started. The drive holds background time from the start of the wait until it clears or the
+drive's Live Activity has ended, so suspension can't stop the timer first. `notInUseSince` is nil
+whenever Compasslet is active on CarPlay, so `endsAtLimit` and `armDeadline` read it alone.
+
+A report while Compasslet is active on CarPlay starts no wait, since Compasslet in use on CarPlay
+keeps location running, and no new report comes if location stops once the scene resigns. So
+`DriveSession.notInUseReportedAt` keeps the time of every report, active or not, until a reading
+taken after it comes while the scene isn't active. Readings while it is active don't clear it,
+because they don't show that location keeps running without the scene. When the scene resigns
+(`carPlayResignedActive`, which `carPlayDisconnected` also calls) while it is set and no wait
+runs, the wait starts then, as it does in `receive`
+([#356](https://github.com/lunchbox-labs/compasslet/issues/356), fixed by
+[#359](https://github.com/lunchbox-labs/compasslet/pull/359)). So after such a report, every
+resignation waits, and the first reading taken after it clears the wait and the report; a
+disconnect then ends the drive 15 s later without one, whatever the auto-stop choice. Activation
+clears the wait but not the report, so the next resignation waits again. A reading taken before
+the resignation leaves the wait running whether it is delivered before or after it. A reading
+taken after a wait started but before a later report clears that wait and starts another from
+then, because the later report still has no newer reading.
+`NotInUseReportWhileCarPlayIsActiveTests` in `DriveSessionControllerTests.swift` covers each of
+these.
 
 ```mermaid
 stateDiagram-v2
     direction LR
     [*] --> Running
     Running --> NotInUse: notInUse, not active on CarPlay
-    NotInUse --> Running: newer reading, or CarPlay activation
+    Running --> Reported: notInUse, active on CarPlay
+    Reported --> Reported: notInUse or any reading
+    Reported --> NotInUse: scene resigns or disconnects
+    Reported --> Ended: any stopDrive
+    NotInUse --> Running: reading newer than the wait's start and every report
+    NotInUse --> NotInUse: reading newer than the wait's start but not a later report
+    NotInUse --> Running: CarPlay activation once a reading has cleared the report
+    NotInUse --> Reported: CarPlay activation while the report stands
     NotInUse --> Ended: 15 s without a newer reading, or any other stopDrive
 ```
 
@@ -483,6 +513,10 @@ Connection alone doesn't start one. Connection also starts the template's
 which resign and disconnect stop. Disconnect is reached from either
 `sceneDidDisconnect` or `didDisconnectInterfaceController`; the second call finds no bridge
 and no updates.
+
+Resigning, which a disconnect does first, starts the drive's not-in-use wait when location
+reported that the app isn't in use and no reading has come since while the scene wasn't active
+(see [Background start intent](#background-start-intent)).
 
 ## CarPlay update gate
 
