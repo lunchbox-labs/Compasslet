@@ -6,6 +6,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
   private var interfaceController: CPInterfaceController?
   private var compass: CarPlayCompassTemplate?
   private var updates: CarPlayTemplateUpdates?
+  private var styleCheck: CarPlayStyleCheck?
   private var bridge: CarPlayLifecycleBridge?
   private var drive: DriveSessionController?
   private var sceneActive = false
@@ -24,6 +25,8 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     CarPlayDisplayInfo.record(interfaceController.carTraitCollection)
     let screen = CarPlayCompassTemplate()
     compass = screen
+    styleCheck?.resign()
+    styleCheck = CarPlayStyleCheck { [weak self] in self?.refreshStyle() }
     self.updates?.stop()
     let updates = CarPlayTemplateUpdates(drive: coordinator) { [weak self] next in
       self?.render(next)
@@ -40,12 +43,13 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
   func sceneDidBecomeActive(_ scene: UIScene) {
     sceneActive = true
-    refreshStyle()
+    styleCheck?.activate()
     observeDiagnostics()
     bridge?.activate()
   }
   func sceneWillResignActive(_ scene: UIScene) {
     sceneActive = false
+    styleCheck?.resign()
     observeDiagnostics()
     bridge?.resign()
   }
@@ -56,10 +60,11 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     didDisconnectInterfaceController interfaceController: CPInterfaceController
   ) { disconnect() }
 
-  /// The template's style comes from the car's trait collection, not the drive. Apple doesn't say
-  /// whether that collection has changed by the time this arrives, so it's read on a later turn.
+  /// Apple doesn't say whether the car's trait collection has changed by the time this arrives,
+  /// so the style is checked on a later turn. The content style it reports isn't the trait
+  /// collection's style, and changes without it are left to the style check's interval.
   func contentStyleDidChange(_ contentStyle: UIUserInterfaceStyle) {
-    Task { [weak self] in self?.refreshStyle() }
+    Task { [weak self] in self?.styleCheck?.check() }
   }
 
   private func disconnect() {
@@ -69,6 +74,8 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     bridge = nil
     updates?.stop()
     updates = nil
+    styleCheck?.resign()
+    styleCheck = nil
     compass = nil
     interfaceController = nil
     drive = nil
@@ -77,10 +84,13 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
   private func render(_ next: CarPlayPresentation?) {
     guard drive != nil, let compass, let interfaceController else { return }
     observeDiagnostics()
-    refreshStyle()
-    guard let next else { return }
-    compass.update(next, traits: interfaceController.carTraitCollection)
-    _ = try? CompassDiagnostics.shared?.record(.fullscreen, kind: .templateUpdated)
+    if let next {
+      compass.update(next, traits: interfaceController.carTraitCollection)
+      _ = try? CompassDiagnostics.shared?.record(.fullscreen, kind: .templateUpdated)
+    }
+    // After a new value, this finds the style it was just drawn in and only restarts the wait
+    // before the next check of its own.
+    styleCheck?.check()
   }
 
   /// Redraws the current content when the car's style or scale differs from what it was drawn for.
@@ -91,8 +101,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
   /// Observes whether a drive shows on the active scene. Diagnostics count a gap over 2 seconds
   /// as a new session, and passes come only with changes, so while one shows with Debug Mode on,
-  /// this observes again a second later, through stretches with nothing new to show. That tick
-  /// also checks the car's style.
+  /// this observes again a second later, through stretches with nothing new to show.
   private func observeDiagnostics() {
     let active = sceneActive && drive?.isDriving == true
     try? CompassDiagnostics.shared?.observe(.fullscreen, active: active)
@@ -106,7 +115,6 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
       do { try await Task.sleep(for: .seconds(1)) } catch { return }
       guard let self, !Task.isCancelled else { return }
       self.diagnosticsTick = nil
-      self.refreshStyle()
       self.observeDiagnostics()
     }
   }

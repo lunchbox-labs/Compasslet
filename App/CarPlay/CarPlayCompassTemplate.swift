@@ -35,13 +35,16 @@ final class CarPlayCompassTemplate {
       bodyVariants: [NSAttributedString(string: value.status)], actionButtons: [])
   }
 
-  /// Redraws the current content when the car's style or scale changes between updates.
-  func refresh(traits: UITraitCollection) {
+  /// Redraws the current content when the car's style or scale changes between updates, and
+  /// reports whether it redrew.
+  @discardableResult
+  func refresh(traits: UITraitCollection) -> Bool {
     guard let rendered,
       rendered.traits.userInterfaceStyle != traits.userInterfaceStyle
         || rendered.traits.displayScale != traits.displayScale
-    else { return }
+    else { return false }
     update(rendered.value, traits: traits)
+    return true
   }
 
   /// Draws one plain image at the car display's scale in its current style. A single image,
