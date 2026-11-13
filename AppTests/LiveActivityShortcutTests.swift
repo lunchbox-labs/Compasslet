@@ -1,4 +1,5 @@
 import CompassCore
+import Foundation
 import Testing
 @testable import Compass
 
