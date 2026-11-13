@@ -199,8 +199,8 @@ run while a drive does, both in process, so they only advance while the process 
   lifecycle](#live-activity-lifecycle)) and writes a reading held by a lower update frequency or
   renews the stale date once it has gone 60 s without a write, and checks every limit again. The
   update frequency never changes the heartbeat. Each beat sets the next one an interval after it
-  ran (`scheduleHeartbeat`), so beats are never under 1 s apart, which diagnostics would skip,
-  and a late beat brings no burst of catch-up beats.
+  ran (`scheduleHeartbeat`), so beats are never under 1 s apart, which diagnostics wouldn't
+  write, and a late beat brings no burst of catch-up beats.
 - One deadline timer (`armDeadline`, `deadlineCame`) fires at the first moment past the
   earliest of the car's absence limit, the not-in-use limit and the reading's 5 s lifetime, so
   each takes effect on time rather than at the next heartbeat. A change that moves a limit later,
@@ -599,8 +599,8 @@ are saved at most about once a second per surface, but it still counts as seen
 call seen, and the time counted from the clock's last write, so a beat that wakes late after a
 repeat keeps the session, as when the first heartbeat after a Live Activity request lands under
 1 s after it. `record` takes an event from the clock's write until 2 s after the last call
-seen. A repeat counts only while the clock holds the call it repeats (`State.lastSeen`), so
-repeats of a call whose write failed can't bridge a gap. Measuring the gap from the last call
-written split such a session in two
+seen, or 3 s of wall time. A repeat counts only while the clock holds the call it repeats
+(`State.lastSeen`), so repeats of a call whose write failed can't bridge a gap. Measuring the gap
+from the last call written split such a session in two
 ([#343](https://github.com/lunchbox-labs/compasslet/issues/343), fixed by
 [#355](https://github.com/lunchbox-labs/compasslet/pull/355)).
