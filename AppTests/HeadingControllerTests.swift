@@ -5,14 +5,7 @@ import XCTest
 
 @MainActor
 final class HeadingControllerTests: XCTestCase {
-  final class Sensor: HeadingSensor {
-    var available = true
-    var receive: ((HeadingEvent) -> Void)?
-    var starts = 0
-    var stops = 0
-    func start() { starts += 1 }
-    func stop() { stops += 1 }
-  }
+  private typealias Sensor = TestHeadingSensor
 
   func testWaitingLiveStaleAndRecoveryReset() {
     let sensor = Sensor()

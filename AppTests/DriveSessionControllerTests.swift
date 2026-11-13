@@ -4,57 +4,8 @@ import XCTest
 
 @MainActor
 final class DriveSessionControllerTests: XCTestCase {
-  final class Sensor: TravelLocationSensor {
-    var authorization: TravelAuthorization = .authorized
-    var fullAccuracy = true
-    var servicesEnabled = true
-    var available = true
-    var receive: ((TravelSensorEvent) -> Void)?
-    var starts = 0
-    var stops = 0
-    var requests = 0
-    var fails = false
-    func requestAuthorization() { requests += 1 }
-    func start() throws {
-      if fails { throw Failure.unavailable }
-      starts += 1
-    }
-    func stop() { stops += 1 }
-  }
-  enum Failure: Error { case unavailable }
-  /// Records what the drive hands to its Live Activity.
-  final class Activity: CompassActivityPresenting {
-    var onDismiss: (() -> Void)?
-    var canStartActivities = true
-    var hasActivities = false
-    var starts = 0
-    var renewals = 0
-    func renew() { renewals += 1 }
-    var invalidations = 0
-    func invalidateReading() { invalidations += 1 }
-    var ends = 0
-    /// Every presentation handed over, in order.
-    var updates: [TravelPresentation] = []
-    var fails = false
-    var pauseStart = false
-    var startContinuation: CheckedContinuation<Void, Never>?
-    var pauseEnd = false
-    var endContinuation: CheckedContinuation<Void, Never>?
-    func start() async throws {
-      starts += 1
-      if pauseStart {
-        await withCheckedContinuation { startContinuation = $0 }
-      }
-      if fails { throw Failure.unavailable }
-    }
-    func show(_ presentation: TravelPresentation) { updates.append(presentation) }
-    func end() -> Task<Void, Never> {
-      ends += 1
-      guard pauseEnd else { return Task {} }
-      return Task { await withCheckedContinuation { self.endContinuation = $0 } }
-    }
-    func waitForPendingOperations() async {}
-  }
+  typealias Sensor = TestTravelSensor
+  typealias Activity = TestActivityPresenter
   let clock = TestDriveClock()
   var time: Date {
     get { clock.now }
@@ -1559,49 +1510,5 @@ final class DriveSessionControllerTests: XCTestCase {
     XCTAssertFalse(needed)
     XCTAssertTrue(controller.isDriving)
     await controller.endDrive()
-  }
-}
-
-/// A clock that moves only when a test sets it, and runs the timers that have come due when
-/// asked.
-final class TestDriveClock: DriveClock {
-  private typealias Entry = (id: Int, date: Date, fire: @MainActor () -> Void)
-  var now: Date
-  private var timers: [Entry] = []
-  private var lastID = 0
-
-  nonisolated init(now: Date = Date(timeIntervalSince1970: 1_000)) { self.now = now }
-
-  func timer(at date: Date, _ fire: @escaping @MainActor () -> Void) -> DriveTimer {
-    lastID += 1
-    let id = lastID
-    timers.append((id, date, fire))
-    return DriveTimer { [weak self] in self?.timers.removeAll { $0.id == id } }
-  }
-
-  /// When the timers still to fire are due, earliest first.
-  var pending: [Date] { timers.map(\.date).sorted() }
-
-  /// Runs each timer due by now once, earliest first. Timers set meanwhile wait for the next call.
-  func fireDue() {
-    let due = timers.filter { $0.date <= now }.sorted(by: Self.earlier).map(\.id)
-    for id in due {
-      guard let index = timers.firstIndex(where: { $0.id == id }) else { continue }
-      timers.remove(at: index).fire()
-    }
-  }
-
-  /// Moves time on to `date`, running each timer at its own time on the way, earliest first.
-  func run(until date: Date) {
-    while let next = timers.filter({ $0.date <= date }).min(by: Self.earlier) {
-      timers.removeAll { $0.id == next.id }
-      if next.date > now { now = next.date }
-      next.fire()
-    }
-    now = date
-  }
-
-  nonisolated private static func earlier(_ first: Entry, _ second: Entry) -> Bool {
-    (first.date, first.id) < (second.date, second.id)
   }
 }

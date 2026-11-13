@@ -65,6 +65,12 @@
 		F48727869BD5AB3FA5D5F667 /* CompassSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55EF90D92525BD937AE2BA8E /* CompassSettingsView.swift */; };
 		F97CCAF85C23D34073466081 /* CompassActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 381DFC8C59216D52B9C5D31F /* CompassActivityWidget.swift */; };
 		FED695C7626372E86C39FF85 /* CarPlayPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41FAB8F8EC4A00F7250C1BC0 /* CarPlayPresentation.swift */; };
+		814D98C01D583BC2119C8FAA /* TestActivityPresenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 409D58B597C4D8885E9D29AB /* TestActivityPresenter.swift */; };
+		D3D406269FD2EB09BC9078EA /* TestCityLookup.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3BDA79B556A08714EDF3500 /* TestCityLookup.swift */; };
+		2586BCCCF047AB549733A3A2 /* TestDriveClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6563116BA415A63687413169 /* TestDriveClock.swift */; };
+		27356DB5F7FE4A1C1A28311D /* TestHeadingSensor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B53FB2795E98F224522CB97B /* TestHeadingSensor.swift */; };
+		3635C686B9290D3B8539D3E8 /* TestPhoneLocationSensor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A061CE984AAE3608A0D472A7 /* TestPhoneLocationSensor.swift */; };
+		D61BD6D5EACC562F41944873 /* TestTravelSensor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EEC7A512FB3977F69A0C138 /* TestTravelSensor.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -155,6 +161,12 @@
 		EDBFE6BCA6B17287C0474860 /* CompassApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CompassApp.swift; sourceTree = "<group>"; };
 		F3323475E7B406064067E6C2 /* DriveSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveSessionController.swift; sourceTree = "<group>"; };
 		FD697ECCB09B35EE9223BFF1 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		409D58B597C4D8885E9D29AB /* TestActivityPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestActivityPresenter.swift; sourceTree = "<group>"; };
+		B3BDA79B556A08714EDF3500 /* TestCityLookup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestCityLookup.swift; sourceTree = "<group>"; };
+		6563116BA415A63687413169 /* TestDriveClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestDriveClock.swift; sourceTree = "<group>"; };
+		B53FB2795E98F224522CB97B /* TestHeadingSensor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestHeadingSensor.swift; sourceTree = "<group>"; };
+		A061CE984AAE3608A0D472A7 /* TestPhoneLocationSensor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestPhoneLocationSensor.swift; sourceTree = "<group>"; };
+		1EEC7A512FB3977F69A0C138 /* TestTravelSensor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestTravelSensor.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -317,9 +329,23 @@
 			path = App;
 			sourceTree = "<group>";
 		};
+		B5E24A2E6EF29CE69040CCED /* Fakes */ = {
+			isa = PBXGroup;
+			children = (
+				409D58B597C4D8885E9D29AB /* TestActivityPresenter.swift */,
+				B3BDA79B556A08714EDF3500 /* TestCityLookup.swift */,
+				6563116BA415A63687413169 /* TestDriveClock.swift */,
+				B53FB2795E98F224522CB97B /* TestHeadingSensor.swift */,
+				A061CE984AAE3608A0D472A7 /* TestPhoneLocationSensor.swift */,
+				1EEC7A512FB3977F69A0C138 /* TestTravelSensor.swift */,
+			);
+			path = Fakes;
+			sourceTree = "<group>";
+		};
 		E487DE66B8434EB992777500 /* AppTests */ = {
 			isa = PBXGroup;
 			children = (
+				B5E24A2E6EF29CE69040CCED /* Fakes */,
 				610060C3F3A54EBB9B3CFE8E /* HeadingControllerTests.swift */,
 				B44134007C500393E3DB2F22 /* PhoneLocationControllerTests.swift */,
 				43DECBF43D00BEAEEF7E2CD8 /* DriveSessionControllerTests.swift */,
@@ -503,6 +529,12 @@
 				5C4EE0A1D2B3C4D5E6F70811 /* ScreenshotTests.swift in Sources */,
 				BDA9B299C2EB6FF52080780E /* AppearanceStoreTests.swift in Sources */,
 				9A3C5E7F1B2D4F6081A3C5E8 /* RenderedPixels.swift in Sources */,
+				814D98C01D583BC2119C8FAA /* TestActivityPresenter.swift in Sources */,
+				D3D406269FD2EB09BC9078EA /* TestCityLookup.swift in Sources */,
+				2586BCCCF047AB549733A3A2 /* TestDriveClock.swift in Sources */,
+				27356DB5F7FE4A1C1A28311D /* TestHeadingSensor.swift in Sources */,
+				3635C686B9290D3B8539D3E8 /* TestPhoneLocationSensor.swift in Sources */,
+				D61BD6D5EACC562F41944873 /* TestTravelSensor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

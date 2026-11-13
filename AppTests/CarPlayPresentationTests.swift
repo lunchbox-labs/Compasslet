@@ -6,8 +6,6 @@ import XCTest
 
 @MainActor
 final class CarPlayPresentationTests: XCTestCase {
-  private typealias Sensor = DriveSessionControllerTests.Sensor
-
   func testDialUsesOnlyValidatedTrueCourse() {
     let now = Date(timeIntervalSince1970: 100)
     let valid = dialValue(59, at: now)
@@ -311,11 +309,11 @@ final class CarPlayPresentationTests: XCTestCase {
 
   /// A drive started by CarPlay on a clock that moves only when the test sets it, whose timers
   /// fire only when the test runs them.
-  private func runningDrive() async -> (DriveSessionController, Sensor, TestDriveClock) {
-    let sensor = Sensor()
+  private func runningDrive() async -> (DriveSessionController, TestTravelSensor, TestDriveClock) {
+    let sensor = TestTravelSensor()
     let clock = TestDriveClock()
     let drive = DriveSessionController(
-      sensor: sensor, activity: DriveSessionControllerTests.Activity(), clock: clock)
+      sensor: sensor, activity: TestActivityPresenter(), clock: clock)
     await drive.carPlayActivated()
     XCTAssertTrue(drive.isDriving)
     return (drive, sensor, clock)
@@ -557,8 +555,8 @@ final class CarPlayPresentationTests: XCTestCase {
     continuation?.resume()
   }
   func testRealBridgeKeepsTheDriveThroughAShortDisconnectDuringActivityStart() async {
-    let sensor = DriveSessionControllerTests.Sensor()
-    let activity = DriveSessionControllerTests.Activity()
+    let sensor = TestTravelSensor()
+    let activity = TestActivityPresenter()
     activity.pauseStart = true
     let clock = TestDriveClock()
     let drive = DriveSessionController(sensor: sensor, activity: activity, clock: clock)

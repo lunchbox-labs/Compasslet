@@ -63,6 +63,10 @@ Simulator tests inject heading and location input, so they don't validate the ph
 or in-car CarPlay operation. Physical-device checks are on the
 [Development](wiki/Developer-Development.md#device-validation) wiki page.
 
+Write new `AppTests` tests with Swift Testing; the older XCTest files stay as they are. The
+fake sensors, city lookup, Live Activity and drive clock are shared in `AppTests/Fakes`, so
+configure one of those rather than adding a private copy.
+
 ## UI capitalization
 
 Use title case for visible headings, navigation titles, short control labels and
