@@ -425,15 +425,21 @@ stateDiagram-v2
     NotInUse --> Ended: 15 s without a newer reading, or any other stopDrive
 ```
 
-A start that leaves the drive with neither CarPlay nor car audio answers `startedWithoutCarPlay`,
-whose dialog says the drive ends in a minute unless CarPlay connects. A new drive starts
-`awaited`, and a kept drive whose Live Activity the intent starts again moves to `awaited` from
-then (see [Car presence](#car-presence-and-the-absence-limit)), so the minute holds either way,
-whatever Auto-Stop is set to ([#357](https://github.com/lunchbox-labs/compasslet/issues/357),
-fixed by [#358](https://github.com/lunchbox-labs/compasslet/pull/358)).
+`LiveActivityShortcut.outcome(of:)` answers `startedWithoutCarPlay`, whose dialog says the drive
+ends in a minute unless CarPlay connects, only while the drive awaits the car
+(`DriveSessionController.isAwaitingTheCar`, true for `awaited`), read when the run ends rather
+than from the connection flags, since the car can come or go during the run. A new drive started
+away from the car starts `awaited`, and a kept drive whose Live Activity the intent starts again
+away from the car moves to `awaited` from then (see
+[Car presence](#car-presence-and-the-absence-limit)), so the minute holds either way, whatever
+Auto-Stop is set to ([#357](https://github.com/lunchbox-labs/compasslet/issues/357), fixed by
+[#358](https://github.com/lunchbox-labs/compasslet/pull/358)). A drive that is `present`, or
+`left` because CarPlay disconnected or car audio dropped during the run, answers `started`
+("Live Activity started."): it ends on Auto-Stop, which no dialog states.
 `StartShortcutAwayFromTheCarTests` in `LiveActivityShortcutTests.swift` runs the shortcut on the
-real controller for a kept drive with Auto-Stop at 1 minute and Never, car audio found at the
-start, the car connecting after it, the Live Activity dismissed again, and a new drive.
+real controller for a kept drive with Auto-Stop at 1 minute and Never, car audio found or gone at
+the start, the car connecting after it, CarPlay disconnecting during the restart, car audio
+dropping during the wait for location, the Live Activity dismissed again, and a new drive.
 
 ## CarPlay scene
 

@@ -119,6 +119,14 @@ final class DriveSessionController {
 
   var isDriving: Bool { current != nil }
 
+  /// Whether the drive, or the latest start of its Live Activity, came away from the car, which
+  /// hasn't shown since, so the drive ends after the start window unless CarPlay or car audio
+  /// connects. Shortcuts read it, not views.
+  var isAwaitingTheCar: Bool {
+    guard let session = current, case .awaited = session.car else { return false }
+    return true
+  }
+
   var compactStatus: CompactStatus {
     switch state {
     case .idle(liveActivityFailed: true): return .unavailable
