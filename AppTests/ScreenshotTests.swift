@@ -550,7 +550,9 @@ final class ScreenshotTests: XCTestCase {
       try await Task.sleep(for: .milliseconds(100))
       form.layoutIfNeeded()
       let row = try XCTUnwrap(form.layoutAttributesForItem(at: lastRow))
-      let viewport = form.bounds.inset(by: form.adjustedContentInset)
+      // A row aligned to the bottom edge can end a rounding error past it, at fractional
+      // offsets, so allow a hundredth of a point.
+      let viewport = form.bounds.inset(by: form.adjustedContentInset).insetBy(dx: 0, dy: -0.01)
       let hasCell = form.cellForItem(at: lastRow) != nil
       if hasCell, viewport.contains(row.frame) { return }
       seen =
