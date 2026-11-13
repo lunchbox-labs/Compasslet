@@ -495,7 +495,8 @@ and every check restarts it. Passes that come at least that often, as while movi
 nothing to do; on an idle scene (no drive, a drive that has ended, or a parked drive whose shown
 value doesn't change), it checks once a second. Activation checks and starts the timer; resign
 and disconnect cancel it, and `isolated deinit` does the same if the delegate drops the check
-without resigning it. A check on an inactive scene, from a pass, sets no timer.
+without resigning it. A check on an inactive scene, from a pass or a content style change, sets
+no timer.
 
 ```mermaid
 stateDiagram-v2

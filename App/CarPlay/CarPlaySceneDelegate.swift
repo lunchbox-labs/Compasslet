@@ -27,6 +27,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
     compass = screen
     styleCheck?.resign()
     styleCheck = CarPlayStyleCheck { [weak self] in self?.refreshStyle() }
+    if sceneActive { styleCheck?.activate() }
     self.updates?.stop()
     let updates = CarPlayTemplateUpdates(drive: coordinator) { [weak self] next in
       self?.render(next)

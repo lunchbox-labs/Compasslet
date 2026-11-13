@@ -169,8 +169,8 @@ final class CarPlayTemplateUpdates {
 }
 
 /// Checks the car's light or dark style and display scale while the CarPlay scene is active,
-/// once `interval` has passed with no other check. CarPlay tells a non-navigation app of no
-/// change to them, and passes come only with drive changes, so without this an idle scene would
+/// once `interval` has passed with no other check. CarPlay doesn't tell a non-navigation app
+/// when they change, and passes come only with drive changes, so without this an idle scene would
 /// keep the dial's old style. Each pass checks too, so while passes keep coming this never fires.
 @MainActor
 final class CarPlayStyleCheck {
