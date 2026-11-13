@@ -595,8 +595,8 @@ final class ScreenshotTests: XCTestCase {
   enum CarPlay { case disconnected, connected, driving }
 
   private static func compass(
-    heading: FixedHeadingSensor.Reading? = .northeast,
-    location: FixedTravelSensor.Access = .allowed,
+    heading: TestHeadingSensor.Reading? = .northeast,
+    location: TravelAuthorization = .authorized,
     tour: OnboardingState.Step? = nil,
     carPlay: CarPlay = .disconnected,
     showsTip: Bool = false,
@@ -604,7 +604,7 @@ final class ScreenshotTests: XCTestCase {
     showsSettings: Bool = false
   ) async -> AnyView {
     CompassView.makeHeadingController = {
-      let sensor = FixedHeadingSensor(reading: heading)
+      let sensor = TestHeadingSensor(reading: heading)
       let controller = HeadingController(sensor: sensor)
       if inactive {
         controller.start()
@@ -617,15 +617,12 @@ final class ScreenshotTests: XCTestCase {
       return controller
     }
     CompassView.makeLocationController = {
-      let sensor = FixedPhoneLocationSensor(allowed: location == .allowed)
-      let controller = PhoneLocationController(sensor: sensor, cityLookup: FixedCityLookup())
+      let sensor = TestPhoneLocationSensor(authorized: location == .authorized, fix: .applePark)
+      let controller = PhoneLocationController(
+        sensor: sensor, cityLookup: TestCityLookup(city: "Cupertino, CA"))
       if inactive {
         controller.start()
-        sensor.receive?(
-          .location(
-            CLLocation(
-              coordinate: CLLocationCoordinate2D(latitude: 37.3349, longitude: -122.009),
-              altitude: 48, horizontalAccuracy: 5, verticalAccuracy: 3, timestamp: .now)))
+        sensor.receive?(.location(TestPhoneLocationSensor.Fix.applePark.location(at: .now)))
         controller.stop(preservingLastReading: true)
       }
       return controller
@@ -670,7 +667,7 @@ final class ScreenshotTests: XCTestCase {
     return onboarding
   }
 
-  private static func settings(location: FixedTravelSensor.Access = .allowed) -> AnyView {
+  private static func settings(location: TravelAuthorization = .authorized) -> AnyView {
     AnyView(CompassSettingsView(drive: drive(location: location), showTour: {}))
   }
 
@@ -699,131 +696,11 @@ final class ScreenshotTests: XCTestCase {
       NavigationStack { AppearanceOptionEditor(surface: nil, option: option, store: .shared) })
   }
 
-  private static func drive(location: FixedTravelSensor.Access) -> DriveSessionController {
+  private static func drive(location: TravelAuthorization) -> DriveSessionController {
     DriveSessionController(
-      sensor: FixedTravelSensor(access: location), activity: IdleActivity(),
-      clock: TestDriveClock(now: Date()))
+      sensor: TestTravelSensor(authorization: location, showsSystemPrompt: true),
+      activity: TestActivityPresenter(), clock: TestDriveClock(now: Date()))
   }
-}
-
-/// A heading sensor that repeats one reading, fresh each time, while it runs.
-@MainActor
-private final class FixedHeadingSensor: HeadingSensor {
-  struct Reading {
-    let degrees: Double
-    let accuracy: Double
-
-    static let northeast = Reading(degrees: 47, accuracy: 5)
-    /// Core Location reports a negative accuracy when the compass needs calibration.
-    static let calibrationNeeded = Reading(degrees: 47, accuracy: -1)
-  }
-
-  let reading: Reading?
-  var receive: ((HeadingEvent) -> Void)?
-  var available: Bool { true }
-  private var repeating: Task<Void, Never>?
-
-  init(reading: Reading?) { self.reading = reading }
-
-  func start() {
-    guard let reading else { return }
-    repeating = Task { [weak self] in
-      while !Task.isCancelled {
-        self?.receive?(
-          .reading(degrees: reading.degrees, accuracy: reading.accuracy, timestamp: .now))
-        try? await Task.sleep(for: .milliseconds(500))
-      }
-    }
-  }
-
-  func stop() {
-    repeating?.cancel()
-    repeating = nil
-  }
-}
-
-/// A precise fix at Apple Park, repeated while the sensor runs so it never goes stale.
-@MainActor
-private final class FixedPhoneLocationSensor: PhoneLocationSensor {
-  let allowed: Bool
-  var receive: ((PhoneLocationEvent) -> Void)?
-  var authorized: Bool { allowed }
-  var precise: Bool { true }
-  var servicesEnabled: Bool { true }
-  private var repeating: Task<Void, Never>?
-
-  init(allowed: Bool) { self.allowed = allowed }
-
-  func start() {
-    repeating = Task { [weak self] in
-      while !Task.isCancelled {
-        self?.receive?(
-          .location(
-            CLLocation(
-              coordinate: CLLocationCoordinate2D(latitude: 37.3349, longitude: -122.009),
-              altitude: 48, horizontalAccuracy: 5, verticalAccuracy: 3, timestamp: .now)))
-        try? await Task.sleep(for: .seconds(1))
-      }
-    }
-  }
-
-  func stop() {
-    repeating?.cancel()
-    repeating = nil
-  }
-}
-
-@MainActor
-private final class FixedCityLookup: PhoneCityLookup {
-  func lookup(_ location: CLLocation, completion: @escaping @MainActor (String?) -> Void) {
-    completion("Cupertino, CA")
-  }
-
-  func cancel() {}
-}
-
-/// Travel location for the drive controller; it only decides the phone's location status here.
-@MainActor
-private final class FixedTravelSensor: TravelLocationSensor {
-  enum Access { case allowed, denied, notDetermined }
-
-  let access: Access
-  var receive: ((TravelSensorEvent) -> Void)?
-  /// Asks the system for real, so the simulator shows its prompt while access is undecided.
-  private var permissionManager: CLLocationManager?
-  var authorization: TravelAuthorization {
-    switch access {
-    case .allowed: .authorized
-    case .denied: .denied
-    case .notDetermined: .notDetermined
-    }
-  }
-  var fullAccuracy: Bool { true }
-  var servicesEnabled: Bool { true }
-  var available: Bool { true }
-
-  init(access: Access) { self.access = access }
-
-  func requestAuthorization() {
-    guard access == .notDetermined else { return }
-    let manager = CLLocationManager()
-    permissionManager = manager
-    manager.requestWhenInUseAuthorization()
-  }
-  func start() throws {}
-  func stop() {}
-}
-
-@MainActor
-private final class IdleActivity: CompassActivityPresenting {
-  var onDismiss: (() -> Void)?
-  var canStartActivities: Bool { true }
-  var hasActivities: Bool { false }
-  func start() async throws {}
-  func renew() {}
-  func show(_ presentation: TravelPresentation) {}
-  func end() -> Task<Void, Never> { Task {} }
-  func waitForPendingOperations() async {}
 }
 
 /// The Lock Screen and CarPlay Live Activity cards as the app renders them, since the

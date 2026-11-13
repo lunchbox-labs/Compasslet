@@ -153,8 +153,9 @@ final class DriveSessionController {
   static let readingLifetime = CompassSample.travelLifetime
   /// How long a drive runs at most.
   static let driveLimit: TimeInterval = 8 * 60 * 60
-  /// How often a drive re-reads the car audio route and setup, observes diagnostics and renews
-  /// its Live Activity. Diagnostics treat a gap over 2 seconds as a new session.
+  /// How often a drive re-reads the car audio route and setup and renews its Live Activity, which
+  /// keeps the activity's diagnostics clock running. Diagnostics treat a gap over 2 seconds as a
+  /// new session.
   static let heartbeatInterval: TimeInterval = 1
 
   private let sensor: any TravelLocationSensor
@@ -507,9 +508,9 @@ final class DriveSessionController {
       return
     }
     if endsAtLimit(session) { return }
-    try? CompassDiagnostics.shared?.observe(.activity, active: session.liveActivity == .active)
-    // Keeps the activity current through a stop with nothing new to show.
-    if session.liveActivity == .active { activity.renew() }
+    // Keeps the activity current through a stop with nothing new to show. A starting activity may
+    // already show, so it is renewed too; the activity's controller does nothing without one.
+    if session.liveActivity.isRunning { activity.renew() }
     expireReading(of: session)
     armDeadline(for: session)
     scheduleHeartbeat(for: session)
@@ -611,7 +612,6 @@ final class DriveSessionController {
     // The background time keeps the app running until the Live Activity has ended.
     let releaseBackgroundTime = session.releaseBackgroundTime
     session.releaseBackgroundTime = nil
-    try? CompassDiagnostics.shared?.observe(.activity, active: false)
     sensor.stop()
     observeAuthorization()
     presentation = TravelPresentation(sample: nil, status: .unavailable)

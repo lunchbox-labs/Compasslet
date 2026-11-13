@@ -36,30 +36,12 @@ private let setupCases: [SetupCase] = [
 
 @MainActor
 struct SetupStatusTests {
-  private final class Sensor: TravelLocationSensor {
-    var authorization: TravelAuthorization
-    var fullAccuracy: Bool
-    var servicesEnabled: Bool
-    var available: Bool
-    var receive: ((TravelSensorEvent) -> Void)?
-
-    init(services: Bool, available: Bool, authorization: TravelAuthorization, precise: Bool) {
-      servicesEnabled = services
-      self.available = available
-      self.authorization = authorization
-      fullAccuracy = precise
-    }
-
-    func requestAuthorization() {}
-    func start() throws {}
-    func stop() {}
-  }
-
   private func status(
     services: Bool, available: Bool, authorization: TravelAuthorization, precise: Bool
   ) -> DriveSessionController.SetupStatus {
-    let sensor = Sensor(
-      services: services, available: available, authorization: authorization, precise: precise)
+    let sensor = TestTravelSensor(
+      authorization: authorization, fullAccuracy: precise, servicesEnabled: services,
+      available: available)
     return DriveSessionController.SetupStatus(sensor: sensor)
   }
 

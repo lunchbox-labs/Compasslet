@@ -4,25 +4,8 @@ import XCTest
 
 @MainActor
 final class PhoneLocationControllerTests: XCTestCase {
-  private final class Sensor: PhoneLocationSensor {
-    var authorized = true
-    var precise = true
-    var servicesEnabled = true
-    var receive: ((PhoneLocationEvent) -> Void)?
-    var starts = 0
-    var stops = 0
-    func start() { starts += 1 }
-    func stop() { stops += 1 }
-  }
-
-  private final class CityLookup: PhoneCityLookup {
-    var completions: [@MainActor (String?) -> Void] = []
-    var cancellations = 0
-    func lookup(_ location: CLLocation, completion: @escaping @MainActor (String?) -> Void) {
-      completions.append(completion)
-    }
-    func cancel() { cancellations += 1 }
-  }
+  private typealias Sensor = TestPhoneLocationSensor
+  private typealias CityLookup = TestCityLookup
 
   func testCoordinateTextSpeaksAxisUnitsAndHemisphere() {
     let latitude = PhoneLocationReadout.coordinate(37.7749, latitude: true)

@@ -8,9 +8,15 @@ transition they touch. File and line references are to commit
 symbol if lines have moved. [Development](Developer-Development#reading-policies) gives the
 reading policies these machines enforce.
 
-Open failure states are listed here and under their machine, each tracked as an issue. One is
+Open failure states are listed here and under their machine, each tracked as an issue. Three are
 open:
 
+- [#336](https://github.com/lunchbox-labs/compasslet/issues/336): the CarPlay dial can keep the
+  wrong light or dark style on an idle scene, as the
+  [CarPlay update gate](#carplay-update-gate) section describes.
+- [#343](https://github.com/lunchbox-labs/compasslet/issues/343): diagnostics can split one Live
+  Activity session in two when a beat wakes late, as the [Diagnostics](#diagnostics) section
+  describes.
 - [#348](https://github.com/lunchbox-labs/compasslet/issues/348): the Start shortcut can end a
   working drive after an earlier not-in-use report
   ([Background start intent](#background-start-intent)).
@@ -51,7 +57,7 @@ active.
 | [Live Activity content](#live-activity-content) | `CompassActivityController` | The last content state and the update frequency choice do |
 | [Background start intent](#background-start-intent) | `StartLiveActivityIntent` | No |
 | [CarPlay scene](#carplay-scene) | `CarPlaySceneDelegate`, `CarPlayLifecycleBridge` | No |
-| [CarPlay update gate](#carplay-update-gate) | `CarPlayUpdateGate` | No |
+| [CarPlay update gate](#carplay-update-gate) | `CarPlayUpdateGate`, `CarPlayTemplateUpdates` | No |
 | [Travel course filter](#travel-course-filter) | `TravelCourseFilter` | No |
 | [Phone heading](#phone-heading) | `HeadingController` | No |
 | [Phone location and city](#phone-location-and-city) | `PhoneLocationController` | No |
@@ -188,13 +194,13 @@ Time comes from an injected `DriveClock` (`SystemDriveClock` in the app). Two ki
 run while a drive does, both in process, so they only advance while the process runs:
 
 - The heartbeat (`heartbeatInterval`, `beat`) runs once a second. It re-reads the car audio
-  route, refreshes setup, enforces the eight-hour limit, observes the `activity` diagnostics
-  surface (which counts a gap over 2 s as a new session), lets an active Live Activity write a
-  reading held by a lower update frequency or renew its stale date once it has gone 60 s without
-  a write, and checks every limit again. The update frequency never changes the heartbeat. Each
-  beat sets the next one an interval after it ran (`scheduleHeartbeat`), so beats are never
-  under 1 s apart, which diagnostics would skip, and a late beat brings no burst of catch-up
-  beats.
+  route, refreshes setup, enforces the eight-hour limit, calls `renew()` on a starting or active
+  Live Activity, which keeps its diagnostics clock running (see [Live Activity
+  lifecycle](#live-activity-lifecycle)) and writes a reading held by a lower update frequency or
+  renews the stale date once it has gone 60 s without a write, and checks every limit again. The
+  update frequency never changes the heartbeat. Each beat sets the next one an interval after it
+  ran (`scheduleHeartbeat`), so beats are never under 1 s apart, which diagnostics would skip,
+  and a late beat brings no burst of catch-up beats.
 - One deadline timer (`armDeadline`, `deadlineCame`) fires at the first moment past the
   earliest of the car's absence limit, the not-in-use limit and the reading's 5 s lifetime, so
   each takes effect on time rather than at the next heartbeat. A change that moves a limit later,
@@ -291,13 +297,23 @@ first drive, phone activation or intent. `end()` also ends every surviving activ
 ended, not as not running (`hasLiveActivity`).
 
 Every write sets a stale date 5 minutes ahead (`staleInterval`, `stamped`). While the drive's
-status is `active`, each heartbeat calls `renew()`, which writes a held reading whose refresh
-interval has passed (see [Live Activity content](#live-activity-content)), and otherwise
-rewrites the last content once nothing has been written for 60 seconds. When the process is
-terminated during a drive (force quit, crash or memory pressure), nothing renews the activity,
-so the system marks it stale within 5 minutes and the card shows travel as unavailable instead
-of the last direction. It stays until the app next launches, the End shortcut runs, or
-ActivityKit's own limit ends it.
+status is `starting` or `active`, each heartbeat calls `renew()`, which does nothing until the
+controller holds an activity, then writes a held reading whose refresh interval has passed (see
+[Live Activity content](#live-activity-content)), and otherwise rewrites the last content once
+nothing has been written for 60 seconds. When the process is terminated during a drive (force
+quit, crash or memory pressure), nothing renews the activity, so the system marks it stale
+within 5 minutes and the card shows travel as unavailable instead of the last direction. It
+stays until the app next launches, the End shortcut runs, or ActivityKit's own limit ends it.
+
+The controller is the only writer of the `activity` [diagnostics](#diagnostics) clock
+(`CompassActivityController.observeDiagnostics` in
+`App/LiveActivity/CompassActivityController.swift`), so the clock follows `handle`, whether an
+activity exists, rather than the drive's status. It observes the surface active once a request
+returns an activity and on each `renew()`, so the clock keeps running between writes, which a
+lower update frequency or a stop makes further apart than its 2 s gap. It observes it inactive
+on a dismissal (`dismissed`) and on every `end()`, including the one a drive's end queues. A
+request that fails or that an end overtakes never observes it active, and a Live Activity
+started again during a drive starts a new diagnostics session.
 
 ## Live Activity content
 
@@ -415,17 +431,74 @@ stateDiagram-v2
 ```
 
 Activation starts a drive when setup is `ready`, no drive runs and the scene isn't suppressed.
-Connection alone doesn't start one. Disconnect is reached from either
-`sceneDidDisconnect` or `didDisconnectInterfaceController`; the second call finds no bridge.
+Connection alone doesn't start one. Connection also starts the template's
+[updates](#carplay-update-gate), which disconnect stops. Disconnect is reached from either
+`sceneDidDisconnect` or `didDisconnectInterfaceController`; the second call finds no bridge
+and no updates.
 
 ## CarPlay update gate
 
 `CarPlayUpdateGate` (`CarPlayPresentation.swift:57`) shows a new bearing at most every 10
-seconds. Changes without a bearing (status text, drive ended) pass at the next render, so a
-status can replace a bearing within the slot, and the next bearing then waits for the slot to
-end. A clock set back before the last bearing shown ends its slot.
-`CarPlaySceneDelegate.render` runs every 250 ms while the scene is connected, which is the only
-way drive changes reach the template, so one shows about 250 ms after it happens.
+seconds (`CarPlayUpdateGate.slot`). Changes without a bearing (status text, drive ended) pass
+at once, so a status can replace a bearing within the slot, and the next bearing then waits for
+the slot to end. A clock set back before the last bearing shown ends its slot. When it holds a
+value back, `heldUntil` reports when that slot ends; a value equal to the one showing isn't
+held, and leaves `heldUntil` nil.
+
+`CarPlayTemplateUpdates` (`App/CarPlay/CarPlayPresentation.swift`) feeds the gate for each
+connected scene. `CarPlaySceneDelegate` creates it on connect and passes the drive through once
+before setting the root template. `start()` then follows an `Observations` sequence over what
+each pass reads from the drive (`presentation`, `setupStatus` and `isDriving`) and over Debug
+Mode (`CompassDiagnostics.isEnabled`). The sequence's first value makes a second pass on
+connect, now that the template is shown, and each later change makes one more. Apart from the
+Debug Mode tick below, nothing runs while those values are unchanged. A held bearing would
+otherwise wait for an unrelated change, so while the gate holds one, a single `DriveClock`
+timer is set for `heldUntil`, and its pass shows the value the drive has then.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> Following: didConnect, pass, start()
+    Following --> Following: drive or Debug Mode change, value shown or already showing
+    Following --> Holding: drive change, gate holds a bearing, timer for heldUntil
+    Holding --> Holding: drive change held until the same end, timer kept
+    Holding --> Following: drive change shown or already showing, timer cancelled
+    Holding --> Following: timer at heldUntil, pass
+    Following --> [*]: disconnect, stop()
+    Holding --> [*]: disconnect, stop(), timer cancelled
+```
+
+`stop()` cancels the observation task and the timer, so neither outlives the scene, and
+`isolated deinit` does the same if the delegate drops it without stopping. The observation
+task holds the updates weakly and checks for cancellation after each wait, so a change
+already on its way when CarPlay disconnects makes no pass. A pass also depends on the time,
+because a bearing stops showing once its sample is more than 5 seconds old; the drive
+publishes an `unavailable` presentation when its reading expires (`expireReading`), and that
+change makes the pass that clears the bearing.
+
+The dial's light or dark style and scale come from the car's trait collection
+(`CPInterfaceController.carTraitCollection`), not the drive, and CarPlay gives a non-navigation
+app no trait-change callback for it (only navigation apps get `carWindow`).
+`CarPlayCompassTemplate.refresh(traits:)` redraws the current content when those traits differ
+from the ones it was drawn for. It runs on every pass, on scene activation, on each Debug Mode
+tick, and on the main actor's turn after `contentStyleDidChange`. That callback reports the
+scene's content style, which Apple doesn't document as the trait collection's style, nor whether
+the collection has changed by the time it arrives; with Always Show Dark Map on, the content
+style can stay dark while the interface style changes.
+
+Open failure state ([#336](https://github.com/lunchbox-labs/compasslet/issues/336)): on an
+idle scene (no drive, a drive that has ended, or, with Debug Mode off, a drive whose shown value
+doesn't change, as when parked), a change to the trait collection's style or scale that
+`contentStyleDidChange` doesn't accompany, or that lands after the turn it schedules, isn't
+redrawn. The dial keeps the old style until the next pass, scene activation or content style
+change. The 250 ms poll this replaced caught it within 250 ms.
+
+Passes also observe the `fullscreen` diagnostics surface, which counts a gap over 2 seconds as
+a new session. While Debug Mode is on, a drive runs and the scene is active,
+`CarPlaySceneDelegate.observeDiagnostics` sets one task to observe again a second later, so
+stretches with nothing new to show still count as active. It stops at the first observation
+with any of those false, and on resign and disconnect. Switching Debug Mode on makes a pass,
+which starts it.
 
 ## Travel course filter
 
@@ -515,3 +588,12 @@ It first deletes the old SQLite store's `Diagnostics` folder from the App Group 
 that log can no longer be cleared from Settings. If the folder or its files can't be read then,
 diagnostics stay unavailable until relaunch. The export is a temporary file removed when its
 share sheet closes or Debug Mode is turned off.
+
+`CompassActivityController` is the only writer of the `activity` clock, so the clock follows
+whether the app holds an activity (see [Live Activity lifecycle](#live-activity-lifecycle)).
+
+Open failure state ([#343](https://github.com/lunchbox-labs/compasslet/issues/343)): a repeat
+within 1 s is dropped without moving the clock, so if the first beat after a request lands
+under 1 s after it and the next beat wakes late, the next call comes over 2 s after the last
+accepted one. That starts a new `activity` session with no `paused` before it and loses about
+2 s of active time.
