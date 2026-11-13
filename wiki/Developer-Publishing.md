@@ -6,11 +6,21 @@ not run it. Configure both environments to allow only `main`, with the required
 approvals, before running Publish; release tags do not need access. The workflow
 does not configure credentials or permissions.
 
-Uploads are eligible for both internal TestFlight testing and App Store submission.
-Publish does not submit to App Review or release the app; select the processed build
-and submit it separately in App Store Connect. A build previously uploaded as
-TestFlight Internal Only cannot be used for an App Store release; upload a new build
-without that restriction.
+Each run uploads one of two kinds of build, chosen by its **Release candidate** box:
+
+- **Unchecked (the default):** a test build for internal TestFlight testing only. App
+  Store Connect won't let it be submitted for review or added to external testing
+  groups, and Publish updates only its TestFlight copy, leaving the App Store listing
+  alone. Its Settings screen ends with a Test Build section showing the version, build
+  number and short commit SHA, so testers can tell exactly which build they have.
+- **Checked:** a release candidate, eligible for both internal TestFlight testing and
+  App Store submission. Publish also updates the App Store listing from its copy. It
+  shows no Test Build section.
+
+Check the box only for a build you're considering for an App Store release. A test
+build can't become one later; run Publish again with the box checked. Publish does not
+submit to App Review or release the app; select the processed release candidate and
+submit it separately in App Store Connect.
 
 ## GitHub Releases and screenshots
 
@@ -112,6 +122,7 @@ The TestFlight description also affects existing beta builds. Release notes and
 testing instructions are separate fields, never substituted for each other.
 
 After upload, sync updates only supplied, changed fields in existing localizations.
+Test builds update only the TestFlight description and testing instructions.
 App Store edits require an existing editable iOS version matching the archive's
 marketing version. Name, subtitle and privacy URLs belong to the app info record
 rather than a version, and are updated only when exactly one app info is editable.
@@ -123,4 +134,4 @@ When testing instructions are supplied, sync waits up to about ten minutes for
 the exact uploaded build to finish processing. A metadata failure does not undo
 the accepted upload or earlier metadata edits. Check App Store Connect and the
 job log before retrying. Re-run only the metadata job to retry the original build
-and copy; re-running the entire workflow uploads another build.
+and copy; re-running the entire workflow uploads another build of the same kind.

@@ -1,9 +1,12 @@
+import CompassCore
 import SwiftUI
 import UIKit
 
 struct CompassSettingsView: View {
   let drive: DriveSessionController
   let showTour: () -> Void
+  /// Present only in TestFlight test builds, so testers can tell which build they have.
+  var testBuild = TestBuildIdentity(infoDictionary: Bundle.main.infoDictionary ?? [:])
   @Environment(\.dismiss) private var dismiss
   @AccessibilityFocusState private var closeFocused: Bool
 
@@ -44,6 +47,23 @@ struct CompassSettingsView: View {
           Text("About")
         } footer: {
           Text("Compasslet is open source under the MIT License.")
+        }
+        if let testBuild {
+          Section {
+            LabeledContent("Version") {
+              Text(testBuild.versionAndBuild).foregroundStyle(.primary).textSelection(.enabled)
+            }
+            LabeledContent("Commit") {
+              Text(testBuild.shortCommit)
+                .foregroundStyle(.primary)
+                .speechSpellsOutCharacters()
+                .textSelection(.enabled)
+            }
+          } header: {
+            Text("Test Build")
+          } footer: {
+            Text("For TestFlight testing only.")
+          }
         }
       }
       .navigationTitle("Settings")

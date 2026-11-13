@@ -155,6 +155,10 @@ final class ScreenshotTests: XCTestCase {
           .environment(\.dynamicTypeSize, .accessibility5))
     },
     Screen(name: "settings-bottom", showsEnd: true) { ScreenshotTests.settings() },
+    // A TestFlight test build, which ends Settings with its version and commit.
+    Screen(name: "settings-test-build", showsEnd: true) {
+      ScreenshotTests.settings(testBuild: ScreenshotTests.sampleTestBuild)
+    },
     // Location is undecided, as after Allow Once ends, so Settings offers the prompt.
     Screen(name: "settings-location-undecided") {
       ScreenshotTests.settings(location: .notDetermined)
@@ -667,9 +671,15 @@ final class ScreenshotTests: XCTestCase {
     return onboarding
   }
 
-  private static func settings(location: TravelAuthorization = .authorized) -> AnyView {
-    AnyView(CompassSettingsView(drive: drive(location: location), showTour: {}))
+  private static func settings(
+    location: TravelAuthorization = .authorized, testBuild: TestBuildIdentity? = nil
+  ) -> AnyView {
+    AnyView(
+      CompassSettingsView(drive: drive(location: location), showTour: {}, testBuild: testBuild))
   }
+
+  private static let sampleTestBuild = TestBuildIdentity(
+    version: "1.0.1", build: "42.1", commit: "3f9c2a7d1e8b4c6a5f0e9d8c7b6a5f4e3d2c1b0a")
 
   /// A small file with the real export's name, since the share sheet previews its name and type.
   private static let sampleDiagnosticsExport = FileManager.default.temporaryDirectory

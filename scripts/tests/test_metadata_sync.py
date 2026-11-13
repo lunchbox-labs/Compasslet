@@ -95,6 +95,7 @@ class MetadataTests(unittest.TestCase):
         self.messages = []
 
     def sync(self, **kwargs):
+        kwargs.setdefault('release_candidate', True)
         return metadata.sync(self.client, metadata.read_copy(self.root),
                              'dev.example.compass', '1.2.3', '17.2',
                              report=self.messages.append, attempts=2, sleep=lambda _: None, **kwargs)
@@ -111,6 +112,19 @@ class MetadataTests(unittest.TestCase):
         self.apple.patches.clear()
         self.sync()
         self.assertEqual(self.apple.patches, [])
+
+    def test_test_builds_update_only_testflight_copy(self):
+        (self.locale / 'what-to-test.txt').write_text('Test these changes')
+        (self.locale / 'name.txt').write_text('New name')
+        self.sync(release_candidate=False)
+        self.assertEqual(sorted(p[0] for p in self.apple.patches),
+                         ['/v1/betaAppLocalizations/beta1', '/v1/betaBuildLocalizations/notes1'])
+        self.assertEqual(self.apple.store['attributes']['description'], 'Old store')
+        self.assertEqual(self.apple.info_copy['attributes']['name'], 'Old name')
+        self.assertFalse(any('appStoreVersions' in path or 'appInfos' in path
+                             for _, path, _ in self.apple.calls))
+        self.assertIn('SKIP App Store listing and app info: test builds update only TestFlight copy.',
+                      self.messages)
 
     def test_notes_bind_exact_processed_build_and_do_not_use_store_release_notes(self):
         (self.locale / 'what-to-test.txt').write_text('Test these changes')
