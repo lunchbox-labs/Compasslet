@@ -39,7 +39,7 @@ These are fixed:
   [#345](https://github.com/lunchbox-labs/compasslet/pull/345):
   a clock set back during a drive held back direction updates for as long as it went back.
 - [#356](https://github.com/lunchbox-labs/compasslet/issues/356), fixed by
-  [#PRNUM](https://github.com/lunchbox-labs/compasslet/pull/PRNUM):
+  [#359](https://github.com/lunchbox-labs/compasslet/pull/359):
   a not-in-use report while the CarPlay scene was active never ended the drive after it resigned.
 
 ## Overview
@@ -416,7 +416,7 @@ keeps location running, and no new report comes if location stops once the scene
 taken after it comes. When the scene resigns (`carPlayResignedActive`, which
 `carPlayDisconnected` also calls) while it is set and no wait runs, the wait starts then, as it
 does in `receive` ([#356](https://github.com/lunchbox-labs/compasslet/issues/356), fixed by
-[#PRNUM](https://github.com/lunchbox-labs/compasslet/pull/PRNUM)). Activation clears the wait
+[#359](https://github.com/lunchbox-labs/compasslet/pull/359)). Activation clears the wait
 but not the report, so a later resignation with still no newer reading waits again from then. A
 reading taken between the report and the resignation but delivered after it clears the report
 but not a wait that started at the resignation; the next reading does.
