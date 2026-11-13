@@ -21,7 +21,8 @@ Precise Location. Use Settings to repair permissions if needed; Always access is
 not required. Open Compasslet from the CarPlay launcher to start automatically.
 Connecting a cable alone may not launch the app.
 
-Switching to Maps keeps the drive running with the background location indicator.
+Switching to Maps keeps the drive running with the background location indicator. If
+Compasslet can't keep reading location after you switch, the drive ends about 15 seconds later.
 The drive ends a minute after CarPlay disconnects (change this in
 Settings › Live Activity › Auto-Stop; see [Live Activity Settings](#live-activity-settings)),
 when you end the Live Activity, when location access or Precise Location is turned off, or

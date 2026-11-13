@@ -88,8 +88,11 @@ final class DriveSessionController {
     /// Whether the car shows, and since when it hasn't while neither CarPlay nor car audio is
     /// connected.
     var car = CarPresence.present
-    /// When location last reported that the app isn't in use, while no newer reading has come.
-    /// Unlike `notInUseSince`, it records reports while Compasslet is active on CarPlay too.
+    /// When location last reported that the app isn't in use, until a newer reading comes while
+    /// Compasslet isn't active on CarPlay. It records reports while the scene is active too,
+    /// unlike `notInUseSince`, and readings then don't clear it, because location running while
+    /// Compasslet is in use on CarPlay doesn't show that it keeps running once the scene resigns.
+    /// So it isn't whether location has recovered since the report, which any newer reading shows.
     var notInUseReportedAt: Date?
     /// When the drive began waiting for a reading after a not-in-use report: at the report, or
     /// when Compasslet's CarPlay scene resigned after one. Nil while the scene is active, which
@@ -366,13 +369,13 @@ final class DriveSessionController {
     }
   }
 
-  /// Compasslet's CarPlay scene stays connected but is no longer in use, as when another app
-  /// comes to the front on CarPlay.
+  /// Compasslet's CarPlay scene is no longer in use, as when another app comes to the front on
+  /// CarPlay or CarPlay disconnects.
   func carPlayResignedActive() {
     active = false
     suppressed = false
-    // A report made while the scene was active, with no newer reading since, may mean location
-    // stops now that Compasslet isn't in use, and no new report will come to say so.
+    // A report made while the scene was active may mean location stops now that Compasslet isn't
+    // in use, and no new report will come to say so.
     if let session = current, session.notInUseReportedAt != nil {
       startNotInUseWait(for: session)
     }
@@ -472,12 +475,17 @@ final class DriveSessionController {
       if session.liveActivity.isRunning { activity.invalidateReading() }
       publish(session.filter.update(nil, now: clock.now), for: session)
     case .reading(let reading):
-      // A newer reading shows that location runs again after the report.
-      if let reportedAt = session.notInUseReportedAt, reading.timestamp > reportedAt {
+      // A newer reading shows that location runs after the report, but only one that comes while
+      // Compasslet isn't active on CarPlay shows that it runs without the scene.
+      if !active, let reportedAt = session.notInUseReportedAt, reading.timestamp > reportedAt {
         session.notInUseReportedAt = nil
       }
-      // A reading taken before the report doesn't show that location still runs.
-      if let since = session.notInUseSince, reading.timestamp > since { clearNotInUse() }
+      // A reading taken before the wait began doesn't show that location still runs.
+      if let since = session.notInUseSince, reading.timestamp > since {
+        clearNotInUse()
+        // A later report that this reading doesn't follow still waits, from now.
+        if session.notInUseReportedAt != nil { startNotInUseWait(for: session) }
+      }
       session.lastReading = reading
       session.hasReceivedReading = true
       publish(session.filter.update(reading, now: clock.now), for: session)

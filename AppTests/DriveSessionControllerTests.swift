@@ -62,22 +62,51 @@ struct NotInUseReportWhileCarPlayIsActiveTests {
     #expect(background.releases == 1)
   }
 
-  /// Only a reading taken after the report shows that location runs again.
+  /// Readings while the scene is active don't show that location keeps running once it resigns,
+  /// whether or not they are newer than the report.
   @Test(arguments: [1, 0, -0.5])
-  func resignWaitsUnlessAReadingIsNewerThanTheReport(secondsAfterTheReport: TimeInterval) async {
-    let recovered = secondsAfterTheReport > 0
+  func readingWhileActiveStillWaitsOnceTheSceneResigns(secondsAfterTheReport: TimeInterval) async {
     await controller.carPlayActivated()
     let reportedAt = clock.now
     sensor.receive?(.notInUse)
     clock.now += 1
     sensor.receive?(reading(takenAt: reportedAt + secondsAfterTheReport))
+    let resigned = clock.now
     controller.carPlayResignedActive()
-    #expect(background.holds == (recovered ? 0 : 1))
-    clock.run(until: clock.now + DriveSessionController.notInUseLimit + 1)
-    #expect(controller.isDriving == recovered)
+    #expect(background.holds == 1)
+    clock.run(until: resigned + DriveSessionController.notInUseLimit)
+    #expect(controller.isDriving)
+    clock.run(until: resigned + DriveSessionController.notInUseLimit + 0.1)
+    #expect(!controller.isDriving)
+    await controller.waitForPendingOperations()
+    #expect(background.releases == 1)
+  }
+
+  /// A reading taken before the scene resigned but delivered after it leaves the wait running, as
+  /// it would delivered before; the first reading taken after the resignation clears it.
+  @Test(arguments: [false, true])
+  func readingTakenBeforeTheResignationKeepsTheWait(freshReadingFollows: Bool) async {
+    await controller.carPlayActivated()
+    sensor.receive?(.notInUse)
+    clock.now += 1
+    let taken = clock.now
+    clock.now += 1
+    let resigned = clock.now
+    controller.carPlayResignedActive()
+    sensor.receive?(reading(takenAt: taken))
+    #expect(background.holds == 1)
+    #expect(background.releases == 0)
+    if freshReadingFollows {
+      clock.now += 1
+      sensor.receive?(reading())
+      #expect(background.releases == 1)
+    }
+    clock.run(until: resigned + DriveSessionController.notInUseLimit + 0.1)
+    #expect(controller.isDriving == freshReadingFollows)
     await controller.endDrive()
     await controller.waitForPendingOperations()
-    #expect(background.releases == background.holds)
+    #expect(background.holds == 1)
+    #expect(background.releases == 1)
   }
 
   @Test func reactivatingWithinTheWaitKeepsTheDriveUntilTheSceneResignsAgain() async {
@@ -96,6 +125,72 @@ struct NotInUseReportWhileCarPlayIsActiveTests {
     controller.carPlayResignedActive()
     #expect(background.holds == 2)
     clock.run(until: resignedAgain + DriveSessionController.notInUseLimit + 0.1)
+    #expect(!controller.isDriving)
+    await controller.waitForPendingOperations()
+    #expect(background.releases == 2)
+  }
+
+  /// A report while the scene isn't active, then activation, which clears its wait: the next
+  /// resignation waits again, since readings while the scene is active don't clear the report.
+  @Test(arguments: [false, true])
+  func backgroundReportWaitsAgainAfterActivationAndResignation(readingWhileActive: Bool) async {
+    await controller.carPlayActivated()
+    controller.carPlayResignedActive()
+    #expect(background.holds == 0)
+    sensor.receive?(.notInUse)
+    #expect(background.holds == 1)
+    clock.now += 5
+    await controller.carPlayActivated()
+    #expect(background.releases == 1)
+    if readingWhileActive {
+      clock.now += 1
+      sensor.receive?(reading())
+    }
+    let resigned = clock.now
+    controller.carPlayResignedActive()
+    #expect(background.holds == 2)
+    clock.run(until: resigned + DriveSessionController.notInUseLimit)
+    #expect(controller.isDriving)
+    clock.run(until: resigned + DriveSessionController.notInUseLimit + 0.1)
+    #expect(!controller.isDriving)
+    await controller.waitForPendingOperations()
+    #expect(background.releases == 2)
+  }
+
+  @Test func secondReportDuringAWaitFromTheResignationKeepsItsStart() async {
+    await controller.carPlayActivated()
+    sensor.receive?(.notInUse)
+    clock.now += 1
+    let resigned = clock.now
+    controller.carPlayResignedActive()
+    clock.now += 5
+    sensor.receive?(.notInUse)
+    #expect(background.holds == 1)
+    clock.run(until: resigned + DriveSessionController.notInUseLimit)
+    #expect(controller.isDriving)
+    clock.run(until: resigned + DriveSessionController.notInUseLimit + 0.1)
+    #expect(!controller.isDriving)
+    await controller.waitForPendingOperations()
+    #expect(background.releases == 1)
+  }
+
+  /// A reading newer than the wait's start but older than a later report ends that wait, and the
+  /// later report starts another from then.
+  @Test func readingOlderThanALaterReportKeepsWaiting() async {
+    await controller.carPlayActivated()
+    controller.carPlayResignedActive()
+    let resigned = clock.now
+    clock.now += 1
+    sensor.receive?(.notInUse)
+    clock.now += 2
+    sensor.receive?(.notInUse)
+    let restarted = clock.now
+    sensor.receive?(reading(takenAt: resigned + 2))
+    #expect(background.holds == 2)
+    #expect(background.releases == 1)
+    clock.run(until: restarted + DriveSessionController.notInUseLimit)
+    #expect(controller.isDriving)
+    clock.run(until: restarted + DriveSessionController.notInUseLimit + 0.1)
     #expect(!controller.isDriving)
     await controller.waitForPendingOperations()
     #expect(background.releases == 2)
@@ -1508,13 +1603,15 @@ final class DriveSessionControllerTests: XCTestCase {
     sensor.receive?(.notInUse)
     clock.run(until: start + DriveSessionController.notInUseLimit)
     await controller.carPlayActivated()
-    // A newer reading shows that location runs, so resigning starts no new wait.
-    sensor.receive?(reading())
+    // The report has had no reading outside CarPlay, so resigning waits again, and a reading
+    // taken after the resignation clears that wait.
     controller.carPlayResignedActive()
-    clock.run(until: start + 2 * DriveSessionController.notInUseLimit)
+    time += 1
+    sensor.receive?(reading())
+    clock.run(until: start + 2 * DriveSessionController.notInUseLimit + 1)
     XCTAssertTrue(controller.isDriving)
-    XCTAssertEqual(backgroundHolds, 1)
-    XCTAssertEqual(backgroundReleases, 1)
+    XCTAssertEqual(backgroundHolds, 2)
+    XCTAssertEqual(backgroundReleases, 2)
     await controller.endDrive()
   }
 
