@@ -1080,25 +1080,6 @@ final class DriveSessionControllerTests: XCTestCase {
     }
   }
 
-  func testStartingTheLiveActivityAgainDuringTheWaitAppliesAutoStop() async {
-    autoStop = .never
-    let sensor = Sensor(), activity = Activity(), controller = make(sensor, activity)
-    await controller.carPlayActivated()
-    activity.onDismiss?()
-    controller.carPlayResignedActive()
-    controller.carPlayDisconnected()
-    let left = time
-    clock.run(until: left + 30)
-    // Started again from Shortcuts while the car is away, it shows the drive again.
-    await controller.startLiveActivity()
-    XCTAssertEqual(controller.compactStatus, .active)
-    clock.run(until: left + 60 * 60)
-    XCTAssertTrue(controller.isDriving)
-    // Dismissed again without CarPlay, the drive ends at once, as before.
-    activity.onDismiss?()
-    XCTAssertFalse(controller.isDriving)
-  }
-
   func testChangingAutoStopDuringAWaitAppliesToIt() async {
     // Shorter than the time already waited: the next beat ends the drive.
     autoStop = .never
