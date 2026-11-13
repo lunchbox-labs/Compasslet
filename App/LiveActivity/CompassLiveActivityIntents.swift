@@ -72,8 +72,7 @@ protocol ShortcutDrive: AnyObject {
   var isDriving: Bool { get }
   var compactStatus: DriveSessionController.CompactStatus { get }
   var setupStatus: DriveSessionController.SetupStatus { get }
-  var isCarPlayConnected: Bool { get }
-  var isCarAudioConnected: Bool { get }
+  var isAwaitingTheCar: Bool { get }
   var hasLiveActivity: Bool { get }
   func startLiveActivity() async
   func endLiveActivity() async
@@ -131,10 +130,9 @@ enum LiveActivityShortcut {
     default: return .needsPreciseLocation
     }
     guard drive.isDriving, drive.compactStatus != .unavailable else { return .couldNotStart }
-    guard drive.isCarPlayConnected || drive.isCarAudioConnected else {
-      return .startedWithoutCarPlay
-    }
-    return .started
+    // Read when the run ends, since the car can come or go while it runs. A drive whose car left
+    // during the run ends on Auto-Stop, which the minute would misstate.
+    return drive.isAwaitingTheCar ? .startedWithoutCarPlay : .started
   }
 }
 

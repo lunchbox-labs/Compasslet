@@ -58,8 +58,8 @@ final class DriveSessionController {
   /// Whether a drive's car shows, and how its absence ends the drive.
   private enum CarPresence {
     case present
-    /// The drive started away from the car, which hasn't shown since. The drive ends once
-    /// `carPlayAbsenceLimit` passes without it.
+    /// The drive, or the latest start of its Live Activity, came away from the car, which hasn't
+    /// shown since. The drive ends once `carPlayAbsenceLimit` passes without it.
     case awaited(since: Date)
     /// The car left during the drive. The drive ends once the auto-stop delay passes, unless
     /// auto-stop is never, or after `carPlayAbsenceLimit` while its Live Activity isn't running.
@@ -126,6 +126,14 @@ final class DriveSessionController {
   private(set) var isCarAudioConnected = false
 
   var isDriving: Bool { current != nil }
+
+  /// Whether the drive, or the latest start of its Live Activity, came away from the car, which
+  /// hasn't shown since, so the drive ends after the start window unless CarPlay or car audio
+  /// connects. Shortcuts read it, not views.
+  var isAwaitingTheCar: Bool {
+    guard let session = current, case .awaited = session.car else { return false }
+    return true
+  }
 
   var compactStatus: CompactStatus {
     switch state {
@@ -289,11 +297,11 @@ final class DriveSessionController {
   }
 
   /// The manual fallback for when the automatic CarPlay start doesn't produce a Live Activity.
-  /// With no drive running, it starts one. Started without CarPlay, as from Shortcuts away
-  /// from the car, the drive ends unless CarPlay connects within the absence limit. During a
-  /// drive whose Live Activity was dismissed or couldn't start, it starts only the Live
-  /// Activity again. Call it from the foreground app or a Live Activity intent, because
-  /// ActivityKit only starts activities there.
+  /// With no drive running, it starts one. During a drive whose Live Activity was dismissed or
+  /// couldn't start, it starts only the Live Activity again. Either way, started away from the
+  /// car, as from Shortcuts, the drive ends unless CarPlay connects within the absence limit.
+  /// Call it from the foreground app or a Live Activity intent, because ActivityKit only starts
+  /// activities there.
   func startLiveActivity() async {
     await prepare()
     refreshSetupStatus()
@@ -312,7 +320,18 @@ final class DriveSessionController {
       return
     }
     setLiveActivity(.starting, for: session)
+    awaitCarIfAway(session)
     await startActivity(for: session)
+  }
+
+  /// Away from the car, a drive whose Live Activity starts again waits for the car as a new drive
+  /// does, so it gets the start window from now, whatever auto-stop is set to, rather than the
+  /// auto-stop delay counted from when the car left.
+  private func awaitCarIfAway(_ session: DriveSession) {
+    refreshCarAudio()
+    guard !isCarPlayConnected, !isCarAudioConnected else { return }
+    session.car = .awaited(since: clock.now)
+    armDeadline(for: session)
   }
 
   private func beginDrive() async {
@@ -444,6 +463,13 @@ final class DriveSessionController {
     }
   }
 
+  /// Reads the car audio route itself during a drive, because a notification can be missed while
+  /// the app is suspended.
+  private func refreshCarAudio() {
+    let connected = readCarAudioRoute()
+    if connected != isCarAudioConnected { carAudioChanged(connected: connected) }
+  }
+
   private func refreshSetupStatus() {
     if sensor.authorization != .notDetermined { requestedPermission = false }
     let status = SetupStatus(sensor: sensor)
@@ -507,7 +533,8 @@ final class DriveSessionController {
   }
 
   /// Sets the next beat an interval after now, so each gap is at least the interval and a late
-  /// beat brings no burst of catch-up beats. Diagnostics skip calls under 1 s apart.
+  /// beat brings no burst of catch-up beats. Diagnostics don't write a renewal under 1 s after the
+  /// last one written, but still measure their 2 s gap from it.
   private func scheduleHeartbeat(for session: DriveSession) {
     let date = clock.now.addingTimeInterval(Self.heartbeatInterval)
     session.heartbeat = clock.timer(at: date) { [weak self, weak session] in
@@ -520,8 +547,7 @@ final class DriveSessionController {
   /// Live Activity goes stale on its own.
   private func beat(_ session: DriveSession) {
     guard session === current else { return }
-    let carAudio = readCarAudioRoute()
-    if carAudio != isCarAudioConnected { carAudioChanged(connected: carAudio) }
+    refreshCarAudio()
     refreshSetupStatus()
     let elapsed = clock.now.timeIntervalSince(session.startedAt)
     guard setupStatus == .ready, (0..<Self.driveLimit).contains(elapsed) else {
@@ -552,11 +578,12 @@ final class DriveSessionController {
     return false
   }
 
-  /// How long the car can stay away, and since when it has: the start window for a drive started
-  /// away from it, or the auto-stop delay once it has left. Nil while the car shows, or once it
-  /// has left when auto-stop is never. Auto-stop keeps only a drive whose Live Activity is
-  /// starting or showing; one whose Live Activity was dismissed or couldn't start shows nothing
-  /// once the car has gone, so it ends after the standard minute whatever auto-stop is set to.
+  /// How long the car can stay away, and since when it has: the start window for a drive, or a
+  /// Live Activity start, away from it, or the auto-stop delay once it has left. Nil while the car
+  /// shows, or once it has left when auto-stop is never. Auto-stop keeps only a drive whose Live
+  /// Activity is starting or showing; one whose Live Activity was dismissed or couldn't start
+  /// shows nothing once the car has gone, so it ends after the standard minute whatever auto-stop
+  /// is set to.
   private func carAbsence(of session: DriveSession) -> (since: Date, limit: TimeInterval)? {
     switch session.car {
     case .present:

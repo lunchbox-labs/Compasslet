@@ -8,15 +8,9 @@ transition they touch. File and line references are to commit
 symbol if lines have moved. [Development](Developer-Development#reading-policies) gives the
 reading policies these machines enforce.
 
-Open failure states are listed here and under their machine, each tracked as an issue. Three are
+Open failure states are listed here and under their machine, each tracked as an issue. One is
 open:
 
-- [#336](https://github.com/lunchbox-labs/compasslet/issues/336): the CarPlay dial can keep the
-  wrong light or dark style on an idle scene, as the
-  [CarPlay update gate](#carplay-update-gate) section describes.
-- [#343](https://github.com/lunchbox-labs/compasslet/issues/343): diagnostics can split one Live
-  Activity session in two when a beat wakes late, as the [Diagnostics](#diagnostics) section
-  describes.
 - [#348](https://github.com/lunchbox-labs/compasslet/issues/348): the Start shortcut can end a
   working drive after an earlier not-in-use report
   ([Background start intent](#background-start-intent)).
@@ -32,6 +26,12 @@ These are fixed:
 - [#249](https://github.com/lunchbox-labs/compasslet/issues/249), fixed by
   [#252](https://github.com/lunchbox-labs/compasslet/pull/252):
   a background start that lost location after its start window could keep running.
+- [#336](https://github.com/lunchbox-labs/compasslet/issues/336), fixed by
+  [#353](https://github.com/lunchbox-labs/compasslet/pull/353):
+  the CarPlay dial could keep the wrong light or dark style on an idle scene.
+- [#343](https://github.com/lunchbox-labs/compasslet/issues/343), fixed by
+  [#355](https://github.com/lunchbox-labs/compasslet/pull/355):
+  diagnostics could split one Live Activity session in two when a beat woke late.
 - [#346](https://github.com/lunchbox-labs/compasslet/issues/346), fixed by
   [#345](https://github.com/lunchbox-labs/compasslet/pull/345):
   the phone said nothing when the Live Activity couldn't start without Compasslet on CarPlay.
@@ -41,6 +41,10 @@ These are fixed:
 - [#356](https://github.com/lunchbox-labs/compasslet/issues/356), fixed by
   [#359](https://github.com/lunchbox-labs/compasslet/pull/359):
   a not-in-use report while the CarPlay scene was active never ended the drive after it resigned.
+- [#357](https://github.com/lunchbox-labs/compasslet/issues/357), fixed by
+  [#358](https://github.com/lunchbox-labs/compasslet/pull/358):
+  the Start shortcut could announce the wrong end time when it started a kept drive's Live
+  Activity again.
 
 ## Overview
 
@@ -60,7 +64,7 @@ active.
 | [Live Activity content](#live-activity-content) | `CompassActivityController` | The last content state and the update frequency choice do |
 | [Background start intent](#background-start-intent) | `StartLiveActivityIntent` | No |
 | [CarPlay scene](#carplay-scene) | `CarPlaySceneDelegate`, `CarPlayLifecycleBridge` | No |
-| [CarPlay update gate](#carplay-update-gate) | `CarPlayUpdateGate`, `CarPlayTemplateUpdates` | No |
+| [CarPlay update gate](#carplay-update-gate) | `CarPlayUpdateGate`, `CarPlayTemplateUpdates`, `CarPlayStyleCheck` | No |
 | [Travel course filter](#travel-course-filter) | `TravelCourseFilter` | No |
 | [Phone heading](#phone-heading) | `HeadingController` | No |
 | [Phone location and city](#phone-location-and-city) | `PhoneLocationController` | No |
@@ -203,8 +207,8 @@ run while a drive does, both in process, so they only advance while the process 
   lifecycle](#live-activity-lifecycle)) and writes a reading held by a lower update frequency or
   renews the stale date once it has gone 60 s without a write, and checks every limit again. The
   update frequency never changes the heartbeat. Each beat sets the next one an interval after it
-  ran (`scheduleHeartbeat`), so beats are never under 1 s apart, which diagnostics would skip,
-  and a late beat brings no burst of catch-up beats.
+  ran (`scheduleHeartbeat`), so beats are never under 1 s apart, which diagnostics wouldn't
+  write, and a late beat brings no burst of catch-up beats.
 - One deadline timer (`armDeadline`, `deadlineCame`) fires at the first moment past the
   earliest of the car's absence limit, the not-in-use limit and the reading's 5 s lifetime, so
   each takes effect on time rather than at the next heartbeat. A change that moves a limit later,
@@ -216,9 +220,9 @@ run while a drive does, both in process, so they only advance while the process 
 ## Car presence and the absence limit
 
 Two signals show the car: Compasslet's CarPlay scene (`isCarPlayConnected`) and the iPhone
-audio route going to CarPlay (`isCarAudioConnected`, from `CarAudioRouteMonitor` and re-read on
-every heartbeat in `beat`). A drive started from a CarPlay automation may only ever see the
-audio route.
+audio route going to CarPlay (`isCarAudioConnected`, from `CarAudioRouteMonitor` and re-read
+by `refreshCarAudio` on every heartbeat in `beat` and when a drive's Live Activity starts again).
+A drive started from a CarPlay automation may only ever see the audio route.
 
 ```mermaid
 stateDiagram-v2
@@ -229,6 +233,7 @@ stateDiagram-v2
     Awaited --> Ended: 60 s without the car (carPlayAbsenceLimit)
     Present --> Left: CarPlay disconnects without car audio, or car audio drops without CarPlay
     Left --> Present: CarPlay connects or car audio returns
+    Left --> Awaited: Live Activity started again with neither
     Left --> Ended: auto-stop delay passes while the Live Activity runs (never, with Never)
     Left --> Ended: 60 s while the Live Activity is dismissed or couldn't start
 ```
@@ -242,11 +247,16 @@ is set to. Once the car has shown and left, the limit is the auto-stop delay
 through its `autoStop` closure each time it checks or sets a limit, so a change in Settings
 applies to a wait already running. A drive whose Live Activity is `dismissed` or `unavailable`
 would show nothing once the car has gone, so it keeps the 60 s limit whatever auto-stop is set
-to; starting the Live Activity again during the wait, as from Shortcuts, brings the auto-stop
-delay back at the next heartbeat or deadline. The standard choice, 1 minute, is the same 60 s
-as before the setting existed. With Never and a running Live Activity, nothing ends the drive
-for the car's absence: it runs until it is ended, its Live Activity is dismissed (which ends a
-drive without CarPlay at once), setup leaves `ready` or the eight-hour `driveLimit` passes.
+to. Starting its Live Activity again during that minute with neither CarPlay nor car audio, as
+from Shortcuts, moves it to `awaited` from that moment (`awaitCarIfAway`, after reading the
+audio route), so it gets the same start window as a new drive and the Start shortcut's minute
+holds; once the car shows and leaves again, the auto-stop delay applies
+([#357](https://github.com/lunchbox-labs/compasslet/issues/357), fixed by
+[#358](https://github.com/lunchbox-labs/compasslet/pull/358)). The standard choice, 1 minute, is
+the same 60 s as before the setting existed. With Never and a running Live Activity, nothing
+ends the drive for the car's absence: it runs until it is ended, its Live Activity is dismissed
+(which ends a drive without CarPlay at once), setup leaves `ready` or the eight-hour
+`driveLimit` passes.
 The deadline timer ends the drive at the first moment past the limit, and every heartbeat
 checks it too.
 
@@ -445,6 +455,22 @@ stateDiagram-v2
     NotInUse --> Ended: 15 s without a newer reading, or any other stopDrive
 ```
 
+`LiveActivityShortcut.outcome(of:)` answers `startedWithoutCarPlay`, whose dialog says the drive
+ends in a minute unless CarPlay connects, only while the drive awaits the car
+(`DriveSessionController.isAwaitingTheCar`, true for `awaited`), read when the run ends rather
+than from the connection flags, since the car can come or go during the run. A new drive started
+away from the car starts `awaited`, and a kept drive whose Live Activity the intent starts again
+away from the car moves to `awaited` from then (see
+[Car presence](#car-presence-and-the-absence-limit)), so the minute holds either way, whatever
+Auto-Stop is set to ([#357](https://github.com/lunchbox-labs/compasslet/issues/357), fixed by
+[#358](https://github.com/lunchbox-labs/compasslet/pull/358)). A drive that is `present`, or
+`left` because CarPlay disconnected or car audio dropped during the run, answers `started`
+("Live Activity started."): it ends on Auto-Stop, which no dialog states.
+`StartShortcutAwayFromTheCarTests` in `LiveActivityShortcutTests.swift` runs the shortcut on the
+real controller for a kept drive with Auto-Stop at 1 minute and Never, car audio found or gone at
+the start, the car connecting after it, CarPlay disconnecting during the restart, car audio
+dropping during the wait for location, the Live Activity dismissed again, and a new drive.
+
 ## CarPlay scene
 
 `CarPlaySceneDelegate` maps scene callbacks to the drive through `CarPlayLifecycleBridge`,
@@ -462,7 +488,8 @@ stateDiagram-v2
 
 Activation starts a drive when setup is `ready`, no drive runs and the scene isn't suppressed.
 Connection alone doesn't start one. Connection also starts the template's
-[updates](#carplay-update-gate), which disconnect stops. Disconnect is reached from either
+[updates](#carplay-update-gate), which disconnect stops, and activation starts its style check,
+which resign and disconnect stop. Disconnect is reached from either
 `sceneDidDisconnect` or `didDisconnectInterfaceController`; the second call finds no bridge
 and no updates.
 
@@ -485,9 +512,9 @@ before setting the root template. `start()` then follows an `Observations` seque
 each pass reads from the drive (`presentation`, `setupStatus` and `isDriving`) and over Debug
 Mode (`CompassDiagnostics.isEnabled`). The sequence's first value makes a second pass on
 connect, now that the template is shown, and each later change makes one more. Apart from the
-Debug Mode tick below, nothing runs while those values are unchanged. A held bearing would
-otherwise wait for an unrelated change, so while the gate holds one, a single `DriveClock`
-timer is set for `heldUntil`, and its pass shows the value the drive has then.
+style check and the Debug Mode tick below, nothing runs while those values are unchanged. A held
+bearing would otherwise wait for an unrelated change, so while the gate holds one, a single
+`DriveClock` timer is set for `heldUntil`, and its pass shows the value the drive has then.
 
 ```mermaid
 stateDiagram-v2
@@ -512,20 +539,38 @@ change makes the pass that clears the bearing.
 
 The dial's light or dark style and scale come from the car's trait collection
 (`CPInterfaceController.carTraitCollection`), not the drive, and CarPlay gives a non-navigation
-app no trait-change callback for it (only navigation apps get `carWindow`).
-`CarPlayCompassTemplate.refresh(traits:)` redraws the current content when those traits differ
-from the ones it was drawn for. It runs on every pass, on scene activation, on each Debug Mode
-tick, and on the main actor's turn after `contentStyleDidChange`. That callback reports the
-scene's content style, which Apple doesn't document as the trait collection's style, nor whether
-the collection has changed by the time it arrives; with Always Show Dark Map on, the content
-style can stay dark while the interface style changes.
+app no trait-change callback for it (only navigation apps get `carWindow`, and the scene isn't a
+`UIWindowScene`). `contentStyleDidChange` reports the scene's content style, which Apple doesn't
+document as the trait collection's style, nor whether the collection has changed by the time it
+arrives; with Always Show Dark Map on, the content style can stay dark while the interface style
+changes. `CarPlayCompassTemplate.refresh(traits:)` redraws the current content when those traits
+differ from the ones it was drawn for, and draws nothing when they match.
 
-Open failure state ([#336](https://github.com/lunchbox-labs/compasslet/issues/336)): on an
-idle scene (no drive, a drive that has ended, or, with Debug Mode off, a drive whose shown value
-doesn't change, as when parked), a change to the trait collection's style or scale that
-`contentStyleDidChange` doesn't accompany, or that lands after the turn it schedules, isn't
-redrawn. The dial keeps the old style until the next pass, scene activation or content style
-change. The 250 ms poll this replaced caught it within 250 ms.
+`CarPlayStyleCheck` (`App/CarPlay/CarPlayPresentation.swift`) decides when `refresh(traits:)`
+runs. `CarPlaySceneDelegate` creates one on connect. `check()` runs it at once: on every pass,
+after any new value is drawn (so a pass that draws a value finds its style already current), and
+on the main actor's turn after `contentStyleDidChange`. While the scene is active, the check also
+keeps one `DriveClock` timer for `CarPlayStyleCheck.interval` (1 second) after the last check,
+and every check restarts it. Passes that come at least that often, as while moving, leave it
+nothing to do; on an idle scene (no drive, a drive that has ended, or a parked drive whose shown
+value doesn't change), it checks once a second. Activation checks and starts the timer; resign
+and disconnect cancel it, and `isolated deinit` does the same if the delegate drops the check
+without resigning it. A check on an inactive scene, from a pass or a content style change, sets
+no timer.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> Inactive: didConnect
+    [*] --> Active: didConnect on an active scene, check, timer
+    Inactive --> Inactive: pass or content style change, check
+    Inactive --> Active: sceneDidBecomeActive, check, timer
+    Active --> Active: pass or content style change, check, timer restarted
+    Active --> Active: timer after 1 s without a check, check, timer
+    Active --> Inactive: sceneWillResignActive, timer cancelled
+    Active --> [*]: disconnect, timer cancelled
+    Inactive --> [*]: disconnect
+```
 
 Passes also observe the `fullscreen` diagnostics surface, which counts a gap over 2 seconds as
 a new session. While Debug Mode is on, a drive runs and the scene is active,
@@ -627,8 +672,14 @@ share sheet closes or Debug Mode is turned off.
 `CompassActivityController` is the only writer of the `activity` clock, so the clock follows
 whether the app holds an activity (see [Live Activity lifecycle](#live-activity-lifecycle)).
 
-Open failure state ([#343](https://github.com/lunchbox-labs/compasslet/issues/343)): a repeat
-within 1 s is dropped without moving the clock, so if the first beat after a request lands
-under 1 s after it and the next beat wakes late, the next call comes over 2 s after the last
-accepted one. That starts a new `activity` session with no `paused` before it and loses about
-2 s of active time.
+A repeat of a surface's state under 1 s after the last call written isn't written, so settings
+are saved at most about once a second per surface, but it still counts as seen
+(`ObservedState` in `App/Diagnostics/CompassDiagnostics.swift`). The 2 s gap runs from the last
+call seen, and the time counted from the clock's last write, so a beat that wakes late after a
+repeat keeps the session, as when the first heartbeat after a Live Activity request lands under
+1 s after it. `record` takes an event from the clock's write until 2 s after the last call
+seen, or 3 s of wall time. A repeat counts only while the clock holds the call it repeats
+(`State.lastSeen`), so repeats of a call whose write failed can't bridge a gap. Measuring the gap
+from the last call written split such a session in two
+([#343](https://github.com/lunchbox-labs/compasslet/issues/343), fixed by
+[#355](https://github.com/lunchbox-labs/compasslet/pull/355)).

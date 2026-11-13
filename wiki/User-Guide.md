@@ -42,5 +42,6 @@ In Compasslet's Settings › Live Activity:
   location, which uses more battery. Drives always end after eight hours. If you
   dismissed the Live Activity, or it couldn't start, the drive ends a minute after CarPlay
   disconnects whatever Auto-Stop is set to, and a drive started from Shortcuts or Siri away
-  from the car still ends after a minute unless CarPlay connects.
+  from the car still ends after a minute unless CarPlay connects. The same goes for a Live
+  Activity started again away from the car, from Shortcuts, Siri or the app.
 
