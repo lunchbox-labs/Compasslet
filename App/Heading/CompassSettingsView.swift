@@ -56,9 +56,10 @@ struct CompassSettingsView: View {
             Link(destination: testBuild.commitURL) {
               LabeledContent {
                 // The accent, as on the app's other links; links otherwise draw in the system
-                // blue, 3.6:1 on these rows. Fixed styles, because .primary would follow it.
+                // blue, 3.6:1 on these rows.
                 Text(testBuild.shortCommit).foregroundStyle(.tint)
               } label: {
+                // A fixed colour, since the relative .primary would take the link's colour.
                 Text("Commit").foregroundStyle(Color.primary)
               }
             }
