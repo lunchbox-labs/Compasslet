@@ -20,12 +20,11 @@ loader.exec_module(testflight)
 
 
 class PublishIdentityTests(unittest.TestCase):
-    def test_export_allows_app_store_submission_without_changing_signing_or_build_numbers(self):
+    def export_options(self, release_candidate):
         with tempfile.TemporaryDirectory() as temporary:
             work = Path(temporary)
             archive = work / 'Compass.xcarchive'
             exported = work / 'export'
-            profiles = ['app-profile', 'activity-profile']
             exports = []
 
             def run(*args, operation, **kwargs):
@@ -35,24 +34,54 @@ class PublishIdentityTests(unittest.TestCase):
                 self.assertEqual(args[6], '-exportOptionsPlist')
                 exports.append(plistlib.loads(Path(args[7]).read_bytes()))
 
-            with patch.object(testflight, 'WORK', work), \
-                    patch.dict(os.environ, {'GITHUB_EVENT_NAME': 'workflow_dispatch'}), \
-                    patch.object(testflight, 'run', side_effect=run):
-                testflight.export_archive(archive, exported, 'TEAM123456', profiles)
-
+            with patch.object(testflight, 'WORK', work), patch.object(testflight, 'run', side_effect=run):
+                testflight.export_archive(archive, exported, 'TEAM123456', ['app-profile', 'activity-profile'],
+                                          release_candidate)
             self.assertEqual(len(exports), 1)
-            options = exports[0]
-            self.assertFalse(options.get('testFlightInternalTestingOnly', False))
-            self.assertEqual(options['method'], 'app-store-connect')
-            self.assertEqual(options['destination'], 'export')
-            self.assertEqual(options['teamID'], 'TEAM123456')
-            self.assertEqual(options['signingStyle'], 'manual')
-            self.assertEqual(options['signingCertificate'], 'Apple Distribution')
-            self.assertEqual(options['provisioningProfiles'], {
-                'dev.lunchbox-labs.carplay-compass': 'app-profile',
-                'dev.lunchbox-labs.carplay-compass.activity': 'activity-profile',
-            })
-            self.assertFalse(options['manageAppVersionAndBuildNumber'])
+            return exports[0]
+
+    def test_export_keeps_signing_and_build_numbers_for_both_kinds_of_build(self):
+        for release_candidate in (False, True):
+            with self.subTest(release_candidate=release_candidate):
+                options = self.export_options(release_candidate)
+                self.assertEqual(options['method'], 'app-store-connect')
+                self.assertEqual(options['destination'], 'export')
+                self.assertEqual(options['teamID'], 'TEAM123456')
+                self.assertEqual(options['signingStyle'], 'manual')
+                self.assertEqual(options['signingCertificate'], 'Apple Distribution')
+                self.assertEqual(options['provisioningProfiles'], {
+                    'dev.lunchbox-labs.carplay-compass': 'app-profile',
+                    'dev.lunchbox-labs.carplay-compass.activity': 'activity-profile',
+                })
+                self.assertFalse(options['manageAppVersionAndBuildNumber'])
+
+    def test_only_release_candidates_can_be_submitted_to_the_app_store(self):
+        self.assertTrue(self.export_options(release_candidate=False)['testFlightInternalTestingOnly'])
+        self.assertNotIn('testFlightInternalTestingOnly', self.export_options(release_candidate=True))
+
+    def test_only_test_builds_record_their_commit_for_the_app(self):
+        commit = 'a' * 40
+        original = {'CFBundleName': 'Compasslet', 'UISceneDelegateClassName': '$(PRODUCT_MODULE_NAME).Delegate'}
+        for release_candidate in (False, True):
+            with self.subTest(release_candidate=release_candidate), tempfile.TemporaryDirectory() as temporary:
+                info_plist = Path(temporary) / 'Info.plist'
+                info_plist.write_bytes(plistlib.dumps(original))
+                testflight.mark_build(info_plist, commit, release_candidate)
+                expected = original if release_candidate else dict(original, CompassletTestBuildCommit=commit)
+                self.assertEqual(plistlib.loads(info_plist.read_bytes()), expected)
+
+    def test_a_committed_commit_key_stops_the_build(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            info_plist = Path(temporary) / 'Info.plist'
+            info_plist.write_bytes(plistlib.dumps({'CompassletTestBuildCommit': 'b' * 40}))
+            for release_candidate in (False, True):
+                with self.subTest(release_candidate=release_candidate), \
+                        self.assertRaises(testflight.SigningError):
+                    testflight.mark_build(info_plist, 'a' * 40, release_candidate)
+
+    def test_the_app_source_does_not_mark_itself_as_a_test_build(self):
+        info = plistlib.loads((Path(__file__).resolve().parents[2] / 'App/Info.plist').read_bytes())
+        self.assertNotIn(testflight.TEST_BUILD_COMMIT_KEY, info)
 
     def test_metadata_identity_is_exposed_only_after_successful_validation_and_upload(self):
         for failed_operation in ('Apple validation', 'upload', None):
@@ -75,6 +104,27 @@ class PublishIdentityTests(unittest.TestCase):
                         self.assertEqual(output.read_text(), 'marketing_version=1.2.3\nbuild_number=17.2\n')
                 self.assertEqual(operations, ['Apple validation'] if failed_operation == 'Apple validation'
                                  else ['Apple validation', 'upload'])
+
+    def test_publish_needs_the_build_kind_and_commit(self):
+        valid = {'GITHUB_EVENT_NAME': 'workflow_dispatch', 'GITHUB_REF': 'refs/heads/main', 'GITHUB_ACTIONS': 'true',
+                 'BUILD_NUMBER': '17.1', 'RELEASE_CANDIDATE': 'false', 'SOURCE_COMMIT': 'a' * 40,
+                 'APPLE_TEAM_ID': ''}
+        cases = [
+            ({'RELEASE_CANDIDATE': ''}, 'RELEASE_CANDIDATE'),
+            ({'RELEASE_CANDIDATE': 'yes'}, 'RELEASE_CANDIDATE'),
+            ({'SOURCE_COMMIT': ''}, 'SOURCE_COMMIT'),
+            ({'SOURCE_COMMIT': 'abc1234'}, 'SOURCE_COMMIT'),
+            # Both kinds of build get past these checks to the next required input.
+            ({}, 'APPLE_TEAM_ID'),
+            ({'RELEASE_CANDIDATE': 'true'}, 'APPLE_TEAM_ID'),
+        ]
+        for changes, expected in cases:
+            with self.subTest(changes=changes):
+                with patch.dict(os.environ, dict(valid, **changes)), patch.object(testflight, 'read_copy'), \
+                        contextlib.redirect_stdout(io.StringIO()), \
+                        self.assertRaises(testflight.SigningError) as raised:
+                    testflight.publish()
+                self.assertIn(expected, str(raised.exception))
 
     def test_only_manual_runs_from_main_reach_the_build(self):
         cases = [

@@ -3,6 +3,11 @@ on:
   # Run by hand from main. Releases and tags are made by hand after Apple approves a version,
   # and never start an upload.
   workflow_dispatch:
+    inputs:
+      release_candidate:
+        description: Release candidate that can be submitted to the App Store (unchecked uploads a test build for internal TestFlight testing only)
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -29,6 +34,8 @@ jobs:
         id: upload
         env:
           BUILD_NUMBER: ${{ github.run_number }}.${{ github.run_attempt }}
+          RELEASE_CANDIDATE: ${{ inputs.release_candidate }}
+          SOURCE_COMMIT: ${{ github.sha }}
           APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
           ASC_DEVELOPER_API_KEY_ID: ${{ vars.ASC_DEVELOPER_API_KEY_ID }}
           ASC_API_ISSUER_ID: ${{ vars.ASC_API_ISSUER_ID }}

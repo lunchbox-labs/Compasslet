@@ -6,11 +6,19 @@ not run it. Configure both environments to allow only `main`, with the required
 approvals, before running Publish; release tags do not need access. The workflow
 does not configure credentials or permissions.
 
-Uploads are eligible for both internal TestFlight testing and App Store submission.
-Publish does not submit to App Review or release the app; select the processed build
-and submit it separately in App Store Connect. A build previously uploaded as
-TestFlight Internal Only cannot be used for an App Store release; upload a new build
-without that restriction.
+Each run uploads one of two kinds of build, chosen by its **Release candidate** box:
+
+- **Unchecked (the default):** a test build for internal TestFlight testing only. App
+  Store Connect won't let it be submitted for review or added to external testing
+  groups. Its Settings screen ends with a Test Build section showing the version, build
+  number and short commit SHA, so testers can tell exactly which build they have.
+- **Checked:** a release candidate, eligible for both internal TestFlight testing and
+  App Store submission. It shows no Test Build section.
+
+Check the box only for a build you're considering for an App Store release. A test
+build can't become one later; run Publish again with the box checked. Publish does not
+submit to App Review or release the app; select the processed release candidate and
+submit it separately in App Store Connect.
 
 ## GitHub Releases and screenshots
 
