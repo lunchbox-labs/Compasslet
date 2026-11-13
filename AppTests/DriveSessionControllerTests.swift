@@ -1,4 +1,5 @@
 import CompassCore
+import Testing
 import XCTest
 @testable import Compass
 
@@ -1525,6 +1526,114 @@ final class DriveSessionControllerTests: XCTestCase {
     let needed = await waiting.value
     XCTAssertFalse(needed)
     XCTAssertTrue(controller.isDriving)
+    await controller.endDrive()
+  }
+}
+
+/// The Start shortcut on a drive whose location reported that the app isn't in use. Only a report
+/// from the shortcut's own start, or one location hasn't recovered from, sends it to the
+/// foreground.
+@Suite @MainActor
+struct StartShortcutAfterNotInUseTests {
+  let clock: TestDriveClock
+  let sensor: TestTravelSensor
+  let activity: TestActivityPresenter
+  let controller: DriveSessionController
+
+  init() {
+    let clock = TestDriveClock(), sensor = TestTravelSensor(), activity = TestActivityPresenter()
+    self.clock = clock
+    self.sensor = sensor
+    self.activity = activity
+    controller = DriveSessionController(
+      sensor: sensor, activity: activity, clock: clock, autoStop: { .oneMinute })
+  }
+
+  private func reading() -> TravelSensorEvent {
+    .reading(
+      TravelReading(
+        courseDegrees: 90, courseAccuracyDegrees: 2, speedMetersPerSecond: 10,
+        speedAccuracyMetersPerSecond: 1, horizontalAccuracyMeters: 5, timestamp: clock.now))
+  }
+
+  private typealias Run = (outcome: LiveActivityShortcut.StartOutcome, continuedInForeground: Bool)
+
+  /// Runs the Start shortcut as from the background, recording whether it asked to continue in
+  /// the foreground.
+  private func runStartShortcut() async -> Run {
+    var continued = false
+    let outcome = await LiveActivityShortcut.start(
+      controller, canContinueInForeground: true, waitingUpTo: .seconds(5)
+    ) { continued = true }
+    return (outcome, continued)
+  }
+
+  /// A CarPlay drive gets a report and then newer readings and carries on; its Live Activity is
+  /// dismissed and CarPlay disconnects.
+  private func driveThatRecovered(sceneActiveAtTheReport: Bool) async {
+    await controller.carPlayActivated()
+    if !sceneActiveAtTheReport { controller.carPlayResignedActive() }
+    sensor.receive?(reading())
+    clock.now += 1
+    sensor.receive?(.notInUse)
+    clock.now += 1
+    sensor.receive?(reading())
+    clock.now += DriveSessionController.notInUseLimit + 1
+    sensor.receive?(reading())
+    clock.fireDue()
+    activity.onDismiss?()
+    controller.carPlayDisconnected()
+    clock.now += 30
+    sensor.receive?(reading())
+    clock.fireDue()
+  }
+
+  @Test(arguments: [false, true])
+  func driveThatRecoveredFromAnEarlierReportKeepsRunning(sceneActiveAtTheReport: Bool) async {
+    await driveThatRecovered(sceneActiveAtTheReport: sceneActiveAtTheReport)
+    #expect(controller.isDriving)
+    #expect(controller.compactStatus == .dismissed)
+    let run = await runStartShortcut()
+    #expect(!run.continuedInForeground)
+    #expect(run.outcome == .startedWithoutCarPlay)
+    #expect(controller.compactStatus == .active)
+    #expect(sensor.starts == 1)
+    #expect(sensor.stops == 0)
+    await controller.endDrive()
+  }
+
+  @Test func driveWithoutANewerReadingSinceTheReportContinuesInTheForeground() async {
+    await controller.carPlayActivated()
+    sensor.receive?(reading())
+    activity.onDismiss?()
+    controller.carPlayDisconnected()
+    clock.now += 1
+    sensor.receive?(.notInUse)
+    let run = await runStartShortcut()
+    #expect(run.continuedInForeground)
+    #expect(run.outcome == .startedWithoutCarPlay)
+    // The drive ended and started again from the foreground.
+    #expect(sensor.starts == 2)
+    #expect(sensor.stops == 1)
+    await controller.endDrive()
+  }
+
+  @Test func freshStartWithAReportThenANewerReadingContinuesInTheForeground() async {
+    activity.pauseStart = true
+    let shortcut = Task { await runStartShortcut() }
+    while activity.startContinuation == nil { await Task.yield() }
+    // As the drive starts, location reports that the app isn't in use and a newer reading
+    // follows at once, which doesn't yet show that location carries on.
+    sensor.receive?(.notInUse)
+    clock.now += 1
+    sensor.receive?(reading())
+    activity.pauseStart = false
+    activity.startContinuation?.resume()
+    let run = await shortcut.value
+    #expect(run.continuedInForeground)
+    #expect(run.outcome == .startedWithoutCarPlay)
+    #expect(sensor.starts == 2)
+    #expect(sensor.stops == 1)
     await controller.endDrive()
   }
 }

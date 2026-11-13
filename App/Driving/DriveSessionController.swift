@@ -65,6 +65,27 @@ final class DriveSessionController {
     /// auto-stop is never, or after `carPlayAbsenceLimit` while its Live Activity isn't running.
     case left(since: Date)
   }
+  /// What location has reported during a drive's current start about the app not being in use.
+  /// A start is the drive's beginning, or a later start of its Live Activity, which leaves
+  /// location running as it was and so carries over only a report it hasn't recovered from.
+  /// Unlike `DriveSession.notInUseSince`, it records reports while Compasslet is active on
+  /// CarPlay too, and ends no drive.
+  private enum NotInUseReport {
+    /// No report during this start.
+    case unreported
+    /// Location reported at this time that the app isn't in use, with no newer reading since.
+    case reported(at: Date)
+    /// A reading newer than the report came, so location runs again.
+    case recovered
+
+    /// Whether location may not have started for this start, so a background start continues in
+    /// the foreground. A report followed at once by a reading still counts, because the start
+    /// can't yet show that location carries on.
+    var needsForeground: Bool {
+      if case .unreported = self { return false }
+      return true
+    }
+  }
   /// No drive, or one drive. `liveActivityFailed` records that the last start ended because its
   /// Live Activity couldn't start, and without CarPlay nothing else would show the drive.
   private enum State {
@@ -83,8 +104,8 @@ final class DriveSessionController {
     // Views don't observe these two, which only the intents read; a view needs a tracked one.
     /// Whether this drive has had a location reading, which shows location started.
     var hasReceivedReading = false
-    /// Whether location reported that it can't run until the app is in use.
-    var locationNeedsForeground = false
+    /// What location reported during this start about the app not being in use.
+    var notInUseReport = NotInUseReport.unreported
     /// Whether the car shows, and since when it hasn't while neither CarPlay nor car audio is
     /// connected.
     var car = CarPresence.present
@@ -139,8 +160,9 @@ final class DriveSessionController {
 
   /// Whether this drive has had a location reading, which shows location started.
   var hasReceivedReading: Bool { current?.hasReceivedReading ?? false }
-  /// Whether location reported that it can't run until the app is in use.
-  var locationNeedsForeground: Bool { current?.locationNeedsForeground ?? false }
+  /// Whether location reported during the drive's current start that it can't run until the app
+  /// is in use.
+  var locationNeedsForeground: Bool { current?.notInUseReport.needsForeground ?? false }
 
   /// How long a drive started away from the car waits for CarPlay or car audio before it ends.
   /// It is also the standard auto-stop delay once the car leaves (`LiveActivityAutoStop`).
@@ -303,6 +325,10 @@ final class DriveSessionController {
     guard session.liveActivity == .dismissed || session.liveActivity == .unavailable else {
       return
     }
+    // Location already runs for this drive, so a report it has since recovered from belongs to
+    // an earlier start and mustn't send this one to the foreground. One it hasn't recovered from
+    // still does, since location may be stopped.
+    if case .recovered = session.notInUseReport { session.notInUseReport = .unreported }
     setLiveActivity(.starting, for: session)
     await startActivity(for: session)
   }
@@ -400,15 +426,15 @@ final class DriveSessionController {
   var hasLiveActivity: Bool { activity.hasActivities }
 
   /// After a start from the background, waits for location and reports whether it couldn't
-  /// start without the app in use. A drive that ended meanwhile, or one with Compasslet's
-  /// CarPlay scene, never needs a foreground start.
+  /// start without the app in use, judged by what location reported during this start. A drive
+  /// that ended meanwhile, or one with Compasslet's CarPlay scene, never needs a foreground start.
   func needsForegroundStart(waitingUpTo timeout: Duration) async -> Bool {
     guard let session = current, !isCarPlayConnected else { return false }
     let clock = ContinuousClock()
     let start = clock.now
     // A reading can arrive before the session reports that the app isn't in use.
     func settled() -> Bool {
-      session.locationNeedsForeground
+      session.notInUseReport.needsForeground
         || (session.hasReceivedReading && clock.now - start >= .seconds(1))
     }
     while session === current, !isCarPlayConnected, !settled(), clock.now - start < timeout {
@@ -419,7 +445,7 @@ final class DriveSessionController {
       guard !Task.isCancelled else { return false }
     }
     guard session === current, !isCarPlayConnected else { return false }
-    return session.locationNeedsForeground || !session.hasReceivedReading
+    return session.notInUseReport.needsForeground || !session.hasReceivedReading
   }
 
   private func observeAuthorization() {
@@ -449,7 +475,7 @@ final class DriveSessionController {
       setupStatus = .denied
       stopDrive()
     case .notInUse:
-      session.locationNeedsForeground = true
+      session.notInUseReport = .reported(at: clock.now)
       // Compasslet in use on CarPlay keeps location running.
       if !active, session.notInUseSince == nil {
         session.notInUseSince = clock.now
@@ -465,6 +491,9 @@ final class DriveSessionController {
     case .reading(let reading):
       // A reading taken before the report doesn't show that location still runs.
       if let since = session.notInUseSince, reading.timestamp > since { clearNotInUse() }
+      if case .reported(let at) = session.notInUseReport, reading.timestamp > at {
+        session.notInUseReport = .recovered
+      }
       session.lastReading = reading
       session.hasReceivedReading = true
       publish(session.filter.update(reading, now: clock.now), for: session)
