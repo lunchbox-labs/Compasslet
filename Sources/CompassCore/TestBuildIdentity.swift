@@ -1,3 +1,5 @@
+import Foundation
+
 /// Which build a TestFlight test build is, shown in Settings so testers can tell exactly what they
 /// have installed. Publish records the source commit only in test builds, so release candidates,
 /// App Store downloads and local builds have no identity and show nothing.
@@ -32,4 +34,7 @@ public struct TestBuildIdentity: Hashable, Sendable {
 
   /// The commit shortened as Git and GitHub show it.
   public var shortCommit: String { String(commit.prefix(7)) }
+
+  /// The commit's page on GitHub.
+  public var commitURL: URL? { SourceRepository.commitURL(commit) }
 }

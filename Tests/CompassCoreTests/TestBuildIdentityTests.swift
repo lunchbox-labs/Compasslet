@@ -14,6 +14,13 @@ private let commit = "0123456789abcdef0123456789abcdef01234567"
   #expect(identity.versionAndBuild == "1.0.1 (42.1)")
   #expect(identity.shortCommit == "0123456")
   #expect(identity.commit == commit)
+  #expect(
+    identity.commitURL?.absoluteString
+      == "https://github.com/lunchbox-labs/compasslet/commit/\(commit)")
+}
+
+@Test func theSourceLinkOpensTheRepository() {
+  #expect(SourceRepository.url?.absoluteString == "https://github.com/lunchbox-labs/compasslet")
 }
 
 @Test func buildsWithoutARecordedCommitShowNothing() {

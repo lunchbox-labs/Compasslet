@@ -38,7 +38,7 @@ struct CompassSettingsView: View {
         }
         DiagnosticsSettingsSection()
         Section {
-          if let url = URL(string: "https://github.com/lunchbox-labs/compasslet") {
+          if let url = SourceRepository.url {
             Link("View Source on GitHub", destination: url)
               // Links draw in the system blue (3.6:1 on these rows), not the accent, unless told.
               .foregroundStyle(.tint)
@@ -53,11 +53,22 @@ struct CompassSettingsView: View {
             LabeledContent("Version") {
               Text(testBuild.versionAndBuild).foregroundStyle(.primary).textSelection(.enabled)
             }
-            LabeledContent("Commit") {
-              Text(testBuild.shortCommit)
-                .foregroundStyle(.primary)
-                .speechSpellsOutCharacters()
-                .textSelection(.enabled)
+            if let url = testBuild.commitURL {
+              Link(destination: url) {
+                LabeledContent {
+                  Text(testBuild.shortCommit).speechSpellsOutCharacters()
+                } label: {
+                  Text("Commit").foregroundStyle(.primary)
+                }
+              }
+              // Links draw in the system blue (3.6:1 on these rows), not the accent, unless told.
+              .foregroundStyle(.tint)
+              .accessibilityHint("Opens the commit on GitHub.")
+              .contextMenu {
+                Button("Copy Commit", systemImage: "doc.on.doc") {
+                  UIPasteboard.general.string = testBuild.commit
+                }
+              }
             }
           } header: {
             Text("Test Build")
