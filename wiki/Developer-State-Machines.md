@@ -8,12 +8,8 @@ transition they touch. File and line references are to commit
 symbol if lines have moved. [Development](Developer-Development#reading-policies) gives the
 reading policies these machines enforce.
 
-Open failure states are listed here and under their machine, each tracked as an issue. One is
-open:
-
-- [#348](https://github.com/lunchbox-labs/compasslet/issues/348): the Start shortcut can end a
-  working drive after an earlier not-in-use report
-  ([Background start intent](#background-start-intent)).
+Open failure states are listed here and under their machine, each tracked as an issue. None
+are open.
 
 These are fixed:
 
@@ -38,6 +34,9 @@ These are fixed:
 - [#347](https://github.com/lunchbox-labs/compasslet/issues/347), fixed by
   [#345](https://github.com/lunchbox-labs/compasslet/pull/345):
   a clock set back during a drive held back direction updates for as long as it went back.
+- [#348](https://github.com/lunchbox-labs/compasslet/issues/348), fixed by
+  [#354](https://github.com/lunchbox-labs/compasslet/pull/354):
+  the Start shortcut could end a working drive after an earlier not-in-use report.
 - [#356](https://github.com/lunchbox-labs/compasslet/issues/356), fixed by
   [#359](https://github.com/lunchbox-labs/compasslet/pull/359):
   a not-in-use report while the CarPlay scene was active never ended the drive after it resigned.
@@ -130,7 +129,7 @@ A drive is the period in which travel location runs. `DriveSessionController.sta
 `liveActivityFailed` whether the last start ended because its Live Activity couldn't start,
 or `driving` with one `DriveSession` object.
 The session holds everything that belongs to one drive: `startedAt`, the course filter, the
-last reading, `hasReceivedReading`, `locationNeedsForeground`, `car` (its car presence),
+last reading, `hasReceivedReading`, `notInUseReport`, `car` (its car presence),
 `notInUseSince`, the background time held for that wait, its heartbeat and deadline timers, and
 the drive's Live Activity status, along with `notInUseReportedAt`, a not-in-use report with no
 newer reading since while Compasslet isn't active on CarPlay. Every sensor callback, timer and
@@ -395,7 +394,7 @@ stateDiagram-v2
     Starting --> Waiting: no CarPlay scene and the intent can continue in the foreground
     Starting --> Done: CarPlay scene connected, can't continue in the foreground, or no drive started
     Waiting --> Done: reading received and 1 s passed, CarPlay connected, or drive ended
-    Waiting --> Foreground: notInUse reported, or no reading within 5 s
+    Waiting --> Foreground: notInUse reported during this start or not yet recovered from, or no reading within 5 s
     Foreground --> Done: drive ended, app foregrounded, drive started again
     Foreground --> Done: user doesn't continue (drive stays ended)
 ```
@@ -405,12 +404,34 @@ the drive to change (`ChangeSignal.wait(until:)` in `App/Driving/ChangeSignal.sw
 the controller's `changes.signal()` on each sensor event, CarPlay connection and drive end), for
 the second after a reading, or for the timeout, rather than polling. `ChangeSignalTests` covers
 the signal on its own: a wait ends at the next signal, its deadline or its task's cancellation,
-and leaves no waiter behind. A cancelled wait reports that no foreground start is needed. Its
-result is the only consumer of `locationNeedsForeground`.
+and leaves no waiter behind. A cancelled wait reports that no foreground start is needed.
 
-Open failure state: `locationNeedsForeground` is never cleared during a drive, so a Start
-shortcut run later in a drive that once got `notInUse` and then carried on can end it to ask
-for the foreground ([#348](https://github.com/lunchbox-labs/compasslet/issues/348)).
+`Waiting` reads `DriveSession.notInUseReport` (`NotInUseReport` in `DriveSessionController.swift`),
+which records what location reported during the current start: `unreported`, `reported(at:)`
+with no newer reading since, or `recovered` once a reading newer than the report came. `receive`
+sets it on every `notInUse`, whether or not Compasslet is active on CarPlay, and moves it to
+`recovered` on a newer reading. A start is the drive's `beginDrive`, or `startLiveActivity`
+starting a dismissed or failed Live Activity again, which leaves location running and so drops
+a `recovered` report but keeps an unrecovered one. Any report during the start sends a
+background start to the foreground, `recovered` included, because a reading right after the
+report doesn't show that location carries on; Core Location doesn't document whether readings
+keep coming after `insufficientlyInUse` for a When In Use session started in the background. So
+a Start shortcut run later in a drive that got `notInUse` and then carried on starts only its
+Live Activity again ([#348](https://github.com/lunchbox-labs/compasslet/issues/348), fixed by
+[#354](https://github.com/lunchbox-labs/compasslet/pull/354)). `StartShortcutAfterNotInUseTests`
+in `DriveSessionControllerTests.swift` runs the shortcut on the real controller for each case.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> Unreported: beginDrive
+    Unreported --> Reported: notInUse
+    Reported --> Reported: notInUse
+    Recovered --> Reported: notInUse
+    Reported --> Recovered: newer reading
+    Recovered --> Unreported: Live Activity started again
+    Reported --> Reported: Live Activity started again
+```
 
 Any `notInUse` report while Compasslet isn't active on CarPlay starts a wait
 (`DriveSession.notInUseSince`, set by `startNotInUseWait` from `receive`). During `Waiting` the
