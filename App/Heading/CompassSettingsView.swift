@@ -97,9 +97,10 @@ struct CompassSettingsView: View {
     }
   }
 
-  /// Copies the full SHA, which the row shortens.
+  /// Copies the full SHA, which the row shortens, and tells VoiceOver it worked.
   private func copyCommit(_ testBuild: TestBuildIdentity) {
     UIPasteboard.general.string = testBuild.commit
+    AccessibilityNotification.Announcement("Commit copied").post()
   }
 }
 
