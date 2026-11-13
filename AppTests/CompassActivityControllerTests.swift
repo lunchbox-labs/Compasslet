@@ -122,8 +122,12 @@ struct CompassActivityControllerTests {
       dropped = controller
       try await controller.start()
     }
-    // The observation holds the controller weakly, so it goes once nothing else holds it.
-    try await Task.sleep(for: .milliseconds(50))
+    // The observation holds the controller weakly, so it goes once nothing else holds it. Wait
+    // for that with a deadline rather than a fixed time, so a busy runner can't fail the test.
+    let deadline = ContinuousClock.now + .seconds(5)
+    while dropped != nil, ContinuousClock.now < deadline {
+      try await Task.sleep(for: .milliseconds(10))
+    }
     #expect(dropped == nil)
     var values = AppearanceValues()
     values.showDegrees = false

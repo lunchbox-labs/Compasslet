@@ -48,12 +48,9 @@ When the simulator tests fail in Check, the `native` job keeps their result bund
 the `check-test-results-run-<number>-attempt-<attempt>` artifact, with each failure's details,
 the test timings and attachments. Passing runs keep nothing.
 
-To check whether the simulator tests are flaky, use Actions → Repeat Tests → Run workflow on the
-branch to test. It runs them up to `iterations` times (20 by default, 50 at most) and stops at the
-first failure, keeping that failure's result bundle for 7 days. Each iteration relaunches the app,
-so no in-memory state carries over between them. A run that's still going after 110 minutes stops
-and keeps its bundle too. It runs only by hand, so it never blocks a merge. Locally,
-`scripts/test-ios` passes its options to `xcodebuild`:
+To check whether a simulator test is flaky, run the tests repeatedly. `scripts/test-ios` passes its
+options to `xcodebuild`. This command runs the tests up to 20 times, stops at the first failure and
+relaunches the app each time so no in-memory state carries over:
 
 ```sh
 bash scripts/test-ios -test-iterations 20 -run-tests-until-failure -test-repetition-relaunch-enabled YES
