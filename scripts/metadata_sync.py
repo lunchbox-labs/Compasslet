@@ -282,9 +282,10 @@ def processed_build(client, app_id, marketing_version, build_number, attempts, s
     raise MetadataError('The exact uploaded build is not processed yet. Upload remains accepted; metadata notes were not synced.')
 
 
-def sync(client, copy, bundle_id, marketing_version, build_number, report=print,
-         attempts=20, sleep=time.sleep):
-    """Resolve all read targets before writing; PATCHes are idempotent but not transactional."""
+def sync(client, copy, bundle_id, marketing_version, build_number, *, release_candidate,
+         report=print, attempts=20, sleep=time.sleep):
+    """Resolve all read targets before writing; PATCHes are idempotent but not transactional.
+    Test builds can't be submitted, so they update only TestFlight copy, never the App Store listing."""
     if not copy:
         report('SKIP metadata: no supplied repository fields.')
         return
@@ -315,6 +316,9 @@ def sync(client, copy, bundle_id, marketing_version, build_number, report=print,
 
     wants_version = any(set(fields) & FIELDS['appStoreVersionLocalizations'] for fields in copy.values())
     wants_info = any(set(fields) & FIELDS['appInfoLocalizations'] for fields in copy.values())
+    if not release_candidate and (wants_version or wants_info):
+        report('SKIP App Store listing and app info: test builds update only TestFlight copy.')
+        wants_version = wants_info = False
     version_still_editable = None
     if wants_version or wants_info:
         versions, _ = client.collection('/v1/apps/' + app_id + '/appStoreVersions', {
@@ -390,6 +394,8 @@ def workflow_identity():
     version = env.get('METADATA_MARKETING_VERSION', '')
     build = env.get('METADATA_BUILD_NUMBER', '')
     sha = env.get('METADATA_SOURCE_SHA', '')
+    release_candidate = env.get('METADATA_RELEASE_CANDIDATE')
+    require(release_candidate in ('true', 'false'), 'METADATA_RELEASE_CANDIDATE must be true or false.')
     require(re.fullmatch(r'[0-9]+(?:\.[0-9]+){0,2}', version),
             'Missing or invalid accepted archive marketing version.')
     require(re.fullmatch(r'[1-9][0-9]{0,3}\.[1-9][0-9]?', build)
@@ -406,7 +412,7 @@ def workflow_identity():
         require(env.get('GITHUB_REF') == 'refs/heads/main', 'Manual metadata sync requires main.')
     else:
         raise MetadataError('Only manual builds from main can sync metadata.')
-    return version, build
+    return version, build, release_candidate == 'true'
 
 
 def main():
@@ -416,7 +422,7 @@ def main():
 
     previous = signal.signal(signal.SIGTERM, interrupted)
     try:
-        version, build = workflow_identity()
+        version, build, release_candidate = workflow_identity()
         copy = read_copy(ROOT / 'app-store')
         require(bool(copy), 'No repository metadata fields supplied.')
         encoded = os.environ.pop('ASC_METADATA_API_PRIVATE_KEY_BASE64', '')
@@ -430,7 +436,8 @@ def main():
                 output.write(private)
             token = Token(os.environ.get('ASC_METADATA_API_KEY_ID'),
                           os.environ.get('ASC_API_ISSUER_ID'), path)
-            sync(Client(token), copy, 'dev.lunchbox-labs.carplay-compass', version, build)
+            sync(Client(token), copy, 'dev.lunchbox-labs.carplay-compass', version, build,
+                 release_candidate=release_candidate)
         return 0
     except (Exception, KeyboardInterrupt) as error:
         detail = str(error) if isinstance(error, MetadataError) else 'Check metadata inputs and configuration.'

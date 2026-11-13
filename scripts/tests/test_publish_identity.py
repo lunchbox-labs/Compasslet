@@ -79,6 +79,26 @@ class PublishIdentityTests(unittest.TestCase):
                         self.assertRaises(testflight.SigningError):
                     testflight.mark_build(info_plist, 'a' * 40, release_candidate)
 
+    def test_upload_stops_unless_the_archive_matches_the_kind_of_build(self):
+        commit = 'a' * 40
+        cases = [(False, commit, True), (False, None, False), (False, 'b' * 40, False),
+                 (True, None, True), (True, commit, False)]
+        for release_candidate, archived, accepted in cases:
+            with self.subTest(release_candidate=release_candidate, archived=archived), \
+                    tempfile.TemporaryDirectory() as temporary:
+                archive = Path(temporary) / 'Compass.xcarchive'
+                app = archive / 'Products/Applications/Compass.app'
+                app.mkdir(parents=True)
+                info = {'CFBundleIdentifier': testflight.APP}
+                if archived:
+                    info[testflight.TEST_BUILD_COMMIT_KEY] = archived
+                (app / 'Info.plist').write_bytes(plistlib.dumps(info))
+                if accepted:
+                    testflight.check_archived_commit(archive, commit, release_candidate)
+                else:
+                    with self.assertRaises(testflight.SigningError):
+                        testflight.check_archived_commit(archive, commit, release_candidate)
+
     def test_the_app_source_does_not_mark_itself_as_a_test_build(self):
         info = plistlib.loads((Path(__file__).resolve().parents[2] / 'App/Info.plist').read_bytes())
         self.assertNotIn(testflight.TEST_BUILD_COMMIT_KEY, info)

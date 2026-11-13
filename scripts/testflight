@@ -127,9 +127,9 @@ def publish():
     build = os.environ.get('BUILD_NUMBER', '')
     require(re.fullmatch(r'[1-9][0-9]{0,3}\.[1-9][0-9]?', build),
             'Workflow build number must be run.attempt (run 1–9999, attempt 1–99).')
-    release_candidate = os.environ.get('RELEASE_CANDIDATE')
-    require(release_candidate in ('true', 'false'), 'RELEASE_CANDIDATE must be true or false.')
-    release_candidate = release_candidate == 'true'
+    release_candidate_input = os.environ.get('RELEASE_CANDIDATE')
+    require(release_candidate_input in ('true', 'false'), 'RELEASE_CANDIDATE must be true or false.')
+    release_candidate = release_candidate_input == 'true'
     commit = os.environ.get('SOURCE_COMMIT', '')
     require(re.fullmatch('[0-9a-f]{40}', commit), 'SOURCE_COMMIT must be the full commit SHA.')
     print('Building a release candidate that can be submitted to the App Store.' if release_candidate
@@ -207,6 +207,7 @@ def publish():
         '-configuration', 'Release', '-destination', 'generic/platform=iOS',
         '-derivedDataPath', WORK / 'derived', '-archivePath', archive, 'archive', cwd=source, operation='archive')
     marketing_version = uploaded_identity(archive, APP, build)
+    check_archived_commit(archive, commit, release_candidate)
     STAGE = 'export'
     exported = WORK / 'export'
     export_archive(archive, exported, team, profiles, release_candidate)
@@ -226,6 +227,15 @@ def mark_build(info_plist, commit, release_candidate):
     if not release_candidate:
         info[TEST_BUILD_COMMIT_KEY] = commit
         info_plist.write_bytes(plistlib.dumps(info))
+
+
+def check_archived_commit(archive, commit, release_candidate):
+    """Stop before upload unless the archived app shows exactly what this kind of build should."""
+    paths = list((Path(archive) / 'Products/Applications').glob('*.app/Info.plist'))
+    require(len(paths) == 1, 'Expected one archived app.')
+    archived = plistlib.loads(paths[0].read_bytes()).get(TEST_BUILD_COMMIT_KEY)
+    require(archived is None if release_candidate else archived == commit,
+            'Archived app does not record the commit as this kind of build should.')
 
 
 def export_archive(archive, exported, team, profiles, release_candidate):

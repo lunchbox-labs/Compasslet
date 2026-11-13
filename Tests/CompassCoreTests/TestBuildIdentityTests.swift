@@ -4,10 +4,12 @@ import Testing
 private let commit = "0123456789abcdef0123456789abcdef01234567"
 
 @Test func testBuildsShowTheirVersionBuildAndShortCommit() throws {
+  // The key Publish's scripts/testflight writes into test builds.
+  #expect(TestBuildIdentity.commitKey == "CompassletTestBuildCommit")
   let identity = try #require(
     TestBuildIdentity(infoDictionary: [
       "CFBundleShortVersionString": "1.0.1", "CFBundleVersion": "42.1",
-      TestBuildIdentity.commitKey: commit,
+      "CompassletTestBuildCommit": commit,
     ]))
   #expect(identity.versionAndBuild == "1.0.1 (42.1)")
   #expect(identity.shortCommit == "0123456")

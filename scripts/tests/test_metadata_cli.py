@@ -37,7 +37,7 @@ class MetadataCLITests(unittest.TestCase):
             'GITHUB_REF': 'refs/heads/main', 'GITHUB_SHA': self.sha,
             'GITHUB_RUN_NUMBER': '17', 'GITHUB_RUN_ATTEMPT': '2',
             'METADATA_SOURCE_SHA': self.sha, 'METADATA_BUILD_NUMBER': '17.2',
-            'METADATA_MARKETING_VERSION': '1.2.3',
+            'METADATA_MARKETING_VERSION': '1.2.3', 'METADATA_RELEASE_CANDIDATE': 'true',
             'ASC_METADATA_API_KEY_ID': 'TEST123',
             'ASC_API_ISSUER_ID': '11111111-1111-4111-8111-111111111111',
             'ASC_METADATA_API_PRIVATE_KEY_BASE64': base64.b64encode(self.private).decode(),
@@ -106,8 +106,9 @@ class MetadataCLITests(unittest.TestCase):
     def test_wrong_event_build_or_checkout_fails_before_any_api_call(self):
         for field, value in [('GITHUB_EVENT_NAME', 'pull_request'), ('GITHUB_REF', 'refs/heads/feature'),
                              ('METADATA_BUILD_NUMBER', '18.1'), ('METADATA_SOURCE_SHA', 'a' * 40),
-                             ('GITHUB_SHA', 'b' * 40)]:
-            with self.subTest(field=field):
+                             ('GITHUB_SHA', 'b' * 40), ('METADATA_RELEASE_CANDIDATE', ''),
+                             ('METADATA_RELEASE_CANDIDATE', 'yes')]:
+            with self.subTest(field=field, value=value):
                 saved = self.env[field]
                 self.env[field] = value
                 self.assertEqual(self.run_cli()[0], 1)

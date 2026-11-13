@@ -51,17 +51,19 @@ struct CompassSettingsView: View {
         if let testBuild {
           Section {
             LabeledContent("Version") {
-              Text(testBuild.versionAndBuild).foregroundStyle(.primary)
+              Text(testBuild.versionAndBuild).foregroundStyle(.primary).textSelection(.enabled)
             }
             LabeledContent("Commit") {
-              Text(testBuild.shortCommit).foregroundStyle(.primary).speechSpellsOutCharacters()
+              Text(testBuild.shortCommit)
+                .foregroundStyle(.primary)
+                .speechSpellsOutCharacters()
+                .textSelection(.enabled)
             }
           } header: {
             Text("Test Build")
           } footer: {
             Text("For TestFlight testing only.")
           }
-          .textSelection(.enabled)
         }
       }
       .navigationTitle("Settings")
