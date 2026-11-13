@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		A64DCE328A7D9AD9AC1666EC /* ChangeSignalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09AAAE017647FDAE371E21C5 /* ChangeSignalTests.swift */; };
+		F87D11B664E63E93889234D5 /* CarPlayStyleCheckTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D7730AAF853E5A41077AA89 /* CarPlayStyleCheckTests.swift */; };
 		25ADC9DE2475197810F86FB0 /* SetupStatusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78E8F7DF1DA199233119AA4F /* SetupStatusTests.swift */; };
 		FA5DA1F36AFFCE5D7935FF2D /* ChangeSignal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CD6596854CBB7F7BF0A47AB /* ChangeSignal.swift */; };
 		605E0D7F022D50FF323D21AC /* SetupStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7CB47ABC0B5A97169BB792F /* SetupStatus.swift */; };
@@ -109,6 +110,7 @@
 
 /* Begin PBXFileReference section */
 		09AAAE017647FDAE371E21C5 /* ChangeSignalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeSignalTests.swift; sourceTree = "<group>"; };
+		1D7730AAF853E5A41077AA89 /* CarPlayStyleCheckTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayStyleCheckTests.swift; sourceTree = "<group>"; };
 		78E8F7DF1DA199233119AA4F /* SetupStatusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupStatusTests.swift; sourceTree = "<group>"; };
 		5CD6596854CBB7F7BF0A47AB /* ChangeSignal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeSignal.swift; sourceTree = "<group>"; };
 		E7CB47ABC0B5A97169BB792F /* SetupStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupStatus.swift; sourceTree = "<group>"; };
@@ -373,6 +375,7 @@
 				43DECBF43D00BEAEEF7E2CD8 /* DriveSessionControllerTests.swift */,
 				13F96CE477553A99C1F0F39D /* CompassActivityControllerTests.swift */,
 				7BF0680E9674EB8E22601374 /* CarPlayPresentationTests.swift */,
+				1D7730AAF853E5A41077AA89 /* CarPlayStyleCheckTests.swift */,
 				275D9183B5D424FCC7810822 /* CompassDiagnosticsTests.swift */,
 				7CF248EACF2442EB95F785CF /* CompassDiagnosticsSessionTests.swift */,
 				5C4EE0A1D2B3C4D5E6F70812 /* ScreenshotTests.swift */,
@@ -548,6 +551,7 @@
 				A64DCE328A7D9AD9AC1666EC /* ChangeSignalTests.swift in Sources */,
 				29D6B7B8A0067DFD42EA7CB5 /* CompassActivityControllerTests.swift in Sources */,
 				7D2734D738F62A57FBC0C728 /* CarPlayPresentationTests.swift in Sources */,
+				F87D11B664E63E93889234D5 /* CarPlayStyleCheckTests.swift in Sources */,
 				774742633DD35133F9D14ED8 /* CompassDiagnosticsTests.swift in Sources */,
 				F1020EA160A57BEACEC42A4D /* CompassDiagnosticsSessionTests.swift in Sources */,
 				5C4EE0A1D2B3C4D5E6F70811 /* ScreenshotTests.swift in Sources */,

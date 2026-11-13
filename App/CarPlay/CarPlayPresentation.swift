@@ -168,6 +168,60 @@ final class CarPlayTemplateUpdates {
   }
 }
 
+/// Checks the car's light or dark style and display scale while the CarPlay scene is active,
+/// once `interval` has passed with no other check. CarPlay doesn't tell a non-navigation app
+/// when they change, and passes come only with drive changes, so without this an idle scene would
+/// keep the dial's old style. Each pass checks too, so while passes keep coming this never fires.
+@MainActor
+final class CarPlayStyleCheck {
+  /// How long the active scene goes without a check before it checks.
+  static let interval: TimeInterval = 1
+  private enum State {
+    case inactive
+    case active(nextCheck: DriveTimer)
+  }
+  private let clock: any DriveClock
+  private let checkStyle: @MainActor () -> Void
+  private var state = State.inactive
+
+  /// `check` compares the car's traits with the ones the dial was drawn for, and redraws only
+  /// when they differ.
+  init(clock: any DriveClock = SystemDriveClock(), check: @escaping @MainActor () -> Void) {
+    self.clock = clock
+    checkStyle = check
+  }
+
+  isolated deinit { resign() }
+
+  /// Checks now, then again whenever the scene goes `interval` without a check, until `resign`.
+  func activate() {
+    resign()
+    state = .active(nextCheck: scheduleCheck())
+    checkStyle()
+  }
+
+  /// Checks now. While the scene is active, the next check waits a full `interval` from now.
+  func check() {
+    if case .active(let nextCheck) = state {
+      nextCheck.cancel()
+      state = .active(nextCheck: scheduleCheck())
+    }
+    checkStyle()
+  }
+
+  /// Stops checking on its own, as when the scene resigns active or disconnects.
+  func resign() {
+    if case .active(let nextCheck) = state { nextCheck.cancel() }
+    state = .inactive
+  }
+
+  private func scheduleCheck() -> DriveTimer {
+    clock.timer(at: clock.now.addingTimeInterval(Self.interval)) { [weak self] in
+      self?.check()
+    }
+  }
+}
+
 /// Lifecycle events never wait behind ActivityKit startup.
 @MainActor
 final class CarPlayLifecycleBridge {

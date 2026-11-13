@@ -8,12 +8,9 @@ transition they touch. File and line references are to commit
 symbol if lines have moved. [Development](Developer-Development#reading-policies) gives the
 reading policies these machines enforce.
 
-Open failure states are listed here and under their machine, each tracked as an issue. Two are
+Open failure states are listed here and under their machine, each tracked as an issue. One is
 open:
 
-- [#336](https://github.com/lunchbox-labs/compasslet/issues/336): the CarPlay dial can keep the
-  wrong light or dark style on an idle scene, as the
-  [CarPlay update gate](#carplay-update-gate) section describes.
 - [#348](https://github.com/lunchbox-labs/compasslet/issues/348): the Start shortcut can end a
   working drive after an earlier not-in-use report
   ([Background start intent](#background-start-intent)).
@@ -29,6 +26,9 @@ These are fixed:
 - [#249](https://github.com/lunchbox-labs/compasslet/issues/249), fixed by
   [#252](https://github.com/lunchbox-labs/compasslet/pull/252):
   a background start that lost location after its start window could keep running.
+- [#336](https://github.com/lunchbox-labs/compasslet/issues/336), fixed by
+  [#353](https://github.com/lunchbox-labs/compasslet/pull/353):
+  the CarPlay dial could keep the wrong light or dark style on an idle scene.
 - [#343](https://github.com/lunchbox-labs/compasslet/issues/343), fixed by
   [#355](https://github.com/lunchbox-labs/compasslet/pull/355):
   diagnostics could split one Live Activity session in two when a beat woke late.
@@ -57,7 +57,7 @@ active.
 | [Live Activity content](#live-activity-content) | `CompassActivityController` | The last content state and the update frequency choice do |
 | [Background start intent](#background-start-intent) | `StartLiveActivityIntent` | No |
 | [CarPlay scene](#carplay-scene) | `CarPlaySceneDelegate`, `CarPlayLifecycleBridge` | No |
-| [CarPlay update gate](#carplay-update-gate) | `CarPlayUpdateGate`, `CarPlayTemplateUpdates` | No |
+| [CarPlay update gate](#carplay-update-gate) | `CarPlayUpdateGate`, `CarPlayTemplateUpdates`, `CarPlayStyleCheck` | No |
 | [Travel course filter](#travel-course-filter) | `TravelCourseFilter` | No |
 | [Phone heading](#phone-heading) | `HeadingController` | No |
 | [Phone location and city](#phone-location-and-city) | `PhoneLocationController` | No |
@@ -432,7 +432,8 @@ stateDiagram-v2
 
 Activation starts a drive when setup is `ready`, no drive runs and the scene isn't suppressed.
 Connection alone doesn't start one. Connection also starts the template's
-[updates](#carplay-update-gate), which disconnect stops. Disconnect is reached from either
+[updates](#carplay-update-gate), which disconnect stops, and activation starts its style check,
+which resign and disconnect stop. Disconnect is reached from either
 `sceneDidDisconnect` or `didDisconnectInterfaceController`; the second call finds no bridge
 and no updates.
 
@@ -451,9 +452,9 @@ before setting the root template. `start()` then follows an `Observations` seque
 each pass reads from the drive (`presentation`, `setupStatus` and `isDriving`) and over Debug
 Mode (`CompassDiagnostics.isEnabled`). The sequence's first value makes a second pass on
 connect, now that the template is shown, and each later change makes one more. Apart from the
-Debug Mode tick below, nothing runs while those values are unchanged. A held bearing would
-otherwise wait for an unrelated change, so while the gate holds one, a single `DriveClock`
-timer is set for `heldUntil`, and its pass shows the value the drive has then.
+style check and the Debug Mode tick below, nothing runs while those values are unchanged. A held
+bearing would otherwise wait for an unrelated change, so while the gate holds one, a single
+`DriveClock` timer is set for `heldUntil`, and its pass shows the value the drive has then.
 
 ```mermaid
 stateDiagram-v2
@@ -478,20 +479,38 @@ change makes the pass that clears the bearing.
 
 The dial's light or dark style and scale come from the car's trait collection
 (`CPInterfaceController.carTraitCollection`), not the drive, and CarPlay gives a non-navigation
-app no trait-change callback for it (only navigation apps get `carWindow`).
-`CarPlayCompassTemplate.refresh(traits:)` redraws the current content when those traits differ
-from the ones it was drawn for. It runs on every pass, on scene activation, on each Debug Mode
-tick, and on the main actor's turn after `contentStyleDidChange`. That callback reports the
-scene's content style, which Apple doesn't document as the trait collection's style, nor whether
-the collection has changed by the time it arrives; with Always Show Dark Map on, the content
-style can stay dark while the interface style changes.
+app no trait-change callback for it (only navigation apps get `carWindow`, and the scene isn't a
+`UIWindowScene`). `contentStyleDidChange` reports the scene's content style, which Apple doesn't
+document as the trait collection's style, nor whether the collection has changed by the time it
+arrives; with Always Show Dark Map on, the content style can stay dark while the interface style
+changes. `CarPlayCompassTemplate.refresh(traits:)` redraws the current content when those traits
+differ from the ones it was drawn for, and draws nothing when they match.
 
-Open failure state ([#336](https://github.com/lunchbox-labs/compasslet/issues/336)): on an
-idle scene (no drive, a drive that has ended, or, with Debug Mode off, a drive whose shown value
-doesn't change, as when parked), a change to the trait collection's style or scale that
-`contentStyleDidChange` doesn't accompany, or that lands after the turn it schedules, isn't
-redrawn. The dial keeps the old style until the next pass, scene activation or content style
-change. The 250 ms poll this replaced caught it within 250 ms.
+`CarPlayStyleCheck` (`App/CarPlay/CarPlayPresentation.swift`) decides when `refresh(traits:)`
+runs. `CarPlaySceneDelegate` creates one on connect. `check()` runs it at once: on every pass,
+after any new value is drawn (so a pass that draws a value finds its style already current), and
+on the main actor's turn after `contentStyleDidChange`. While the scene is active, the check also
+keeps one `DriveClock` timer for `CarPlayStyleCheck.interval` (1 second) after the last check,
+and every check restarts it. Passes that come at least that often, as while moving, leave it
+nothing to do; on an idle scene (no drive, a drive that has ended, or a parked drive whose shown
+value doesn't change), it checks once a second. Activation checks and starts the timer; resign
+and disconnect cancel it, and `isolated deinit` does the same if the delegate drops the check
+without resigning it. A check on an inactive scene, from a pass or a content style change, sets
+no timer.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> Inactive: didConnect
+    [*] --> Active: didConnect on an active scene, check, timer
+    Inactive --> Inactive: pass or content style change, check
+    Inactive --> Active: sceneDidBecomeActive, check, timer
+    Active --> Active: pass or content style change, check, timer restarted
+    Active --> Active: timer after 1 s without a check, check, timer
+    Active --> Inactive: sceneWillResignActive, timer cancelled
+    Active --> [*]: disconnect, timer cancelled
+    Inactive --> [*]: disconnect
+```
 
 Passes also observe the `fullscreen` diagnostics surface, which counts a gap over 2 seconds as
 a new session. While Debug Mode is on, a drive runs and the scene is active,
