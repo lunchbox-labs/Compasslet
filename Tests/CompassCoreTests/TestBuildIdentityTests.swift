@@ -16,6 +16,17 @@ private let commit = "0123456789abcdef0123456789abcdef01234567"
   #expect(identity.commit == commit)
 }
 
+@Test func theCommitLinksToItsPageOnGitHub() throws {
+  let identity = try #require(TestBuildIdentity(version: "1.0.1", build: "42.1", commit: commit))
+  #expect(
+    identity.commitURL.absoluteString
+      == "https://github.com/lunchbox-labs/compasslet/commit/\(commit)")
+}
+
+@Test func theSourceLinkOpensTheRepository() {
+  #expect(SourceRepository.url?.absoluteString == "https://github.com/lunchbox-labs/compasslet")
+}
+
 @Test func buildsWithoutARecordedCommitShowNothing() {
   // Release candidates, App Store downloads and local builds have no commit key.
   #expect(

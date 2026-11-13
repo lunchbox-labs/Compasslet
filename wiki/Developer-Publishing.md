@@ -12,7 +12,8 @@ Each run uploads one of two kinds of build, chosen by its **Release candidate** 
   Store Connect won't let it be submitted for review or added to external testing
   groups, and Publish updates only its TestFlight copy, leaving the App Store listing
   alone. Its Settings screen ends with a Test Build section showing the version, build
-  number and short commit SHA, so testers can tell exactly which build they have.
+  number and short commit SHA, so testers can tell exactly which build they have. Tapping
+  the commit opens it on GitHub, and a long press copies the full SHA.
 - **Checked:** a release candidate, eligible for both internal TestFlight testing and
   App Store submission. Publish also updates the App Store listing from its copy. It
   shows no Test Build section.

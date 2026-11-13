@@ -1,3 +1,5 @@
+import Foundation
+
 /// Which build a TestFlight test build is, shown in Settings so testers can tell exactly what they
 /// have installed. Publish records the source commit only in test builds, so release candidates,
 /// App Store downloads and local builds have no identity and show nothing.
@@ -8,14 +10,18 @@ public struct TestBuildIdentity: Hashable, Sendable {
   public let version: String
   public let build: String
   public let commit: String
+  /// The commit's page on GitHub.
+  public let commitURL: URL
 
   public init?(version: String, build: String, commit: String) {
     guard !version.isEmpty, !build.isEmpty, commit.count == 40,
-      commit.allSatisfy({ "0123456789abcdef".contains($0) })
+      commit.allSatisfy({ "0123456789abcdef".contains($0) }),
+      let commitURL = SourceRepository.commitURL(commit)
     else { return nil }
     self.version = version
     self.build = build
     self.commit = commit
+    self.commitURL = commitURL
   }
 
   /// Reads a bundle's Info.plist values, such as `Bundle.main.infoDictionary`.
