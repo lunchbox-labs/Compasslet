@@ -37,9 +37,9 @@ are the shared iOS mapping, including colours that still need to be added by imp
 - Use the foundation's spacing steps for custom layout and `@ScaledMetric` beside text. Native
   margins and list insets follow iOS rather than the web. The iOS guide owns card corners,
   capsules, glass controls, target sizes and press states.
-- The dial in `Shared/CompassDial.swift` keeps a red north marker, distinguished by shape as well
-  as colour. Check the small “N” separately for text contrast; red is functional, not a brand
-  accent. Essential direction information must remain readable without colour.
+- The dial in `App/Heading/CompassDial.swift` keeps a red north marker, distinguished by shape
+  as well as colour. Check the small “N” separately for text contrast; red is functional, not a
+  brand accent. Essential direction information must remain readable without colour.
 - Keep the compass's reduced-motion choice: steady text or a dial with reduced movement.
   Values crossing north must not animate the long way round. New custom transitions follow
   the foundation's timing and no-bounce rule, with a short fade or no movement under Reduce Motion.
