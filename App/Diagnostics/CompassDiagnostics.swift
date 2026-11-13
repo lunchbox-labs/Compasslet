@@ -130,7 +130,30 @@ final class CompassDiagnostics: Observable, Sendable {
     var lines: Int
     /// The line count at which to try compacting again after a rewrite failed.
     var retryCompactionAt = 0
-    var lastObservation: [Surface: (uptime: Double, active: Bool)] = [:]
+    var lastObservation: [Surface: ObservedState] = [:]
+
+    /// When `surface` was last seen in its clock's state: at the clock's write, or at a later
+    /// repeat of the call the clock holds. Repeats of a call whose write failed don't count, since
+    /// the clock doesn't hold it.
+    func lastSeen(_ surface: Surface) -> (wall: Double, uptime: Double)? {
+      guard let clock = settings.clocks[surface.rawValue] else { return nil }
+      if let observation = lastObservation[surface], observation.active == clock.active,
+        observation.accepted == clock.uptime
+      {
+        return observation.seen
+      }
+      return (clock.wall, clock.uptime)
+    }
+  }
+  /// A surface's last observation in this process. A repeat of its state under 1 s after the
+  /// call that set it isn't written, so the stored files don't grow from repeats, but it still
+  /// counts as seen.
+  private struct ObservedState {
+    let active: Bool
+    /// The uptime of the call that set this state, which repeats are measured from.
+    let accepted: Double
+    /// The latest call with this state, repeat or not.
+    var seen: (wall: Double, uptime: Double)
   }
 
   /// How many active seconds of events each surface keeps.
@@ -220,7 +243,8 @@ final class CompassDiagnostics: Observable, Sendable {
   }
 
   /// Called by existing lifecycle ticks, and by CarPlay's one-second tick only while Debug Mode is
-  /// on, a drive runs and Compasslet is in front on CarPlay. Gaps are not assumed active.
+  /// on, a drive runs and Compasslet is in front on CarPlay. Gaps are not assumed active: a gap
+  /// over 2 seconds from the last call seen, a repeat included, starts a new session.
   func observe(
     _ surface: Surface, active: Bool,
     wall: Double = Date().timeIntervalSince1970,
@@ -228,21 +252,32 @@ final class CompassDiagnostics: Observable, Sendable {
   ) throws {
     guard wall.isFinite, uptime.isFinite else { return }
     try state.withLock { state in
-      if let previous = state.lastObservation[surface], previous.active == active,
-        (0..<1).contains(uptime - previous.uptime)
+      if var previous = state.lastObservation[surface], previous.active == active,
+        (0..<1).contains(uptime - previous.accepted)
       {
+        previous.seen = (wall, uptime)
+        state.lastObservation[surface] = previous
         return
       }
-      state.lastObservation[surface] = (uptime, active)
+      let seen = state.lastSeen(surface)
+      state.lastObservation[surface] = ObservedState(
+        active: active, accepted: uptime, seen: (wall, uptime))
       guard state.settings.enabled else { return }
       let last = state.settings.clocks[surface.rawValue]
       var total = last?.total ?? 0
       let wasActive = last?.active ?? false
       guard active || wasActive else { return }
-      let delta = uptime - (last?.uptime ?? uptime)
-      let continuing = wasActive && last?.owner == process && (0...2).contains(delta)
-      if continuing { total += delta }
-      let session = continuing ? (last?.session ?? UUID().uuidString) : UUID().uuidString
+      // The gap runs from the last call seen, and the time counted from the clock's write, which
+      // a repeat since is under 1 s after.
+      var continuing = false
+      var session = UUID().uuidString
+      if let last, let seen, wasActive, last.owner == process, uptime >= last.uptime,
+        uptime - seen.uptime <= 2
+      {
+        continuing = true
+        total += uptime - last.uptime
+        session = last.session
+      }
       var settings = state.settings
       settings.clocks[surface.rawValue] = Clock(
         total: total, wall: wall, uptime: uptime, owner: process, session: session, active: active)
@@ -278,9 +313,12 @@ final class CompassDiagnostics: Observable, Sendable {
   ) throws -> Bool {
     guard wall.isFinite, uptime.isFinite else { return false }
     return try state.withLock { state in
+      // Recent means since the clock's write, and within 2 s, or 3 s of wall time, of the last
+      // call seen.
       guard state.settings.enabled, let clock = state.settings.clocks[surface.rawValue],
         clock.active, matchingSession == nil || matchingSession == clock.session,
-        (0...2).contains(uptime - clock.uptime), (0...3).contains(wall - clock.wall)
+        let seen = state.lastSeen(surface), uptime >= clock.uptime, uptime - seen.uptime <= 2,
+        wall >= clock.wall, wall - seen.wall <= 3
       else { return false }
       var settings = state.settings
       let event = Record(

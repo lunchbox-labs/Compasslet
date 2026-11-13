@@ -1138,6 +1138,46 @@ struct CompassActivityControllerTests {
     #expect(events[1].session != events[2].session)
     #expect(snapshot.surfaces.first { $0.surface == .activity }?.activeSeconds == 10)
   }
+
+  @Test func aBeatThatWakesLateAfterARepeatKeepsTheActivityInOneSession() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+      UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = try CompassDiagnostics(directory: directory)
+    try store.setEnabled(true)
+    let system = TestActivitySystem()
+    system.suspend = true
+    let clock = TestDriveClock(now: Date(timeIntervalSince1970: 100))
+    let start = clock.now
+    let activity = CompassActivityController(
+      system: system, now: { clock.now }, refreshInterval: { 15 },
+      observeDiagnostics: { active in
+        let seconds = clock.now.timeIntervalSince1970
+        _ = try? store.observe(.activity, active: active, wall: seconds, uptime: seconds)
+      })
+    let drive = DriveSessionController(
+      sensor: TestTravelSensor(), activity: activity, clock: clock)
+    let activation = Task { await drive.carPlayActivated() }
+    while system.resume == nil { await Task.yield() }
+    // The activity shows just after the first beat, so the next beat renews it under 1 s later.
+    clock.run(until: start + 1.25)
+    system.resume?.resume()
+    await activation.value
+    #expect(drive.compactStatus == .active)
+    clock.run(until: start + 2)
+    // The beat after that wakes late: over 2 s after the start, but under 2 s after the renewal.
+    clock.now = start + 3.5
+    clock.fireDue()
+    clock.run(until: start + 6)
+    await drive.endDrive()
+    let snapshot = try store.snapshot()
+    let events = snapshot.events.filter { $0.surface == .activity }
+    #expect(events.map(\.kind) == [.started, .paused])
+    #expect(events.map(\.activeSeconds) == [0, 4.75])
+    #expect(Set(events.map(\.session)).count == 1)
+    #expect(snapshot.surfaces.first { $0.surface == .activity }?.activeSeconds == 4.75)
+  }
 }
 
 /// What a controller has told diagnostics about its activity, in order.
